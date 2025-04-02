@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")"
+openmsx -machine Panasonic_FS-A1ST -ext nextoride -hda ./hd.dsk

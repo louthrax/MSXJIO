@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/Bluetooth.svg</file>
+        <file>icons/USB.svg</file>
+        <file>icons/connected.svg</file>
+        <file>icons/connecting.svg</file>
+        <file>icons/disconnected.svg</file>
+        <file>icons/JIOServer.svg</file>
+        <file>icons/openFile.svg</file>
+        <file>icons/refresh.svg</file>
+        <file>icons/clear.svg</file>
+        <file>icons/unlock.svg</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,9 @@
+JIOServer.pro.user
+android/res/*
+MSXClient/*.rom
+
+HD/hd.dsk
+
+MSXClient/drv_jio.r01
+
+MSXClient/drv_jio_c.as
