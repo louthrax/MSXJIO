@@ -6,7 +6,11 @@
 #include <QThread>
 
 #include "MainWindow.h"
+#ifdef Q_OS_ANDROID
+#include "ui_MainWindowAndroid.h"
+#else
 #include "ui_MainWindow.h"
+#endif
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
 
@@ -21,6 +25,7 @@ typedef struct
     quint16 m_uiAddress;
 } tdReadWriteHeader;
 #pragma pack(pop)
+
 static_assert(sizeof(tdReadWriteHeader) == 7, "tdReadWriteHeader must be 7 bytes");
 std::coroutine_handle<> ByteReader::	m_soHandle = nullptr;
 #define vRead(a)	*a = *(typeof(a)) (((QByteArray) co_await oRead(sizeof(typeof(*a)))).constData());
@@ -201,10 +206,6 @@ MainWindow::MainWindow() :
     QButtonGroup	*group = new QButtonGroup(this);
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    group->setExclusive(true);
-    group->addButton(m_poUI->USBButton);
-    group->addButton(m_poUI->bluetoothButton);
-
     m_bReadCRC = m_poSettings->value("ReadCRC", false).toBool();
     m_bWriteCRC = m_poSettings->value("WriteCRC", false).toBool();
     m_bRetryCRC = m_poSettings->value("RetryCRC", false).toBool();
@@ -215,12 +216,17 @@ MainWindow::MainWindow() :
 
 #ifdef Q_OS_ANDROID
     oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
-    m_poUI->USBButton->hide();
-    m_poUI->bluetoothButton->hide();
     m_eSelectedInterface = eInterfaceBluetooth;
 #else
     oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
+
+    group->setExclusive(true);
+    group->addButton(m_poUI->USBButton);
+    group->addButton(m_poUI->bluetoothButton);
+
+    m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
+    m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
 #endif
     m_poUI->logWidget->setFont(oFont);
 
@@ -228,8 +234,6 @@ MainWindow::MainWindow() :
     m_poUI->writeCRC->setChecked(m_bWriteCRC);
     m_poUI->retryCRC->setChecked(m_bRetryCRC);
     m_poUI->retryTimeout->setChecked(m_bRetryTimeout);
-    m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
-    m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
 
     vSetInterface(m_eSelectedInterface);
 
@@ -702,6 +706,7 @@ void MainWindow::onButtonClicked()
         vUpdateLights();
         m_poUI->logWidget->clear();
     }
+#ifndef Q_OS_ANDROID
     else if(poSender == m_poUI->bluetoothButton)
     {
         vSetInterface(eInterfaceBluetooth);
@@ -710,6 +715,7 @@ void MainWindow::onButtonClicked()
     {
         vSetInterface(eInterfaceSerial);
     }
+#endif
     else if(poSender == m_poUI->fileSelectPushButton)
     {
         /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/

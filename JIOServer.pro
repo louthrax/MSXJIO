@@ -2,6 +2,8 @@ QT += core gui widgets bluetooth serialport
 
 CONFIG += c++20
 
+FORMS += MainWindow.ui
+
 unix:!android:CONFIG(release, debug|release) {
     APPNAME = JIOServer
     OUTDIR = $$OUT_PWD
@@ -14,6 +16,8 @@ unix:!android:CONFIG(release, debug|release) {
 }
 
 android {
+    FORMS = MainWindowAndroid.ui
+
     QT += svg
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 
@@ -60,8 +64,6 @@ win32 {
 
     RC_ICONS += $$ICON_TARGET
 }
-
-FORMS += MainWindow.ui
 
 SOURCES += \
     InterfaceBluetoothSocket.cpp \
