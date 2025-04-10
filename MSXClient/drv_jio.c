@@ -1,119 +1,202 @@
 
+
 #include "flags.inc"
 
 typedef unsigned char bool;
 
-#pragma function=intrinsic(0)
-void _opc(unsigned char);
+#pragma function = intrinsic(0)
+void _opc (unsigned char);
 #define cei()	_opc(0xFB)
 #define cdi()	_opc(0xF3)
 
-
-typedef enum
-{
-    eZ80 = 0,
-    eR800_ROM = 1,
-    eR800_DRAM = 2
-}
-tdCPUMode;
-
+typedef enum { eZ80 = 0, eR800_ROM = 1, eR800_DRAM = 2 } tdCPUMode;
 
 typedef struct
 {
 	char			m_acSig[3];
-    unsigned char	m_ucCommand;
-    unsigned char	m_aucSector[3];
-    unsigned char	m_ucLength;
-    void			*m_pvAddress;
-} tdReadWriteHeader;
+	unsigned char	m_ucCommand;
+} tdCommonHeader;
+
+typedef struct
+{
+	unsigned char	m_aucSector[3];
+	unsigned char	m_ucLength;
+	void			*m_pvAddress;
+} tdReadWriteData;
 
 #define false	0
 #define true	1
 
-unsigned int	uiXModemCRC16(void *_pvAddress, unsigned int _uiLength);
+unsigned int	uiXModemCRC16(void *_pvAddress, unsigned int _uiLength, unsigned int _uiCRC);
 bool			bJIOReceive(void *_pvDestination, unsigned int _uiSize);
-void			vJIOSend(void *_pvSource, unsigned int _uiSize);
-tdCPUMode       eGetCPU();
-void            vSetCPU(tdCPUMode _eMode);
+void			vJIOTransmit(void *_pvSource, unsigned int _uiSize);
+tdCPUMode		eGetCPU();
+void			vSetCPU(tdCPUMode _eMode);
 
-#define READ(a, b) \
-	while(!bJIOReceive(a, b)) \
-	{ \
-		if(!(_ucFlags & FLAGBITS_RETRY_TIMEOUT)) return 1; \
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+
+unsigned int uiTransmit
+(
+	void			*_pvAddress,
+	unsigned int	_uiLength,
+	unsigned char	_ucFlags,
+	unsigned int	_uiCRC,
+	bool			_bLast
+)
+{
+	if(_ucFlags & FLAGBITS_TX_CRC)
+	{
+        vSetCPU(eR800_DRAM);
+        _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 	}
+
+    vSetCPU(eZ80);
+    cdi();
+    vJIOTransmit(_pvAddress, _uiLength);
+
+	if(_bLast && (_ucFlags & FLAGBITS_TX_CRC))
+	{
+        vJIOTransmit(&_uiCRC, sizeof(_uiCRC));
+    }
+
+	return _uiCRC;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char _ucFlags, unsigned int *_puiCRC)
+{
+    /* Avoid interrupt before reading acknowledge or checksum */
+    if (_uiLength != 2)
+    {
+        vSetCPU(eZ80);
+        cdi();
+    }
+
+    while(!bJIOReceive(_pvAddress, _uiLength))
+	{
+		if(!(_ucFlags & FLAGBITS_RETRY_TIMEOUT))
+		{
+            return COMMAND_REPORT_TIMEOUT;
+		}
+	}
+
+	if(_ucFlags & FLAGBITS_RX_CRC)
+	{
+        vSetCPU(eR800_DRAM);
+        *_puiCRC = uiXModemCRC16(_pvAddress, _uiLength, *_puiCRC);
+	}
+
+	return COMMAND_OK;
+}
 
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
 unsigned char ucReadOrWriteSectors
-    (
-        unsigned long	_ulSector,
-        unsigned char	_ucLength,
-        void			*_pvAddress,
-        unsigned char	_ucFlags
-        )
+(
+	unsigned long	_ulSector,
+	unsigned char	_ucLength,
+	void			*_pvAddress,
+	unsigned char	_ucFlags
+)
 {
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    unsigned int		uiTotalLength;
-    unsigned int		uiComputedCRC;
-    unsigned int		uiReceivedCRC;
-	bool				bSuccess;
-    tdReadWriteHeader   oHeader;
-    tdCPUMode           eCPUMode;
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	unsigned int	uiTotalLength;
+    unsigned int	uiReceivedCRC;
+    unsigned int	uiComputedCRC;
+    unsigned int	uiTransmitCRC;
+	tdCommonHeader	oCommonHeader;
+	tdReadWriteData oReadWriteHeader;
+	tdCPUMode		eCPUMode;
+	unsigned char	ucResult;
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    eCPUMode = eGetCPU();
+#define ucCommand (_ucFlags & 0x0F)
 
-	oHeader.m_acSig[0] = 'J';
-	oHeader.m_acSig[1] = 'I';
-    oHeader.m_acSig[2] = 'O';
-    oHeader.m_aucSector[0] = (_ulSector >> 0);
-    oHeader.m_aucSector[1] = (_ulSector >> 8);
-    oHeader.m_aucSector[2] = (_ulSector >> 16);
-    oHeader.m_ucLength = _ucLength;
-    oHeader.m_pvAddress = _pvAddress;
+	eCPUMode = eGetCPU();
 
-    uiTotalLength = _ucLength * 512;
+	oCommonHeader.m_acSig[0] = 'J';
+	oCommonHeader.m_acSig[1] = 'I';
+	oCommonHeader.m_acSig[2] = 'O';
 
-    do
-    {
-        oHeader.m_ucCommand = _ucFlags;
+    oReadWriteHeader.m_aucSector[0] = (_ulSector >> 0);
+    oReadWriteHeader.m_aucSector[1] = (_ulSector >> 8);
+    oReadWriteHeader.m_aucSector[2] = (_ulSector >> 16);
+	oReadWriteHeader.m_ucLength = _ucLength;
+	oReadWriteHeader.m_pvAddress = _pvAddress;
 
-        vSetCPU(eZ80);
-        cdi();
+	uiTotalLength = _ucLength * 512;
 
-        vJIOSend(&oHeader, sizeof(oHeader));
+	do
+	{
+		ucResult = COMMAND_OK;
+		oCommonHeader.m_ucCommand = _ucFlags;
 
-        if ((_ucFlags & 0x0F) == COMMAND_WRITE)
-            vJIOSend(_pvAddress, uiTotalLength);
-        else
-            READ(_pvAddress, uiTotalLength);
+		uiTransmitCRC = 0;
+		uiTransmitCRC = uiTransmit(&oCommonHeader, sizeof(oCommonHeader), _ucFlags, 0, ucCommand == COMMAND_INFO);
 
-        if(((_ucFlags  & FLAGBITS_READ_CRC)  && ((_ucFlags & 0x0F) == COMMAND_READ)) ||
-            ((_ucFlags & FLAGBITS_WRITE_CRC) && ((_ucFlags & 0x0F) == COMMAND_WRITE)))
-        {
-            READ(&uiReceivedCRC, sizeof(uiReceivedCRC));
+		if(ucCommand == COMMAND_WRITE)
+		{
+			/*~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+			unsigned int	uiAcknowledge;
+			/*~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-            vSetCPU(eR800_DRAM);
-            uiComputedCRC = uiXModemCRC16(_pvAddress, uiTotalLength);
-            bSuccess = uiReceivedCRC == uiComputedCRC;
-            if(!bSuccess)
-            {
-                oHeader.m_ucCommand++;
-                vSetCPU(eZ80);
-                cdi();
-                vJIOSend(&oHeader, sizeof(oHeader));
-            }
+			uiTransmitCRC = uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), _ucFlags, uiTransmitCRC, false);
+			uiTransmitCRC = uiTransmit(_pvAddress, uiTotalLength, _ucFlags, uiTransmitCRC, true);
+
+			if(_ucFlags & FLAGBITS_TX_CRC)
+			{
+				uiReceivedCRC = 0;
+				ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), _ucFlags, &uiReceivedCRC);
+				if(ucResult == COMMAND_OK)
+				{
+					switch(uiAcknowledge)
+					{
+					case 0x1111:	ucResult = COMMAND_REPORT_BAD_TX_CRC; break;
+					case 0x2222:	break;
+					default:		ucResult = COMMAND_REPORT_BAD_ACKNOWLEDGE; break;
+					}
+				}
+			}
+		}
+		else
+		{
+			if(ucCommand == COMMAND_READ)
+			{
+                uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), _ucFlags, uiTransmitCRC, true);
+			}
+
+            uiComputedCRC = 0;
+            ucResult = ucReceive(_pvAddress, uiTotalLength, _ucFlags, &uiComputedCRC);
+
+            if((ucResult == COMMAND_OK) && (_ucFlags & FLAGBITS_RX_CRC))
+			{
+                ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, 0);
+                if ((ucResult == COMMAND_OK) && (uiReceivedCRC != uiComputedCRC))
+                {
+                    ucResult = COMMAND_REPORT_BAD_RX_CRC;
+                }
+			}
+		}
+
+		if(ucResult != COMMAND_OK)
+		{
+			oCommonHeader.m_ucCommand = ucResult;
+            uiTransmit(&oCommonHeader, sizeof(oCommonHeader), _ucFlags, 0, true);
         }
-        else
-            bSuccess = true;
-	} while(!bSuccess && (_ucFlags & FLAGBITS_RETRY_CRC));
+    } while((ucResult != COMMAND_OK) && (_ucFlags & FLAGBITS_RETRY_CRC));
 
-    vSetCPU(eCPUMode);
-    cei();
+	vSetCPU(eCPUMode);
+	cei();
 
-    return bSuccess ? 0 : 1;
+    return ucResult;
 }
 
 /*$off*/

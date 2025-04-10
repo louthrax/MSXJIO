@@ -22,3 +22,12 @@ _LEAVE_DIRECT_L09:
         pop     de
         pop     bc
         ret
+
+_ENT_PARM_DIRECT_L09:
+        pop     hl
+        push    bc
+        push    de
+        push    ix
+        ld      ix,0
+        add     ix,sp
+        jp      (hl)

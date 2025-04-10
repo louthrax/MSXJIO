@@ -49,7 +49,6 @@ public slots:
 
     void        onButtonClicked();
     void        onItemActivated(QListWidgetItem *_poItem);
-    void        onCheckBoxStateChanged(int _iState);
     void        onTextChanged(QString _oText);
 
     void        onRedLightTimer();
@@ -57,23 +56,23 @@ public slots:
     void        onUnlockTimer();
 
 private:
-    void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
-    void		vSetInterface(tdInterface _eInterface);
-    void		vSendChecksum(const QByteArray &_roData);
-    void		vSendData(const QByteArray &_roData);
-    quint8		ucCalculateChecksum(const QByteArray &_roData);
+    void		vTransmitData(const QByteArray &_roData);
+    quint16     uiTransmit(const void *_pvAddress, unsigned int	_uiLength, unsigned char _ucFlags, quint16 _uiCRC, bool _bLast);
+    quint16     uiXModemCRC16(const void * _pucData, size_t _uiSize, quint16 _uiCRC);
     QByteArray	acGetServerInfo();
+
+    void		vSetInterface(tdInterface _eInterface);
+    void		vSetState(tdConnectionState _eCState);
+
     void		vLog(tdLogType _eLogType, QString fmt, ...);
     QString		oFormatSize(qint64 _uiSizeBytes);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
     void		vSaveSettings();
-    void		vSetState(tdConnectionState _eCState);
+    void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
     void		vUpdateLights();
 #ifdef Q_OS_ANDROID
     void		vRequestAndroidPermissions();
 #endif
-
-    QByteArray crc16_xmodem(const QByteArray &data);
 
     Task        oParser();
     ByteReader  oRead(int size)
@@ -81,9 +80,7 @@ private:
         m_poCurrentByteReader = std::make_unique<ByteReader>(m_acBuffer, size);
         return *m_poCurrentByteReader;
     }
-
     std::unique_ptr<ByteReader>     m_poCurrentByteReader;
-
     Ui::MainWindow                  *m_poUI = nullptr;
 	QTimer							*m_poRedLightOffTimer = nullptr;
     QTimer							*m_poGreenLightOffTimer = nullptr;
@@ -91,16 +88,16 @@ private:
     Interface                       *m_poInterface = nullptr;
     QFile							*m_poImageFile = nullptr;
     QByteArray						m_acBuffer;
-    bool                            m_bReadCRC = true;
-    bool                            m_bWriteCRC = false;
+    bool                            m_bRxCRC = true;
+    bool                            m_bTxCRC = false;
     bool                            m_bRetryTimeout = false;
     bool                            m_bRetryCRC = false;
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;
     quint64                         m_uiBytesReceived = 0;
-    quint64                         m_uiBytesSent = 0;
+    quint64                         m_uiBytesTransmitted = 0;
     quint64                         m_uiReceiveErrors = 0;
-    quint64                         m_uiSendErrors = 0;
+    quint64                         m_uiTransmitErrors = 0;
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
     QString                         m_oSelectedImagePath;
     QString                         m_oSelectedSerialID;

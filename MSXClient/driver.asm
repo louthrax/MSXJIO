@@ -508,7 +508,7 @@ ENDIF
 		add	a,'A'
 		rst	$18
 		call	PrintMsg
-		db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
+                db	13,10,"Press drive key or [ESC]...",0
 		ld	hl,(bootWait)		; get wait time from patch area
 boot_r1:	push	hl
 		call	SelectDrive
@@ -636,9 +636,6 @@ nokey:		or	$ff
 ; ------------------------------------------------------------------------------
 
 		SECTION	DRV_PATCH
-		ORG	$7FD0
-
-		; Reserved
-		ds	$2e,$00
+                ORG	$7FFE
 
 bootWait:	dw	$5000		; 7FFE Boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)

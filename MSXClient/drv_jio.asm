@@ -140,8 +140,7 @@ TestInterface:	ld	a,(hl)
         ld	a,(ix+W_DRIVES)
         add	a,'0'
         rst	$18
-        call	PrintCRLF
-        ret
+        jp	PrintCRLF
 
 ;********************************************************************************************************************************
 ; DSKIO - Disk Input / Output
@@ -271,6 +270,9 @@ ELSE
         ret
 ENDIF
 
+INCLUDE	"drv_jio_c.asm"
+INCLUDE	"crt.asm"
+
 ;********************************************************************************************************************************
 ; Read (boot) sector
 ; Input: C,DE = sector number
@@ -278,14 +280,6 @@ ENDIF
 READSEC:
         ld      a,COMMAND_READ
         ld	b,1
-        jp	ReadOrWriteSectors
-
-;********************************************************************************************************************************
-;********************************************************************************************************************************
-
-INCLUDE	"drv_jio_c.asm"
-INCLUDE	"crt.asm"
-
 
 ; CDE : Sector
 ; B   : Length
@@ -348,7 +342,7 @@ vSetCPU:
 ;      BC = LENGTH
 ;********************************************************************************************************************************
 
-vJIOSend:
+vJIOTransmit:
         ex      de,hl
         inc	bc
         exx
@@ -362,7 +356,7 @@ vJIOSend:
         ld	c,$a1
 
         db	$3e
-JIOSendLoop:	ret	nz
+JIOTransmitLoop:	ret	nz
         out	(c),e
         exx
         ld	a,(hl)
@@ -372,76 +366,76 @@ JIOSendLoop:	ret	nz
         rrca
         out	(c),d	; =0
         ret	nz
-        jp	c,SEND10
+        jp	c,TRANSMIT10
         out	(c),d	; -0
         rrca
-        jp	c,SEND11
+        jp	c,TRANSMIT11
 ;________________________________________________________________________________________________________________________________
 
-SEND01:	out	(c),d	; -1
+TRANSMIT01:	out	(c),d	; -1
         rrca
-        jr	c,SEND12
+        jr	c,TRANSMIT12
         nop
 
-SEND02:	out	(c),d	; -0
+TRANSMIT02:	out	(c),d	; -0
         rrca
-        jp	c,SEND13
+        jp	c,TRANSMIT13
 
-SEND03:	out	(c),d	; -1
+TRANSMIT03:	out	(c),d	; -1
         rrca
-        jr	c,SEND14
+        jr	c,TRANSMIT14
         nop
 
-SEND04:	out	(c),d	; -0
+TRANSMIT04:	out	(c),d	; -0
         rrca
-        jp	c,SEND15
+        jp	c,TRANSMIT15
 
-SEND05:	out	(c),d	; -1
+TRANSMIT05:	out	(c),d	; -1
         rrca
-        jr	c,SEND16
+        jr	c,TRANSMIT16
         nop
 
-SEND06:	out	(c),d	; -0
+TRANSMIT06:	out	(c),d	; -0
         rrca
-        jp	c,SEND17
+        jp	c,TRANSMIT17
 
-SEND07:	out	(c),d	; -1
-        jp	JIOSendLoop
+TRANSMIT07:	out	(c),d	; -1
+        jp	JIOTransmitLoop
 ;________________________________________________________________________________________________________________________________
 
-SEND10:	out	(c),e	; -0
+TRANSMIT10:	out	(c),e	; -0
         rrca
-        jp	nc,SEND01
+        jp	nc,TRANSMIT01
 
-SEND11:	out	(c),e	; -1
+TRANSMIT11:	out	(c),e	; -1
         rrca
-        jr	nc,SEND02
+        jr	nc,TRANSMIT02
         nop
 
-SEND12:	out	(c),e	; -0
+TRANSMIT12:	out	(c),e	; -0
         rrca
-        jp	nc,SEND03
+        jp	nc,TRANSMIT03
 
-SEND13:	out	(c),e	; -1
+TRANSMIT13:	out	(c),e	; -1
         rrca
-        jr	nc,SEND04
+        jr	nc,TRANSMIT04
         nop
 
-SEND14:	out	(c),e	; -0
+TRANSMIT14:	out	(c),e	; -0
         rrca
-        jp	nc,SEND05
+        jp	nc,TRANSMIT05
 
-SEND15:	out	(c),e	; -1
+TRANSMIT15:	out	(c),e	; -1
         rrca
-        jr	nc,SEND06
+        jr	nc,TRANSMIT06
         nop
 
-SEND16:	out	(c),e	; -0
+TRANSMIT16:	out	(c),e	; -0
         rrca
-        jp	nc,SEND07
+        jp	nc,TRANSMIT07
 
-SEND17:	out	(c),e	; -1
-        jp	JIOSendLoop
+TRANSMIT17:	out	(c),e	; -1
+        jp	JIOTransmitLoop
 
 ;********************************************************************************************************************************
 ;********************************************************************************************************************************
@@ -627,46 +621,57 @@ RX_PE:	in	f,(c)	; 14
 
 ;________________________________________________________________________________________________________________________________
 
-
 ; Compute xmodem CRC-16
-; Input:  DE = buffer
-;         BC = bytes
-; Output: HL = CRC-16
+; Input:  DE    = buffer
+;         BC    = bytes
+;         Stack = CRC-16
+; Output: HL    = updated CRC-16
 
 uiXModemCRC16:
-        push    ix
-        ld	hl,0
-        ld      ix,bc
+    ld  l,c
+    ld  h,b
+
+    ld  b,l
+    dec hl
+    inc h
+    ld  c,h
+
+    pop hl
+    pop hl
+    push hl
+    dec sp
+    dec sp
 
 crc16:
-        ld	a,(de)
-        inc	de
-        xor     h
-        ld      b,a
-        ld      c,l
-        rrca
-        rrca
-        rrca
-        rrca
-        ld      l,a
-        and     0fh
-        ld      h,a
-        xor     b
-        ld      b,a
-        xor     l
-        and     0f0h
-        ld      l,a
-        xor     c
-        add     hl,hl
-        xor     h
-        ld      h,a
-        ld      a,l
-        xor     b
-        ld      l,a
-        dec     ix
-        ld      a,ixh
-        or      ixl
-        jp      nz,crc16
+    push bc
+    ld	a,(de)
+    inc	de
+    xor     h
+    ld      b,a
+    ld      c,l
+    rrca
+    rrca
+    rrca
+    rrca
+    ld      l,a
+    and     0fh
+    ld      h,a
+    xor     b
+    ld      b,a
+    xor     l
+    and     0f0h
+    ld      l,a
+    xor     c
+    add     hl,hl
+    xor     h
+    ld      h,a
+    ld      a,l
+    xor     b
+    ld      l,a
 
-        pop     ix
-        ret
+    pop     bc
+    djnz    crc16
+
+    dec     c
+    jp      nz,crc16
+    ret

@@ -182,7 +182,7 @@
          <x>10</x>
          <y>10</y>
          <width>341</width>
-         <height>401</height>
+         <height>391</height>
         </rect>
        </property>
        <property name="frameShape">
@@ -196,58 +196,6 @@
        </property>
        <property name="maximumBlockCount">
         <number>1000</number>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="readCRC">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>420</y>
-         <width>93</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Read CRC</string>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="writeCRC">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>440</y>
-         <width>93</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Write CRC</string>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="retryCRC">
-       <property name="geometry">
-        <rect>
-         <x>110</x>
-         <y>420</y>
-         <width>121</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Retry CRC</string>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="retryTimeout">
-       <property name="geometry">
-        <rect>
-         <x>110</x>
-         <y>440</y>
-         <width>121</width>
-         <height>24</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Retry Timeout</string>
        </property>
       </widget>
       <widget class="QPushButton" name="bluetoothButton">
@@ -302,7 +250,7 @@
         <bool>true</bool>
        </property>
       </widget>
-      <widget class="Line" name="line_2">
+      <widget class="Line" name="line">
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -390,6 +338,70 @@
         <bool>false</bool>
        </property>
       </widget>
+      <widget class="QPushButton" name="readCRC">
+       <property name="geometry">
+        <rect>
+         <x>30</x>
+         <y>410</y>
+         <width>91</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>RX CRC</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="writeCRC">
+       <property name="geometry">
+        <rect>
+         <x>160</x>
+         <y>410</y>
+         <width>91</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>TX CRC</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="retryCRC">
+       <property name="geometry">
+        <rect>
+         <x>30</x>
+         <y>440</y>
+         <width>91</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Retry CRC</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="retryTimeout">
+       <property name="geometry">
+        <rect>
+         <x>160</x>
+         <y>440</y>
+         <width>91</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Retry timout</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -444,70 +456,6 @@
     <hint type="destinationlabel">
      <x>225</x>
      <y>261</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>readCRC</sender>
-   <signal>stateChanged(int)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onCheckBoxStateChanged(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>86</x>
-     <y>491</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>writeCRC</sender>
-   <signal>stateChanged(int)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onCheckBoxStateChanged(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>86</x>
-     <y>511</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>retryCRC</sender>
-   <signal>stateChanged(int)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onCheckBoxStateChanged(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>236</x>
-     <y>491</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>retryTimeout</sender>
-   <signal>stateChanged(int)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onCheckBoxStateChanged(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>250</x>
-     <y>511</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
     </hint>
    </hints>
   </connection>
@@ -616,6 +564,70 @@
     <hint type="sourcelabel">
      <x>45</x>
      <y>670</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>retryCRC</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>75</x>
+     <y>442</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>writeCRC</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>205</x>
+     <y>412</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>readCRC</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>75</x>
+     <y>412</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>retryTimeout</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>205</x>
+     <y>442</y>
     </hint>
     <hint type="destinationlabel">
      <x>180</x>
