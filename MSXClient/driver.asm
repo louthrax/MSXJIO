@@ -1,7 +1,7 @@
 ; ------------------------------------------------------------------------------
 ; driver.asm
 ;
-; Copyright (C) 2024 H.J. Berends*
+; Copyright (C) 2025 H.J. Berends*
 ; * Part of the code is based on the BEER-202 driver by SOLiD and other
 ; PPI 8255 and 8-BIT CF IDE solutions publicly shared on the internet.
 ; 
@@ -48,7 +48,6 @@
 		; Hardware interface symbols used by the DOS driver
 		EXTERN	DRVMEM
 		EXTERN	DRVINIT
-		EXTERN	DRVINFO
 		EXTERN	DSKIO
 		EXTERN	READSEC
 
@@ -131,9 +130,8 @@ DRIVES:		push	af
 
 		; probe hardware, display info and validate MBR
 		call	DRVINIT
-		jr	nz,r207			; nz=ide hardware not detected
-		call	DRVINFO
-		jr	c,r207			; c=time-out
+		jr	nz,r207			; nz=interface not detected / canceled
+		jr	c,r207			; c=interface time-out
 		ld	hl,PART_BUF		; Buffer address
 		xor	a
 		ld	e,a
@@ -493,7 +491,7 @@ BOOTMENU:	ei
 		xor	a
 		or	(ix+W_DRIVES)		; are there any IDE drives?
 IFDEF IDEDOS1
-		ret	z			; z=no IDE drives
+		ret	z
 		ld	a,(ix+W_BOOTDRV)
 		ld	(CURDRV),a		
 ELSE
@@ -508,7 +506,7 @@ ENDIF
 		add	a,'A'
 		rst	$18
 		call	PrintMsg
-                db	13,10,"Press drive key or [ESC]...",0
+		db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
 		ld	hl,(bootWait)		; get wait time from patch area
 boot_r1:	push	hl
 		call	SelectDrive

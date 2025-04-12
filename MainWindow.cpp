@@ -24,7 +24,7 @@ typedef struct
 	quint16 m_uiAddress;
 } tdReadWriteHeader;
 #pragma pack(pop)
-static_assert(sizeof(tdReadWriteHeader) == 6, "tdReadWriteHeader must be 7 bytes");
+static_assert(sizeof(tdReadWriteHeader) == 6, "tdReadWriteHeader must be 6 bytes");
 std::coroutine_handle<> ByteReader::	m_soHandle = nullptr;
 
 /*
@@ -83,7 +83,7 @@ quint16 MainWindow::uiTransmit
 
 #define vReceive(_pvAddress, _uiSize, _ucFlags, _uiCRC) \
 	{ \
-		*(_pvAddress) = *(typeof(_pvAddress)) (((QByteArray) co_await oRead(_uiSize)).constData()); \
+        memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
         if(_ucFlags & FLAGBITS_TX_CRC) \
 		{ \
 			_uiCRC = uiXModemCRC16(_pvAddress, _uiSize, _uiCRC); \
@@ -208,22 +208,21 @@ Task MainWindow::oParser()
 		case COMMAND_WRITE:
 			{
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-				quint16 uiAcknowledgeOK = 0x1111;
-				quint16 uiAcknowledgeBAD = 0x2222;
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+                quint16 uiAcknowledgeOK = 0x2222;
+                quint16 uiAcknowledgeBAD = 0x1111;
+                char *acData;
+                /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
                 vReceive(&oHeader, sizeof(oHeader), ucCommandAndFlags, uiCRC);
 
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-				QByteArray	oData(oHeader.m_ucLength * 512, Qt::Uninitialized);
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+                acData = (char*)malloc(oHeader.m_ucLength*512);
 
-                vReceive(oData.data(), oData.size(), ucCommandAndFlags, uiCRC);
+                vReceive(acData, oHeader.m_ucLength*512, ucCommandAndFlags, uiCRC);
 
-				bCRCOK = true;
+                bCRCOK = true;
                 if(ucCommandAndFlags & FLAGBITS_TX_CRC)
 				{
-                    vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), ucCommandAndFlags, uiCRC);
+                    vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
                     bCRCOK = uiReceivedCRC == uiCRC;
 				}
 
@@ -245,16 +244,18 @@ Task MainWindow::oParser()
 					);
 
 					m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
-					m_poImageFile->write(oData);
+                    m_poImageFile->write(acData, oHeader.m_ucLength*512);
 					m_poImageFile->flush();
 				}
 				else
 				{
-                    vLog(eLogError, "Transmission error !");
+                    vLog(eLogError, "Transmission error ! %x %x %d", uiReceivedCRC, uiCRC);
                     m_uiTransmitErrors++;
                     vUpdateLights();
                     uiTransmit(&uiAcknowledgeBAD, sizeof(uiAcknowledgeBAD), 0, 0, false);
 				}
+
+                free(acData);
 			}
 			break;
 

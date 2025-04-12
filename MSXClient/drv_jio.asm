@@ -15,7 +15,6 @@
 
         ; Mandatory symbols defined by the disk hardware interface driver
         PUBLIC	DRVINIT	; Initialize hardware interface driver
-        PUBLIC	DRVINFO	; Print disk driver information
         PUBLIC	INIENV	; Initialize driver environment
         PUBLIC	DSKIO	; Disk I/O routine
         PUBLIC	DSKCHG	; Disk change routine
@@ -29,7 +28,7 @@
         EXTERN	W_BOOTDRV	; "
         EXTERN	W_DRIVES	; "
 
-        ; Driver routines, use in DRVINIT/DRVINFO/INIENV only
+        ; Driver routines, use in DRVINIT/INIENV only
         EXTERN	PART_BUF
 
         EXTERN	PrintMsg
@@ -93,13 +92,6 @@ DRVINIT_Retry:
         call	PrintString
 
         xor	a
-        ret
-
-;********************************************************************************************************************************
-; Print disk driver information
-;********************************************************************************************************************************
-
-DRVINFO:	xor	a
         ret
 
 ;********************************************************************************************************************************

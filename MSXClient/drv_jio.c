@@ -69,7 +69,7 @@ unsigned int uiTransmit
  =======================================================================================================================
  =======================================================================================================================
  */
-unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char _ucFlags, unsigned int *_puiCRC)
+unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char _ucFlags)
 {
     /* Avoid interrupt before reading acknowledge or checksum */
     if (_uiLength != 2)
@@ -84,12 +84,6 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
 		{
             return COMMAND_REPORT_TIMEOUT;
 		}
-	}
-
-	if(_ucFlags & FLAGBITS_RX_CRC)
-	{
-        vSetCPU(eR800_DRAM);
-        *_puiCRC = uiXModemCRC16(_pvAddress, _uiLength, *_puiCRC);
 	}
 
 	return COMMAND_OK;
@@ -154,7 +148,7 @@ unsigned char ucReadOrWriteSectors
 			if(_ucFlags & FLAGBITS_TX_CRC)
 			{
 				uiReceivedCRC = 0;
-				ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), _ucFlags, &uiReceivedCRC);
+                ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), _ucFlags);
 				if(ucResult == COMMAND_OK)
 				{
 					switch(uiAcknowledge)
@@ -173,15 +167,20 @@ unsigned char ucReadOrWriteSectors
                 uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), _ucFlags, uiTransmitCRC, true);
 			}
 
-            uiComputedCRC = 0;
-            ucResult = ucReceive(_pvAddress, uiTotalLength, _ucFlags, &uiComputedCRC);
+            ucResult = ucReceive(_pvAddress, uiTotalLength, _ucFlags);
 
             if((ucResult == COMMAND_OK) && (_ucFlags & FLAGBITS_RX_CRC))
 			{
-                ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, 0);
-                if ((ucResult == COMMAND_OK) && (uiReceivedCRC != uiComputedCRC))
+                ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), _ucFlags);
+                if (ucResult == COMMAND_OK)
                 {
-                    ucResult = COMMAND_REPORT_BAD_RX_CRC;
+                    vSetCPU(eR800_DRAM);
+                    uiComputedCRC = uiXModemCRC16(_pvAddress, uiTotalLength, 0);
+
+                    if (uiReceivedCRC != uiComputedCRC)
+                    {
+                        ucResult = COMMAND_REPORT_BAD_RX_CRC;
+                    }
                 }
 			}
 		}
