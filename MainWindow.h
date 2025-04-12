@@ -28,16 +28,16 @@ class	MainWindow;
 }
 
 class MainWindow :
-	public QMainWindow
+                   public QMainWindow
 {
-	Q_OBJECT
+    Q_OBJECT
 
-/*
+    /*
  -----------------------------------------------------------------------------------------------------------------------
  -----------------------------------------------------------------------------------------------------------------------
  */
 public:
-	MainWindow();
+    MainWindow();
     ~MainWindow();
 
 public slots:
@@ -56,8 +56,8 @@ public slots:
     void        onUnlockTimer();
 
 private:
-    void		vTransmitData(const QByteArray &_roData);
-    quint16     uiTransmit(const void *_pvAddress, unsigned int	_uiLength, unsigned char _ucFlags, quint16 _uiCRC, bool _bLast);
+    void		vTransmitData(const QByteArray &_roData, int _iDelay);
+    quint16     uiTransmit(const void *_pvAddress, unsigned int	_uiLength, unsigned char _ucFlags, quint16 _uiCRC, bool _bLast, int _iDelay);
     quint16     uiXModemCRC16(const void * _pucData, size_t _uiSize, quint16 _uiCRC);
     QByteArray	acGetServerInfo();
 
@@ -82,7 +82,7 @@ private:
     }
     std::unique_ptr<ByteReader>     m_poCurrentByteReader;
     Ui::MainWindow                  *m_poUI = nullptr;
-	QTimer							*m_poRedLightOffTimer = nullptr;
+    QTimer							*m_poRedLightOffTimer = nullptr;
     QTimer							*m_poGreenLightOffTimer = nullptr;
     QTimer							*m_poUnlockTimer = nullptr;
     Interface                       *m_poInterface = nullptr;
