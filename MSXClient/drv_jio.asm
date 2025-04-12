@@ -36,9 +36,9 @@
         EXTERN	PrintString
 
 ; Hardware driver variables
-W_FLAGS	equ	DRVSIZE
-W_TMP	equ	DRVSIZE+1
-DRVMEM	equ	2
+W_FLAGS     equ	DRVSIZE
+W_COMMAND   equ	DRVSIZE+1
+DRVMEM      equ	2
 
 #include "flags.inc"
 
@@ -50,8 +50,6 @@ GETCPU	equ	$183
 ;********************************************************************************************************************************
 
 DRVINIT:
-        ld	(ix+W_FLAGS),0
-
         call	PrintMsg
 IFDEF IDEDOS1
         db	"JIO MSX-DOS 1",13,10
@@ -81,7 +79,8 @@ DRVINIT_Retry:
         ld	b,1
         ld	hl,PART_BUF
 
-        ld      a,COMMAND_INFO
+        ld	(ix+W_FLAGS),0
+        ld      (ix+W_COMMAND),COMMAND_INFO
         call	ReadOrWriteSectors
         jr	c,DRVINIT_Retry
 
@@ -162,9 +161,9 @@ DSKIO:	push	hl
 	call	GETWRK	; Base address of workarea in hl and ix
 	pop	af
 
-        ld      (ix+W_TMP),COMMAND_WRITE
+        ld      (ix+W_COMMAND),COMMAND_WRITE
 	jr	c,WriteFlag
-        ld      (ix+W_TMP),COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_READ
 WriteFlag:
 
         ld	e,a
@@ -210,7 +209,6 @@ r402:	ld	c,(iy+$00)
 	pop	af	; Restore sector counter
 	ld	b,a
 
-        ld      a,(ix+W_TMP)
         jp	ReadOrWriteSectors
 
 	; Disk i/o error
@@ -270,7 +268,7 @@ INCLUDE	"crt.asm"
 ; Input: C,DE = sector number
 ;********************************************************************************************************************************
 READSEC:
-        ld      a,COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_READ
         ld	b,1
 
 ; CDE : Sector
@@ -278,25 +276,14 @@ READSEC:
 ; HL  : Address
 
 ReadOrWriteSectors:
-        push    af
-        ld      a,(ix+W_FLAGS)
-        and     0xF0
-        ld      (ix+W_FLAGS),a
-        pop     af
+        push    ix              ; _pucFlagsAndCommand
+        push    hl              ; _pvAddress
 
-        or      (ix+W_FLAGS)
-        ld      (ix+W_FLAGS),a
-
-        ld      a,c             ; Flags
-        ld      c,(ix+W_FLAGS)
+        ld      a,c
+        ld      c,b             ; _ucLength
         push    bc
 
-        push    hl              ; Address
-
-        ld      c,b             ; Length
-        push    bc
-
-        ld      b,0
+        ld      b,0             ; _ulSector in BCDE
         ld      c,a
 
         di
@@ -620,50 +607,107 @@ RX_PE:	in	f,(c)	; 14
 ; Output: HL    = updated CRC-16
 
 uiXModemCRC16:
-    ld  l,c
-    ld  h,b
 
-    ld  b,l
-    dec hl
-    inc h
-    ld  c,h
 
-    pop hl
-    pop hl
-    push hl
-    dec sp
-    dec sp
+        ld	l,c
+        ld	h,b
+        ld	b,l
+        dec	hl
+        inc	h
+        ld	c,h
 
+        pop hl
+        pop hl
+        push hl
+        dec sp
+        dec sp
 crc16:
-    push bc
-    ld	a,(de)
-    inc	de
-    xor     h
-    ld      b,a
-    ld      c,l
-    rrca
-    rrca
-    rrca
-    rrca
-    ld      l,a
-    and     0fh
-    ld      h,a
-    xor     b
-    ld      b,a
-    xor     l
-    and     0f0h
-    ld      l,a
-    xor     c
-    add     hl,hl
-    xor     h
-    ld      h,a
-    ld      a,l
-    xor     b
-    ld      l,a
+        ld	a,l
+        ex	af,af'
+        ld	a,(de)
+        inc	de
+        xor	h
+        ld	h,CrcTab/256
+        ld	l,a
+        ex	af,af'
+        xor	(hl)
+        inc	h
+        ld	l,(hl)
+        ld	h,a
+        djnz	crc16
+        dec	c
+        jp	nz,crc16
+        ret
 
-    pop     bc
-    djnz    crc16
+        SECTION	DRV_CRCTAB
 
-    dec     c
-    jp      nz,crc16
-    ret
+        ORG	$7E00	; align to 256-byte page boundary
+
+CrcTab:	; high bytes
+        db	000h,010h,020h,030h,040h,050h,060h,070h
+        db	081h,091h,0A1h,0B1h,0C1h,0D1h,0E1h,0F1h
+        db	012h,002h,032h,022h,052h,042h,072h,062h
+        db	093h,083h,0B3h,0A3h,0D3h,0C3h,0F3h,0E3h
+        db	024h,034h,004h,014h,064h,074h,044h,054h
+        db	0A5h,0B5h,085h,095h,0E5h,0F5h,0C5h,0D5h
+        db	036h,026h,016h,006h,076h,066h,056h,046h
+        db	0B7h,0A7h,097h,087h,0F7h,0E7h,0D7h,0C7h
+        db	048h,058h,068h,078h,008h,018h,028h,038h
+        db	0C9h,0D9h,0E9h,0F9h,089h,099h,0A9h,0B9h
+        db	05Ah,04Ah,07Ah,06Ah,01Ah,00Ah,03Ah,02Ah
+        db	0DBh,0CBh,0FBh,0EBh,09Bh,08Bh,0BBh,0ABh
+        db	06Ch,07Ch,04Ch,05Ch,02Ch,03Ch,00Ch,01Ch
+        db	0EDh,0FDh,0CDh,0DDh,0ADh,0BDh,08Dh,09Dh
+        db	07Eh,06Eh,05Eh,04Eh,03Eh,02Eh,01Eh,00Eh
+        db	0FFh,0EFh,0DFh,0CFh,0BFh,0AFh,09Fh,08Fh
+        db	091h,081h,0B1h,0A1h,0D1h,0C1h,0F1h,0E1h
+        db	010h,000h,030h,020h,050h,040h,070h,060h
+        db	083h,093h,0A3h,0B3h,0C3h,0D3h,0E3h,0F3h
+        db	002h,012h,022h,032h,042h,052h,062h,072h
+        db	0B5h,0A5h,095h,085h,0F5h,0E5h,0D5h,0C5h
+        db	034h,024h,014h,004h,074h,064h,054h,044h
+        db	0A7h,0B7h,087h,097h,0E7h,0F7h,0C7h,0D7h
+        db	026h,036h,006h,016h,066h,076h,046h,056h
+        db	0D9h,0C9h,0F9h,0E9h,099h,089h,0B9h,0A9h
+        db	058h,048h,078h,068h,018h,008h,038h,028h
+        db	0CBh,0DBh,0EBh,0FBh,08Bh,09Bh,0ABh,0BBh
+        db	04Ah,05Ah,06Ah,07Ah,00Ah,01Ah,02Ah,03Ah
+        db	0FDh,0EDh,0DDh,0CDh,0BDh,0ADh,09Dh,08Dh
+        db	07Ch,06Ch,05Ch,04Ch,03Ch,02Ch,01Ch,00Ch
+        db	0EFh,0FFh,0CFh,0DFh,0AFh,0BFh,08Fh,09Fh
+        db	06Eh,07Eh,04Eh,05Eh,02Eh,03Eh,00Eh,01Eh
+
+        ;low bytes
+        db	000h,021h,042h,063h,084h,0A5h,0C6h,0E7h
+        db	008h,029h,04Ah,06Bh,08Ch,0ADh,0CEh,0EFh
+        db	031h,010h,073h,052h,0B5h,094h,0F7h,0D6h
+        db	039h,018h,07Bh,05Ah,0BDh,09Ch,0FFh,0DEh
+        db	062h,043h,020h,001h,0E6h,0C7h,0A4h,085h
+        db	06Ah,04Bh,028h,009h,0EEh,0CFh,0ACh,08Dh
+        db	053h,072h,011h,030h,0D7h,0F6h,095h,0B4h
+        db	05Bh,07Ah,019h,038h,0DFh,0FEh,09Dh,0BCh
+        db	0C4h,0E5h,086h,0A7h,040h,061h,002h,023h
+        db	0CCh,0EDh,08Eh,0AFh,048h,069h,00Ah,02Bh
+        db	0F5h,0D4h,0B7h,096h,071h,050h,033h,012h
+        db	0FDh,0DCh,0BFh,09Eh,079h,058h,03Bh,01Ah
+        db	0A6h,087h,0E4h,0C5h,022h,003h,060h,041h
+        db	0AEh,08Fh,0ECh,0CDh,02Ah,00Bh,068h,049h
+        db	097h,0B6h,0D5h,0F4h,013h,032h,051h,070h
+        db	09Fh,0BEh,0DDh,0FCh,01Bh,03Ah,059h,078h
+        db	088h,0A9h,0CAh,0EBh,00Ch,02Dh,04Eh,06Fh
+        db	080h,0A1h,0C2h,0E3h,004h,025h,046h,067h
+        db	0B9h,098h,0FBh,0DAh,03Dh,01Ch,07Fh,05Eh
+        db	0B1h,090h,0F3h,0D2h,035h,014h,077h,056h
+        db	0EAh,0CBh,0A8h,089h,06Eh,04Fh,02Ch,00Dh
+        db	0E2h,0C3h,0A0h,081h,066h,047h,024h,005h
+        db	0DBh,0FAh,099h,0B8h,05Fh,07Eh,01Dh,03Ch
+        db	0D3h,0F2h,091h,0B0h,057h,076h,015h,034h
+        db	04Ch,06Dh,00Eh,02Fh,0C8h,0E9h,08Ah,0ABh
+        db	044h,065h,006h,027h,0C0h,0E1h,082h,0A3h
+        db	07Dh,05Ch,03Fh,01Eh,0F9h,0D8h,0BBh,09Ah
+        db	075h,054h,037h,016h,0F1h,0D0h,0B3h,092h
+        db	02Eh,00Fh,06Ch,04Dh,0AAh,08Bh,0E8h,0C9h
+        db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
+        db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
+        db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
+

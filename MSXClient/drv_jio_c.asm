@@ -72,38 +72,46 @@ _0013:
 	JP	_LEAVE_DIRECT_L09
 ucReadOrWriteSectors:
 	CALL	_ENT_AUTO_DIRECT_L09
-	DEFW	65514
+	DEFW	65510
 	PUSH	IY
-	LD	B,(IX+12)
-	LD	IYH,B
+	LD	HL,W_FLAGS
+	LD	C,(IX+12)
+	LD	B,(IX+13)
+	ADD	HL,BC
+	LD	D,(HL)
+	LD	IYH,D
+	LD	HL,W_COMMAND
+	ADD	HL,BC
+	LD	B,(HL)
+	LD	(IX-4),B
 	CALL	eGetCPU
-	LD	(IX-4),A
-	LD	(IX-14),74
-	LD	(IX-13),73
-	LD	(IX-12),79
+	LD	(IX-7),A
+	LD	(IX-18),74
+	LD	(IX-17),73
+	LD	(IX-16),79
+	LD	(IX-15),D
 	LD	B,(IX+2)
-	LD	(IX-10),B
+	LD	(IX-13),B
 	LD	H,(IX+3)
-	LD	(IX-9),H
-	LD	L,C
+	LD	(IX-12),H
+	LD	L,(IX+4)
 	LD	BC,0
-	LD	(IX-8),L
+	LD	(IX-11),L
 	LD	B,(IX+8)
-	LD	(IX-7),B
+	LD	(IX-10),B
 	LD	L,(IX+10)
 	LD	H,(IX+11)
-	LD	(IX-6),L
-	LD	(IX-5),H
+	LD	(IX-9),L
+	LD	(IX-8),H
 	LD	H,B
 	LD	L,C
 	ADD	HL,HL
-	LD	(IX-22),L
-	LD	(IX-21),H
+	LD	(IX-26),L
+	LD	(IX-25),H
 _0016:
-	LD	B,IYH
-	LD	(IX-11),B
-	LD	A,IYH
-	AND	15
+	LD	B,(IX-4)
+	LD	(IX-14),B
+	LD	A,B
 	CP	3
 	JR	NZ,_0043
 	LD	A,1
@@ -117,7 +125,7 @@ _0044:
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	BC,4
+	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
 	EX	DE,HL
@@ -126,19 +134,18 @@ _0044:
 	POP	AF
 	POP	AF
 	LD	IYL,0
-	LD	A,IYH
-	AND	15
-	DEC	A
-	DEC	A
+	LD	B,(IX-4)
+	DEC	B
+	DEC	B
 	JR	NZ,_0018
 _0017:
-	LD	C,A
+	LD	C,B
 	PUSH	BC
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	BC,6
-	LD	HL,20
+	LD	C,6
+	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	uiTransmit
@@ -150,8 +157,8 @@ _0017:
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	uiTransmit
@@ -162,13 +169,10 @@ _0017:
 	BIT	5,B
 	JR	Z,_0023
 _0019:
-	XOR	A
-	LD	(IX-20),A
-	LD	(IX-19),A
 	LD	C,IYH
 	PUSH	BC
 	LD	BC,2
-	LD	HL,24
+	LD	HL,27
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	ucReceive
@@ -177,8 +181,8 @@ _0019:
 	OR	A
 	JR	NZ,_0023
 _0021:
-	LD	C,(IX-2)
-	LD	B,(IX-1)
+	LD	C,(IX-3)
+	LD	B,(IX-2)
 	LD	HL,4369
 	AND	A
 	SBC	HL,BC
@@ -198,9 +202,8 @@ _0022:
 _0020:
 	JR	_0037
 _0018:
-	LD	A,IYH
-	AND	15
-	DEC	A
+	LD	B,(IX-4)
+	DEC	B
 	JR	NZ,_0029
 _0028:
 	LD	C,1
@@ -208,8 +211,8 @@ _0028:
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	BC,6
-	LD	HL,20
+	LD	C,6
+	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	uiTransmit
@@ -219,8 +222,8 @@ _0028:
 _0029:
 	LD	C,IYH
 	PUSH	BC
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	ucReceive
@@ -250,14 +253,14 @@ _0034:
 	CALL	vSetCPU
 	LD	HL,0
 	PUSH	HL
-	LD	C,(IX-22)
-	LD	B,(IX-21)
+	LD	C,(IX-26)
+	LD	B,(IX-25)
 	LD	E,(IX+10)
 	LD	D,(IX+11)
 	CALL	uiXModemCRC16
 	POP	AF
-	LD	C,(IX-20)
-	LD	B,(IX-19)
+	LD	C,(IX-24)
+	LD	B,(IX-23)
 	AND	A
 	SBC	HL,BC
 	JR	Z,_0037
@@ -272,14 +275,14 @@ _0027:
 	DEC	B
 	JR	Z,_0039
 _0038:
-	LD	(IX-11),B
+	LD	(IX-14),B
 	LD	C,1
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	BC,4
+	LD	BC,5
 	LD	L,16
 	ADD	HL,SP
 	EX	DE,HL
@@ -296,7 +299,7 @@ _0039:
 	BIT	7,B
 	JP	NZ,_0016
 _0014:
-	LD	E,(IX-4)
+	LD	E,(IX-7)
 	CALL	vSetCPU
 	DEFB	251
 	LD	A,IYL

@@ -29,41 +29,44 @@
 ; FASTALLOC	Calculate max 4K free clusters for large drives in ALLOC function to avoid slow DIR command
 
 ; Apply to all targets
-	OPTM	EQU	1	
+        OPTM	EQU	1	; use optimized code
+        BTWAIT	EQU	$5000	; boot menu wait time-out (default $5000 is appr. 3 sec for MSX/3.58Mhz)
+
 
 IF PPIDE || JIO || UART
-	DEFINE	FASTALLOC
+        DEFINE	FASTALLOC
 ENDIF
 
 IF CFIDE || PPIDE
-	DEFINE	FAT16
-	DEFINE	FAT16DOS1
-	MOD1	EQU	'x'	; eXtended
-	MOD2	EQU	'i'	; Ide
+        DEFINE	FAT16
+        DEFINE	FAT16DOS1
+        DEFINE	BOOTCHOICE	; show boot menu / drive choice
+        MOD1	EQU	'x'	; eXtended
+        MOD2	EQU	'i'	; Ide
 ENDIF
 
 IFDEF JIO
-	DEFINE	FAT16
-	DEFINE	FAT16DOS1
-	MOD1	EQU	'x'	; eXended
-	MOD2	EQU	'r'	; JIO Remote disk
+        DEFINE	FAT16
+        DEFINE	FAT16DOS1
+        MOD1	EQU	'x'	; eXended
+        MOD2	EQU	'r'	; JIO Remote disk
 ENDIF
 
 IFDEF UART
-	DEFINE	FAT16
-	DEFINE	FAT16DOS1
-	MOD1	EQU	'x'	; eXended
-	MOD2	EQU	'u'	; UART
+        DEFINE	FAT16
+        DEFINE	FAT16DOS1
+        MOD1	EQU	'x'	; eXended
+        MOD2	EQU	'u'	; UART
 ENDIF
 
 IFDEF CORE
-	DEFINE	FAT16
-	DEFINE	FAT16DOS1
-	MOD1	EQU	'x'	; eXtended
-	MOD2	EQU	' '	;
+        DEFINE	FAT16
+        DEFINE	FAT16DOS1
+        MOD1	EQU	'x'	; eXtended
+        MOD2	EQU	' '	;
 ENDIF
 
 IFDEF TEST
-	MOD1	EQU	't'	; Test
-	MOD2	EQU	' '	; 
+        MOD1	EQU	't'	; Test
+        MOD2	EQU	' '	;
 ENDIF
