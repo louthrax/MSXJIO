@@ -16,8 +16,6 @@ unix:!android:CONFIG(release, debug|release) {
 }
 
 android {
-    FORMS = MainWindowAndroid.ui
-
     QT += svg
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
 
@@ -98,4 +96,5 @@ DISTFILES += \
     MSXClient/p1_main.asm \
     MSXClient/p3_paging.asm \
     android/AndroidManifest.xml \
-    docs/Notes.odt
+    docs/Notes.odt \
+    readme.md

@@ -6,11 +6,7 @@
 #include <QThread>
 
 #include "MainWindow.h"
-#ifdef Q_OS_ANDROID
-#include "ui_MainWindowAndroid.h"
-#else
 #include "ui_MainWindow.h"
-#endif
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
 
