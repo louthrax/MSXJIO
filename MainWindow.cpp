@@ -87,6 +87,9 @@ quint16 MainWindow::uiTransmit
 		} \
 	}
 
+#define TRANSMIT_DELAY_SHORT 3
+#define TRANSMIT_DELAY_LONG  7
+
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -154,7 +157,7 @@ Task MainWindow::oParser()
 					/*~~~~~~~~~~~~~~~~~~*/
 
 					oInfoData = acGetServerInfo();
-                    uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, 3);
+                    uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, TRANSMIT_DELAY_SHORT);
 				}
                 else
                 {
@@ -185,8 +188,8 @@ Task MainWindow::oParser()
 					vLog
 					(
 						eLogRead,
-						"Read%c  %2d sector(s) at %10d to   0x%04X",
-                        ucFlags & FLAG_RX_CRC ? 'C' : ' ',
+                        "Read%s  %2d sector(s) at %10d to   0x%04X",
+                        ucFlags & FLAG_RX_CRC ? "✓" : " ",
 						oHeader.m_ucLength,
 						oHeader.m_uiSector,
 						oHeader.m_uiAddress
@@ -194,7 +197,7 @@ Task MainWindow::oParser()
 					m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
 					oFileData = m_poImageFile->read(oHeader.m_ucLength * 512);
 
-                    uiTransmit(oFileData.constData(), oFileData.size(), ucFlags, 0, true, 3);
+                    uiTransmit(oFileData.constData(), oFileData.size(), ucFlags, 0, true, TRANSMIT_DELAY_SHORT);
 				}
                 else
                 {
@@ -231,7 +234,7 @@ Task MainWindow::oParser()
 				{
                     if (m_bImageWriteProtected || m_bReadOnly)
                     {
-                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, 6);
+                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, TRANSMIT_DELAY_LONG);
                         vLog(eLogError, "Can't write to write-protected disk image.");
                     }
                     else
@@ -242,8 +245,8 @@ Task MainWindow::oParser()
                         vLog
                         (
                             eLogWrite,
-                            "Write%c %2d sector(s) at %10d from 0x%04X",
-                            ucFlags & FLAG_TX_CRC ? 'C' : ' ',
+                            "Write%s %2d sector(s) at %10d from 0x%04X",
+                            ucFlags & FLAG_TX_CRC ? "✓" : " ",
                             oHeader.m_ucLength,
                             oHeader.m_uiSector,
                             oHeader.m_uiAddress
@@ -257,18 +260,18 @@ Task MainWindow::oParser()
 
                         if (iBytesToWrite == iBytesWritten)
                         {
-                            uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, 6);
+                            uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, TRANSMIT_DELAY_LONG);
                         }
                         else
                         {
-                            uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, 6);
+                            uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, TRANSMIT_DELAY_LONG);
                             vLog(eLogError, "Write error on disk image.");
                         }
                     }
 				}
 				else
 				{
-                    uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, 6);
+                    uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, TRANSMIT_DELAY_LONG);
                     vLog(eLogError, "Transmission error !");
                     m_uiTransmitErrors++;
                     vUpdateLights();
@@ -295,6 +298,10 @@ Task MainWindow::oParser()
             m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
+
+        case COMMAND_DRIVE_REPORT_WRITE_PROTECTED:
+            vLog(eLogError, "Write protected error !");
+            break;
 
 		default:
             vLog(eLogError, "Unknown command: %d", ucCommand);
@@ -616,14 +623,17 @@ QByteArray MainWindow::acGetServerInfo()
 
 	oText = QString::asprintf
 		(
-            "\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  :%s\r\nCRCs  : %s%s\r\n",
+            "\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  : %s\r\nFlags : \r\n",
 			qPrintable(oInfo.absoluteFilePath()),
 			qPrintable(oFormatSize(oInfo.size())),
 			qPrintable(oInfo.lastModified().toString(Qt::ISODate)),
-            (m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write",
-			m_bRxCRC ? "Rx" : "",
-			m_bTxCRC ? "Tx" : ""
+            (m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write"
 		);
+
+    if (m_bRxCRC) oText+="    Rx CRC\r\n";
+    if (m_bTxCRC) oText+="    Tx CRC\r\n";
+    if (m_bTimeout) oText+="    Timeout\r\n";
+    if (m_bAutoRetry) oText+="    Auto retry\r\n";
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 	QByteArray	acPayload = oText.toUtf8().left(510);
@@ -913,6 +923,8 @@ void MainWindow::onButtonClicked()
 			vSetState(eCStateDisconnected);
 		}
 	}
+
+    vSaveSettings();
 }
 
 /*

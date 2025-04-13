@@ -52,9 +52,9 @@ GETCPU	equ	$183
 DRVINIT:
         call	PrintMsg
 IFDEF IDEDOS1
-        db	"JIO MSX-DOS 1",13,10
+        db	"JIO MSX-DOS1",13,10
 ELSE
-        db	"JIO MSX-DOS 2",13,10
+        db	"JIO MSX-DOS2",13,10
 ENDIF
         db	"Rev.: "
         INCLUDE	"rdate.inc"	; Revision date
@@ -79,7 +79,7 @@ DRVINIT_Retry:
         ld	b,1
         ld	hl,PART_BUF
 
-        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC
+        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
         ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         call	ReadOrWriteSectors
         jr	c,DRVINIT_Retry
@@ -441,8 +441,7 @@ bJIOReceive:
         push	ix
         push	de
 
-        ld      d,0
-        ld      e,d
+        ld      de,0
 
         dec	hl
         ld	b,(hl)	; What if HL=0 ?
@@ -627,11 +626,13 @@ uiXModemCRC16:
         inc	h
         ld	c,h
 
-        pop hl
-        pop hl
-        push hl
-        dec sp
-        dec sp
+        push    ix
+        ld      ix,0
+        add     ix,sp
+        ld      l,(ix+4)
+        ld      h,(ix+5)
+        pop     ix
+
 crc16:
         ld	a,l
         ex	af,af'
