@@ -77,7 +77,7 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
 
     while(!bJIOReceive(_pvAddress, _uiLength))
 	{
-        if(!(_ucFlags & FLAG_RETRY_TIMEOUT))
+        if(_ucFlags & FLAG_TIMEOUT)
 		{
             return COMMAND_DRIVE_REPORT_DRIVE_NOT_READY;
 		}
@@ -184,7 +184,7 @@ unsigned char ucReadOrWriteSectors
 			oCommonHeader.m_ucCommand = ucResult;
             uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, true);
         }
-    } while((ucResult != COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_RETRY_CRC));
+    } while((ucResult != COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_AUTO_RETRY));
 
 	vSetCPU(eCPUMode);
 

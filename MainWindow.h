@@ -91,9 +91,10 @@ private:
 
     bool                            m_bRxCRC;
     bool                            m_bTxCRC;
-    bool                            m_bRetryTimeout;
-    bool                            m_bRetryCRC;
-    bool                            m_bWriteProtected;
+    bool                            m_bTimeout;
+    bool                            m_bAutoRetry;
+    bool                            m_bImageWriteProtected;
+    bool                            m_bReadOnly;
 
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;

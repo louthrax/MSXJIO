@@ -1,8 +1,8 @@
 
 #define FLAG_RX_CRC                 (1 << 0)
 #define FLAG_TX_CRC                 (1 << 1)
-#define FLAG_RETRY_TIMEOUT          (1 << 2)
-#define FLAG_RETRY_CRC              (1 << 3)
+#define FLAG_TIMEOUT                (1 << 2)
+#define FLAG_AUTO_RETRY             (1 << 3)
 
 #define COMMAND_DRIVE_REPORT_OK		       0
 #define COMMAND_DRIVE_REPORT_WRITE_PROTECTED   0+1

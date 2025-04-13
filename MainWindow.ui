@@ -289,10 +289,10 @@
       <widget class="QPushButton" name="clearPushButton">
        <property name="geometry">
         <rect>
-         <x>280</x>
-         <y>420</y>
-         <width>71</width>
-         <height>41</height>
+         <x>290</x>
+         <y>410</y>
+         <width>61</width>
+         <height>51</height>
         </rect>
        </property>
        <property name="text">
@@ -338,65 +338,81 @@
         <bool>false</bool>
        </property>
       </widget>
-      <widget class="QPushButton" name="readCRC">
+      <widget class="QPushButton" name="RxCRC">
        <property name="geometry">
         <rect>
-         <x>30</x>
+         <x>10</x>
          <y>410</y>
-         <width>91</width>
+         <width>81</width>
          <height>26</height>
         </rect>
        </property>
        <property name="text">
-        <string>RX CRC</string>
+        <string>Rx CRC</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
        </property>
       </widget>
-      <widget class="QPushButton" name="writeCRC">
+      <widget class="QPushButton" name="TxCRC">
        <property name="geometry">
         <rect>
-         <x>160</x>
+         <x>100</x>
          <y>410</y>
-         <width>91</width>
+         <width>81</width>
          <height>26</height>
         </rect>
        </property>
        <property name="text">
-        <string>TX CRC</string>
+        <string>Tx CRC</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
        </property>
       </widget>
-      <widget class="QPushButton" name="retryCRC">
+      <widget class="QPushButton" name="autoRetry">
        <property name="geometry">
         <rect>
-         <x>30</x>
+         <x>10</x>
          <y>440</y>
-         <width>91</width>
+         <width>81</width>
          <height>26</height>
         </rect>
        </property>
        <property name="text">
-        <string>Retry CRC</string>
+        <string>Auto retry</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
        </property>
       </widget>
-      <widget class="QPushButton" name="retryTimeout">
+      <widget class="QPushButton" name="timeout">
        <property name="geometry">
         <rect>
-         <x>160</x>
+         <x>100</x>
          <y>440</y>
-         <width>91</width>
+         <width>81</width>
          <height>26</height>
         </rect>
        </property>
        <property name="text">
-        <string>Retry timout</string>
+        <string>Timeout</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="readOnly">
+       <property name="geometry">
+        <rect>
+         <x>190</x>
+         <y>410</y>
+         <width>81</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Read only</string>
        </property>
        <property name="checkable">
         <bool>true</bool>
@@ -572,7 +588,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>retryCRC</sender>
+   <sender>autoRetry</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
    <slot>onButtonClicked()</slot>
@@ -588,7 +604,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>writeCRC</sender>
+   <sender>TxCRC</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
    <slot>onButtonClicked()</slot>
@@ -604,7 +620,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>readCRC</sender>
+   <sender>RxCRC</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
    <slot>onButtonClicked()</slot>
@@ -620,7 +636,7 @@
    </hints>
   </connection>
   <connection>
-   <sender>retryTimeout</sender>
+   <sender>timeout</sender>
    <signal>clicked()</signal>
    <receiver>MainWindow</receiver>
    <slot>onButtonClicked()</slot>
@@ -628,6 +644,22 @@
     <hint type="sourcelabel">
      <x>205</x>
      <y>442</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>readOnly</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>230</x>
+     <y>422</y>
     </hint>
     <hint type="destinationlabel">
      <x>180</x>

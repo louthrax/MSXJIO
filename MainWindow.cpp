@@ -229,33 +229,47 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-                    if (m_bWriteProtected)
-                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, 6);
-                    else
-                        uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, 6);
-
-					vLog
-					(
-						eLogWrite,
-						"Write%c %2d sector(s) at %10d from 0x%04X",
-                        ucFlags & FLAG_TX_CRC ? 'C' : ' ',
-						oHeader.m_ucLength,
-						oHeader.m_uiSector,
-						oHeader.m_uiAddress
-					);
-
-                    if (!m_bWriteProtected)
+                    if (m_bImageWriteProtected || m_bReadOnly)
                     {
+                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, 6);
+                        vLog(eLogError, "Can't write to write-protected disk image.");
+                    }
+                    else
+                    {
+                        qint64 iBytesToWrite;
+                        qint64 iBytesWritten;
+
+                        vLog
+                        (
+                            eLogWrite,
+                            "Write%c %2d sector(s) at %10d from 0x%04X",
+                            ucFlags & FLAG_TX_CRC ? 'C' : ' ',
+                            oHeader.m_ucLength,
+                            oHeader.m_uiSector,
+                            oHeader.m_uiAddress
+                        );
+
                         m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
-                        m_poImageFile->write(acData, oHeader.m_ucLength*512);
+
+                        iBytesToWrite = oHeader.m_ucLength*512;
+                        iBytesWritten = m_poImageFile->write(acData, iBytesToWrite);
                         m_poImageFile->flush();
+
+                        if (iBytesToWrite == iBytesWritten)
+                        {
+                            uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, 6);
+                        }
+                        else
+                        {
+                            uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, 6);
+                            vLog(eLogError, "Write error on disk image.");
+                        }
                     }
 				}
 				else
 				{
                     uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, 6);
-
-                    vLog(eLogError, "Transmission error ! %x %x %d", uiReceivedCRC, uiCRC);
+                    vLog(eLogError, "Transmission error !");
                     m_uiTransmitErrors++;
                     vUpdateLights();
 				}
@@ -337,8 +351,9 @@ MainWindow::MainWindow() :
 
     m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
     m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
-    m_bRetryCRC = m_poSettings->value("RetryCRC", true).toBool();
-    m_bRetryTimeout = m_poSettings->value("RetryTimeout", true).toBool();
+    m_bAutoRetry = m_poSettings->value("AutoRetry", true).toBool();
+    m_bTimeout = m_poSettings->value("Timeout", true).toBool();
+    m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
 
     m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
@@ -360,10 +375,11 @@ MainWindow::MainWindow() :
 #endif
 	m_poUI->logWidget->setFont(oFont);
 
-	m_poUI->readCRC->setChecked(m_bRxCRC);
-	m_poUI->writeCRC->setChecked(m_bTxCRC);
-	m_poUI->retryCRC->setChecked(m_bRetryCRC);
-	m_poUI->retryTimeout->setChecked(m_bRetryTimeout);
+    m_poUI->RxCRC->setChecked(m_bRxCRC);
+    m_poUI->TxCRC->setChecked(m_bTxCRC);
+    m_poUI->autoRetry->setChecked(m_bAutoRetry);
+    m_poUI->timeout->setChecked(m_bTimeout);
+    m_poUI->readOnly->setChecked(m_bReadOnly);
 
 	vSetInterface(m_eSelectedInterface);
 
@@ -600,10 +616,11 @@ QByteArray MainWindow::acGetServerInfo()
 
 	oText = QString::asprintf
 		(
-			"\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nCRCs  : %s%s\r\n",
+            "\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  :%s\r\nCRCs  : %s%s\r\n",
 			qPrintable(oInfo.absoluteFilePath()),
 			qPrintable(oFormatSize(oInfo.size())),
 			qPrintable(oInfo.lastModified().toString(Qt::ISODate)),
+            (m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write",
 			m_bRxCRC ? "Rx" : "",
 			m_bTxCRC ? "Tx" : ""
 		);
@@ -616,7 +633,7 @@ QByteArray MainWindow::acGetServerInfo()
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
     quint8	ucFlags = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) |
-        (m_bRetryTimeout ? FLAG_RETRY_TIMEOUT : 0) | (m_bRetryCRC ? FLAG_RETRY_CRC : 0);
+        (m_bTimeout ? FLAG_TIMEOUT : 0) | (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	return QByteArray(1, ucFlags) + acPayload.leftJustified(511, '\0');
@@ -633,8 +650,9 @@ void MainWindow::vSaveSettings()
 	m_poSettings->setValue("SelectedBlueToothID", m_oSelectedBlueToothID);
 	m_poSettings->setValue("RxCRC", m_bRxCRC);
 	m_poSettings->setValue("TxCRC", m_bTxCRC);
-	m_poSettings->setValue("RetryCRC", m_bRetryCRC);
-	m_poSettings->setValue("RetryTimeout", m_bRetryTimeout);
+    m_poSettings->setValue("AutoRetry", m_bAutoRetry);
+    m_poSettings->setValue("Timeout", m_bTimeout);
+    m_poSettings->setValue("ReadOnly", m_bReadOnly);
 #ifndef Q_OS_ANDROID
 	m_poSettings->setValue("SelectedInterface", m_eSelectedInterface);
 #endif
@@ -784,15 +802,17 @@ void MainWindow::onButtonClicked()
 
 	poSender = QObject::sender();
 
-	if(poSender == m_poUI->readCRC)
+    if(poSender == m_poUI->RxCRC)
 		m_bRxCRC = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->writeCRC)
+    else if(poSender == m_poUI->TxCRC)
 		m_bTxCRC = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->retryCRC)
-		m_bRetryCRC = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->retryTimeout)
-		m_bRetryTimeout = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->unlockPushButton)
+    else if(poSender == m_poUI->autoRetry)
+        m_bAutoRetry = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->timeout)
+        m_bTimeout = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->readOnly)
+        m_bReadOnly = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->unlockPushButton)
 	{
 		if(m_poUnlockTimer->isActive())
 			m_poUnlockTimer->stop();
@@ -852,10 +872,10 @@ void MainWindow::onButtonClicked()
                 else
 				{
                     if (m_poImageFile->open(QIODevice::ReadWrite)) {
-                        m_bWriteProtected = false;
+                        m_bImageWriteProtected = false;
                     }
                     else if (m_poImageFile->open(QIODevice::ReadOnly)) {
-                        m_bWriteProtected = true;
+                        m_bImageWriteProtected = true;
                     }
                     else
                     {
