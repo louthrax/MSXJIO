@@ -208,8 +208,9 @@ Task MainWindow::oParser()
         case COMMAND_DRIVE_WRITE:
 			{
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-                quint16 uiAcknowledgeOK = DRIVE_ACKNOWLEDGE_WRITE_OK;
-                quint16 uiAcknowledgeFailed = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+                quint16 uiAcknowledgeWriteOK        = DRIVE_ACKNOWLEDGE_WRITE_OK;
+                quint16 uiAcknowledgeWriteFailed    = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+                quint16 uiAcknowledgeWriteProtected = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
                 char *acData;
                 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -228,10 +229,10 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-                    if(ucFlags & FLAG_TX_CRC)
-                    {
-                        uiTransmit(&uiAcknowledgeOK, sizeof(uiAcknowledgeOK), 0, 0, false, 3);
-                    }
+                    if (m_bWriteProtected)
+                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, 6);
+                    else
+                        uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, 6);
 
 					vLog
 					(
@@ -243,16 +244,20 @@ Task MainWindow::oParser()
 						oHeader.m_uiAddress
 					);
 
-					m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
-                    m_poImageFile->write(acData, oHeader.m_ucLength*512);
-					m_poImageFile->flush();
+                    if (!m_bWriteProtected)
+                    {
+                        m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
+                        m_poImageFile->write(acData, oHeader.m_ucLength*512);
+                        m_poImageFile->flush();
+                    }
 				}
 				else
 				{
+                    uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, 6);
+
                     vLog(eLogError, "Transmission error ! %x %x %d", uiReceivedCRC, uiCRC);
                     m_uiTransmitErrors++;
                     vUpdateLights();
-                    uiTransmit(&uiAcknowledgeFailed, sizeof(uiAcknowledgeFailed), 0, 0, false, 6);
 				}
 
                 free(acData);
@@ -330,11 +335,12 @@ MainWindow::MainWindow() :
 	QButtonGroup	*group = new QButtonGroup(this);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-	m_bRxCRC = m_poSettings->value("RxCRC", false).toBool();
-	m_bTxCRC = m_poSettings->value("TxCRC", false).toBool();
-	m_bRetryCRC = m_poSettings->value("RetryCRC", false).toBool();
-	m_bRetryTimeout = m_poSettings->value("RetryTimeout", false).toBool();
-	m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
+    m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
+    m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
+    m_bRetryCRC = m_poSettings->value("RetryCRC", true).toBool();
+    m_bRetryTimeout = m_poSettings->value("RetryTimeout", true).toBool();
+
+    m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
 
@@ -843,9 +849,18 @@ void MainWindow::onButtonClicked()
 				{
 					m_poImageFile = nullptr;
 				}
-				else if(!m_poImageFile->open(QIODevice::ReadWrite))
+                else
 				{
-					m_poImageFile = nullptr;
+                    if (m_poImageFile->open(QIODevice::ReadWrite)) {
+                        m_bWriteProtected = false;
+                    }
+                    else if (m_poImageFile->open(QIODevice::ReadOnly)) {
+                        m_bWriteProtected = true;
+                    }
+                    else
+                    {
+                        m_poImageFile = nullptr;
+                    }
 				}
 			}
 

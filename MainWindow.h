@@ -88,10 +88,13 @@ private:
     Interface                       *m_poInterface = nullptr;
     QFile							*m_poImageFile = nullptr;
     QByteArray						m_acBuffer;
-    bool                            m_bRxCRC = true;
-    bool                            m_bTxCRC = false;
-    bool                            m_bRetryTimeout = false;
-    bool                            m_bRetryCRC = false;
+
+    bool                            m_bRxCRC;
+    bool                            m_bTxCRC;
+    bool                            m_bRetryTimeout;
+    bool                            m_bRetryCRC;
+    bool                            m_bWriteProtected;
+
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;
     quint64                         m_uiBytesReceived = 0;

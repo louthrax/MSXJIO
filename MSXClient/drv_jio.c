@@ -145,17 +145,14 @@ unsigned char ucReadOrWriteSectors
             uiTransmitCRC = uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), ucFlags, uiTransmitCRC, false);
             uiTransmit(_pvAddress, uiTotalLength, ucFlags, uiTransmitCRC, true);
 
-            if(ucFlags & FLAG_TX_CRC)
-			{
-                ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
-                if(ucResult == COMMAND_DRIVE_REPORT_OK)
-				{
-                    if (uiAcknowledge != DRIVE_ACKNOWLEDGE_WRITE_OK)
-                    {
-                        ucResult = (uiAcknowledge == DRIVE_ACKNOWLEDGE_WRITE_PROTECTED) ? COMMAND_DRIVE_REPORT_WRITE_PROTECTED : COMMAND_DRIVE_REPORT_WRITE_FAULT;
-                    }
+            ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
+            if(ucResult == COMMAND_DRIVE_REPORT_OK)
+            {
+                if (uiAcknowledge != DRIVE_ACKNOWLEDGE_WRITE_OK)
+                {
+                    ucResult = (uiAcknowledge == DRIVE_ACKNOWLEDGE_WRITE_PROTECTED) ? COMMAND_DRIVE_REPORT_WRITE_PROTECTED : COMMAND_DRIVE_REPORT_WRITE_FAULT;
                 }
-			}
+            }
 		}
 		else
 		{
