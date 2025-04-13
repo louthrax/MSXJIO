@@ -63,14 +63,14 @@ quint16 MainWindow::uiTransmit
     int             _iDelay
 )
 {
-    if(_ucFlags & FLAGBITS_RX_CRC)
+    if(_ucFlags & FLAG_RX_CRC)
 	{
 		_uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 	}
 
     vTransmitData(QByteArray((const char *) _pvAddress, _uiLength), _iDelay);
 
-    if(_bLast && (_ucFlags & FLAGBITS_RX_CRC))
+    if(_bLast && (_ucFlags & FLAG_RX_CRC))
 	{
         vTransmitData(QByteArray((const char *) &_uiCRC, sizeof(_uiCRC)), _iDelay);
 	}
@@ -81,7 +81,7 @@ quint16 MainWindow::uiTransmit
 #define vReceive(_pvAddress, _uiSize, _ucFlags, _uiCRC) \
 	{ \
         memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
-        if(_ucFlags & FLAGBITS_TX_CRC) \
+        if(_ucFlags & FLAG_TX_CRC) \
 		{ \
 			_uiCRC = uiXModemCRC16(_pvAddress, _uiSize, _uiCRC); \
 		} \
@@ -116,7 +116,7 @@ Task MainWindow::oParser()
 
 		while(iSigPos < sigLength)
 		{
-            vReceive(&ucChar, sizeof(ucChar), FLAGBITS_TX_CRC, uiCRC);
+            vReceive(&ucChar, sizeof(ucChar), FLAG_TX_CRC, uiCRC);
 
             if(ucChar == signature[iSigPos])
 			{
@@ -133,15 +133,15 @@ Task MainWindow::oParser()
 			}
 		}
 
-        vReceive(&ucFlags, sizeof(ucFlags), FLAGBITS_TX_CRC, uiCRC);
-        vReceive(&ucCommand, sizeof(ucCommand), FLAGBITS_TX_CRC, uiCRC);
+        vReceive(&ucFlags, sizeof(ucFlags), FLAG_TX_CRC, uiCRC);
+        vReceive(&ucCommand, sizeof(ucCommand), FLAG_TX_CRC, uiCRC);
 
         switch(ucCommand)
 		{
-		case COMMAND_INFO:
+        case COMMAND_DRIVE_INFO:
 			{
 				bCRCOK = true;
-                if(ucFlags & FLAGBITS_TX_CRC)
+                if(ucFlags & FLAG_TX_CRC)
 				{
 					vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
                     bCRCOK = uiReceivedCRC == uiCRC;
@@ -165,12 +165,12 @@ Task MainWindow::oParser()
 			}
 			break;
 
-		case COMMAND_READ:
+        case COMMAND_DRIVE_READ:
 			{
                 vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
 
 				bCRCOK = true;
-                if(ucFlags & FLAGBITS_TX_CRC)
+                if(ucFlags & FLAG_TX_CRC)
 				{
 					vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
                     bCRCOK = uiReceivedCRC == uiCRC;
@@ -186,7 +186,7 @@ Task MainWindow::oParser()
 					(
 						eLogRead,
 						"Read%c  %2d sector(s) at %10d to   0x%04X",
-                        ucFlags & FLAGBITS_RX_CRC ? 'C' : ' ',
+                        ucFlags & FLAG_RX_CRC ? 'C' : ' ',
 						oHeader.m_ucLength,
 						oHeader.m_uiSector,
 						oHeader.m_uiAddress
@@ -205,7 +205,7 @@ Task MainWindow::oParser()
 			}
 			break;
 
-		case COMMAND_WRITE:
+        case COMMAND_DRIVE_WRITE:
 			{
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
                 quint16 uiAcknowledgeOK = 0x2222;
@@ -220,7 +220,7 @@ Task MainWindow::oParser()
                 vReceive(acData, oHeader.m_ucLength*512, ucFlags, uiCRC);
 
                 bCRCOK = true;
-                if(ucFlags & FLAGBITS_TX_CRC)
+                if(ucFlags & FLAG_TX_CRC)
 				{
                     vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
                     bCRCOK = uiReceivedCRC == uiCRC;
@@ -228,7 +228,7 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-                    if(ucFlags & FLAGBITS_TX_CRC)
+                    if(ucFlags & FLAG_TX_CRC)
                     {
                         uiTransmit(&uiAcknowledgeOK, sizeof(uiAcknowledgeOK), 0, 0, false, 3);
                     }
@@ -237,7 +237,7 @@ Task MainWindow::oParser()
 					(
 						eLogWrite,
 						"Write%c %2d sector(s) at %10d from 0x%04X",
-                        ucFlags & FLAGBITS_TX_CRC ? 'C' : ' ',
+                        ucFlags & FLAG_TX_CRC ? 'C' : ' ',
 						oHeader.m_ucLength,
 						oHeader.m_uiSector,
 						oHeader.m_uiAddress
@@ -259,25 +259,25 @@ Task MainWindow::oParser()
 			}
 			break;
 
-		case COMMAND_REPORT_BAD_RX_CRC:
+        case COMMAND_DRIVE_REPORT_BAD_RX_CRC:
 			vLog(eLogError, "Reception error !");
             m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
 
-		case COMMAND_REPORT_BAD_TX_CRC:
+        case COMMAND_DRIVE_REPORT_BAD_TX_CRC:
 			vLog(eLogError, "Transmission error !");
             m_uiTransmitErrors++;
 			vUpdateLights();
 			break;
 
-		case COMMAND_REPORT_BAD_ACKNOWLEDGE:
+        case COMMAND_DRIVE_REPORT_BAD_ACKNOWLEDGE:
 			vLog(eLogError, "Acknowledge error !");
             m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
 
-		case COMMAND_REPORT_TIMEOUT:
+        case COMMAND_DRIVE_REPORT_TIMEOUT:
 			vLog(eLogError, "Timeout error !");
             m_uiReceiveErrors++;
 			vUpdateLights();
@@ -615,8 +615,8 @@ QByteArray MainWindow::acGetServerInfo()
 	vLog(eLogInfo, oText);
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	quint8	ucFlags = (m_bRxCRC ? FLAGBITS_RX_CRC : 0) | (m_bTxCRC ? FLAGBITS_TX_CRC : 0) |
-		(m_bRetryTimeout ? FLAGBITS_RETRY_TIMEOUT : 0) | (m_bRetryCRC ? FLAGBITS_RETRY_CRC : 0);
+    quint8	ucFlags = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) |
+        (m_bRetryTimeout ? FLAG_RETRY_TIMEOUT : 0) | (m_bRetryCRC ? FLAG_RETRY_CRC : 0);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	return QByteArray(1, ucFlags) + acPayload.leftJustified(511, '\0');

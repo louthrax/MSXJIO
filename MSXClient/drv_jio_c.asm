@@ -1,6 +1,6 @@
 uiTransmit:
 	CALL	_ENT_PARM_DIRECT_L09
-	BIT	5,(IX+8)
+	BIT	1,(IX+8)
 	JR	Z,_0001
 _0000:
 	LD	E,2
@@ -17,7 +17,6 @@ _0000:
 _0001:
 	LD	E,0
 	CALL	vSetCPU
-	DEFB	243
 	LD	C,(IX+4)
 	LD	B,(IX+5)
 	LD	E,(IX+2)
@@ -26,7 +25,7 @@ _0001:
 	XOR	A
 	OR	(IX+12)
 	JR	Z,_0003
-	BIT	5,(IX+8)
+	BIT	1,(IX+8)
 	JR	Z,_0003
 _0005:
 _0004:
@@ -49,7 +48,6 @@ ucReceive:
 _0006:
 	LD	E,0
 	CALL	vSetCPU
-	DEFB	243
 _0007:
 _0009:
 	LD	C,(IX+4)
@@ -60,10 +58,10 @@ _0009:
 	OR	A
 	JR	NZ,_0008
 _0010:
-	BIT	6,(IX+8)
+	BIT	2,(IX+8)
 	JR	NZ,_0007
 _0011:
-	LD	A,7
+	LD	A,4
 	JR	_0013
 _0012:
 _0008:
@@ -112,7 +110,7 @@ _0016:
 	LD	B,(IX-4)
 	LD	(IX-14),B
 	LD	A,B
-	CP	3
+	CP	7
 	JR	NZ,_0043
 	LD	A,1
 	JR	_0044
@@ -134,17 +132,16 @@ _0044:
 	POP	AF
 	POP	AF
 	LD	IYL,0
-	LD	B,(IX-4)
-	DEC	B
-	DEC	B
+	LD	A,(IX-4)
+	CP	6
 	JR	NZ,_0018
 _0017:
-	LD	C,B
+	LD	C,0
 	PUSH	BC
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	C,6
+	LD	BC,6
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -166,7 +163,7 @@ _0017:
 	POP	AF
 	POP	AF
 	LD	B,IYH
-	BIT	5,B
+	BIT	1,B
 	JR	Z,_0023
 _0019:
 	LD	C,IYH
@@ -188,22 +185,21 @@ _0021:
 	SBC	HL,BC
 	JR	NZ,_0025
 _0024:
-	LD	IYL,5
-	JR	_0023
+	LD	IYL,2
+	JR	_0037
 _0025:
 	LD	HL,8738
 	AND	A
 	SBC	HL,BC
 	JR	Z,_0037
 _0026:
-	LD	IYL,6
+	LD	IYL,3
 _0023:
 _0022:
 _0020:
 	JR	_0037
 _0018:
-	LD	B,(IX-4)
-	DEC	B
+	CP	5
 	JR	NZ,_0029
 _0028:
 	LD	C,1
@@ -211,7 +207,7 @@ _0028:
 	PUSH	HL
 	LD	C,IYH
 	PUSH	BC
-	LD	C,6
+	LD	BC,6
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -232,7 +228,7 @@ _0029:
 	OR	A
 	JR	NZ,_0037
 	LD	B,IYH
-	BIT	4,B
+	BIT	0,B
 	JR	Z,_0037
 _0033:
 _0032:
@@ -265,7 +261,7 @@ _0034:
 	SBC	HL,BC
 	JR	Z,_0037
 _0036:
-	LD	IYL,4
+	LD	IYL,1
 _0037:
 _0035:
 _0031:
@@ -296,12 +292,11 @@ _0039:
 	DEC	B
 	JR	Z,_0014
 	LD	B,IYH
-	BIT	7,B
+	BIT	3,B
 	JP	NZ,_0016
 _0014:
 	LD	E,(IX-7)
 	CALL	vSetCPU
-	DEFB	251
 	LD	A,IYL
 	POP	IY
 	JP	_LEAVE_DIRECT_L09

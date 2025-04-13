@@ -4,11 +4,6 @@
 
 typedef unsigned char bool;
 
-#pragma function = intrinsic(0)
-void _opc (unsigned char);
-#define cei()	_opc(0xFB)
-#define cdi()	_opc(0xF3)
-
 typedef enum { eZ80 = 0, eR800_ROM = 1, eR800_DRAM = 2 } tdCPUMode;
 
 typedef struct
@@ -51,17 +46,16 @@ unsigned int uiTransmit
 	bool			_bLast
 )
 {
-	if(_ucFlags & FLAGBITS_TX_CRC)
+    if(_ucFlags & FLAG_TX_CRC)
 	{
         vSetCPU(eR800_DRAM);
         _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 	}
 
     vSetCPU(eZ80);
-    cdi();
     vJIOTransmit(_pvAddress, _uiLength);
 
-	if(_bLast && (_ucFlags & FLAGBITS_TX_CRC))
+    if(_bLast && (_ucFlags & FLAG_TX_CRC))
 	{
         vJIOTransmit(&_uiCRC, sizeof(_uiCRC));
     }
@@ -79,18 +73,17 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
     if (_uiLength != 2)
     {
         vSetCPU(eZ80);
-        cdi();
     }
 
     while(!bJIOReceive(_pvAddress, _uiLength))
 	{
-		if(!(_ucFlags & FLAGBITS_RETRY_TIMEOUT))
+        if(!(_ucFlags & FLAG_RETRY_TIMEOUT))
 		{
-            return COMMAND_REPORT_TIMEOUT;
+            return COMMAND_DRIVE_REPORT_TIMEOUT;
 		}
 	}
 
-	return COMMAND_OK;
+    return COMMAND_DRIVE_REPORT_OK;
 }
 
 /*
@@ -138,12 +131,12 @@ unsigned char ucReadOrWriteSectors
 
 	do
 	{
-		ucResult = COMMAND_OK;
+        ucResult = COMMAND_DRIVE_REPORT_OK;
         oCommonHeader.m_ucCommand = ucCommand;
 
-        uiTransmitCRC = uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, ucCommand == COMMAND_INFO);
+        uiTransmitCRC = uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, ucCommand == COMMAND_DRIVE_INFO);
 
-		if(ucCommand == COMMAND_WRITE)
+        if(ucCommand == COMMAND_DRIVE_WRITE)
 		{
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 			unsigned int	uiAcknowledge;
@@ -152,54 +145,53 @@ unsigned char ucReadOrWriteSectors
             uiTransmitCRC = uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), ucFlags, uiTransmitCRC, false);
             uiTransmit(_pvAddress, uiTotalLength, ucFlags, uiTransmitCRC, true);
 
-            if(ucFlags & FLAGBITS_TX_CRC)
+            if(ucFlags & FLAG_TX_CRC)
 			{
                 ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
-				if(ucResult == COMMAND_OK)
+                if(ucResult == COMMAND_DRIVE_REPORT_OK)
 				{
 					switch(uiAcknowledge)
 					{
-					case 0x1111:	ucResult = COMMAND_REPORT_BAD_TX_CRC; break;
+                    case 0x1111:	ucResult = COMMAND_DRIVE_REPORT_BAD_TX_CRC; break;
 					case 0x2222:	break;
-					default:		ucResult = COMMAND_REPORT_BAD_ACKNOWLEDGE; break;
+                    default:		ucResult = COMMAND_DRIVE_REPORT_BAD_ACKNOWLEDGE; break;
 					}
 				}
 			}
 		}
 		else
 		{
-			if(ucCommand == COMMAND_READ)
+            if(ucCommand == COMMAND_DRIVE_READ)
 			{
                 uiTransmit(&oReadWriteHeader, sizeof(oReadWriteHeader), ucFlags, uiTransmitCRC, true);
 			}
 
             ucResult = ucReceive(_pvAddress, uiTotalLength, ucFlags);
 
-            if((ucResult == COMMAND_OK) && (ucFlags & FLAGBITS_RX_CRC))
+            if((ucResult == COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_RX_CRC))
 			{
                 ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), ucFlags);
-                if (ucResult == COMMAND_OK)
+                if (ucResult == COMMAND_DRIVE_REPORT_OK)
                 {
                     vSetCPU(eR800_DRAM);
                     uiComputedCRC = uiXModemCRC16(_pvAddress, uiTotalLength, 0);
 
                     if (uiReceivedCRC != uiComputedCRC)
                     {
-                        ucResult = COMMAND_REPORT_BAD_RX_CRC;
+                        ucResult = COMMAND_DRIVE_REPORT_BAD_RX_CRC;
                     }
                 }
 			}
 		}
 
-		if(ucResult != COMMAND_OK)
+        if(ucResult != COMMAND_DRIVE_REPORT_OK)
 		{
 			oCommonHeader.m_ucCommand = ucResult;
             uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, true);
         }
-    } while((ucResult != COMMAND_OK) && (ucFlags & FLAGBITS_RETRY_CRC));
+    } while((ucResult != COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_RETRY_CRC));
 
 	vSetCPU(eCPUMode);
-	cei();
 
     return ucResult;
 }

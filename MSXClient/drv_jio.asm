@@ -79,8 +79,8 @@ DRVINIT_Retry:
         ld	b,1
         ld	hl,PART_BUF
 
-        ld	(ix+W_FLAGS),0
-        ld      (ix+W_COMMAND),COMMAND_INFO
+        ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         call	ReadOrWriteSectors
         jr	c,DRVINIT_Retry
 
@@ -147,6 +147,18 @@ TestInterface:	ld	a,(hl)
 ;   Carry flag = clear ==> successful, set ==> error
 ;   If error then
 ;	 A = error code
+;           0 - Write protected disk
+;           2 - Drive not ready
+;           4 - Data (CRC) error
+;           6 - Seek error
+;           7 - Record not found
+;           10 - Write fault (verify error)
+;           12 - Other error
+;           new 18 - Not a DOS disk
+;           new 20 - Incompatible disk
+;           new 22 - Unformatted disk
+;           new 24 - Unexpected disk change
+;
 ;	 B = remaining sectors
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
@@ -161,9 +173,9 @@ DSKIO:	push	hl
 	call	GETWRK	; Base address of workarea in hl and ix
 	pop	af
 
-        ld      (ix+W_COMMAND),COMMAND_WRITE
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
 	jr	c,WriteFlag
-        ld      (ix+W_COMMAND),COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
 WriteFlag:
 
         ld	e,a
@@ -268,7 +280,7 @@ INCLUDE	"crt.asm"
 ; Input: C,DE = sector number
 ;********************************************************************************************************************************
 READSEC:
-        ld      (ix+W_COMMAND),COMMAND_READ
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
         ld	b,1
 
 ; CDE : Sector
@@ -286,7 +298,6 @@ ReadOrWriteSectors:
         ld      b,0             ; _ulSector in BCDE
         ld      c,a
 
-        di
         call    ucReadOrWriteSectors
         pop hl
         pop hl
@@ -326,6 +337,7 @@ vJIOTransmit:
         inc	bc
         exx
         ld	a,15
+        di
         out	($a0),a
         in	a,($a2)
         or	4
@@ -437,6 +449,7 @@ bJIOReceive:
         ld	ix,0
         add	ix,sp
         ld	a,15
+        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -511,8 +524,6 @@ RX_PO:	in	f,(c)	; 14
         ld	a,d	;  5
         or	e	;  5
         jp	nz,RX_PO	; 11
-
-        jp	ReceiveOK
 ;________________________________________________________________________________________________________________________________
 
 ReceiveOK:
@@ -596,7 +607,7 @@ RX_PE:	in	f,(c)	; 14
         or	e	;  5
         jp	nz,RX_PE	; 11
 
-        jp	ReceiveOK
+        jr	ReceiveOK
 
 ;________________________________________________________________________________________________________________________________
 
@@ -607,8 +618,7 @@ RX_PE:	in	f,(c)	; 14
 ; Output: HL    = updated CRC-16
 
 uiXModemCRC16:
-
-
+        ei
         ld	l,c
         ld	h,b
         ld	b,l
