@@ -305,6 +305,7 @@ ReadOrWriteSectors:
 
         or      a
         ret     z
+        dec     a
         scf
         ret
 

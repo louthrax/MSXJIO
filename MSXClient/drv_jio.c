@@ -79,7 +79,7 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
 	{
         if(!(_ucFlags & FLAG_RETRY_TIMEOUT))
 		{
-            return COMMAND_DRIVE_REPORT_TIMEOUT;
+            return COMMAND_DRIVE_REPORT_DRIVE_NOT_READY;
 		}
 	}
 
@@ -150,13 +150,11 @@ unsigned char ucReadOrWriteSectors
                 ucResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
                 if(ucResult == COMMAND_DRIVE_REPORT_OK)
 				{
-					switch(uiAcknowledge)
-					{
-                    case 0x1111:	ucResult = COMMAND_DRIVE_REPORT_BAD_TX_CRC; break;
-					case 0x2222:	break;
-                    default:		ucResult = COMMAND_DRIVE_REPORT_BAD_ACKNOWLEDGE; break;
-					}
-				}
+                    if (uiAcknowledge != DRIVE_ACKNOWLEDGE_WRITE_OK)
+                    {
+                        ucResult = (uiAcknowledge == DRIVE_ACKNOWLEDGE_WRITE_PROTECTED) ? COMMAND_DRIVE_REPORT_WRITE_PROTECTED : COMMAND_DRIVE_REPORT_WRITE_FAULT;
+                    }
+                }
 			}
 		}
 		else
@@ -178,7 +176,7 @@ unsigned char ucReadOrWriteSectors
 
                     if (uiReceivedCRC != uiComputedCRC)
                     {
-                        ucResult = COMMAND_DRIVE_REPORT_BAD_RX_CRC;
+                        ucResult = COMMAND_DRIVE_REPORT_CRC_ERROR;
                     }
                 }
 			}

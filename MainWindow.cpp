@@ -208,8 +208,8 @@ Task MainWindow::oParser()
         case COMMAND_DRIVE_WRITE:
 			{
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-                quint16 uiAcknowledgeOK = 0x2222;
-                quint16 uiAcknowledgeBAD = 0x1111;
+                quint16 uiAcknowledgeOK = DRIVE_ACKNOWLEDGE_WRITE_OK;
+                quint16 uiAcknowledgeFailed = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
                 char *acData;
                 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -252,33 +252,27 @@ Task MainWindow::oParser()
                     vLog(eLogError, "Transmission error ! %x %x %d", uiReceivedCRC, uiCRC);
                     m_uiTransmitErrors++;
                     vUpdateLights();
-                    uiTransmit(&uiAcknowledgeBAD, sizeof(uiAcknowledgeBAD), 0, 0, false, 6);
+                    uiTransmit(&uiAcknowledgeFailed, sizeof(uiAcknowledgeFailed), 0, 0, false, 6);
 				}
 
                 free(acData);
 			}
 			break;
 
-        case COMMAND_DRIVE_REPORT_BAD_RX_CRC:
-			vLog(eLogError, "Reception error !");
+        case COMMAND_DRIVE_REPORT_CRC_ERROR:
+            vLog(eLogError, "CRC error !");
             m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
 
-        case COMMAND_DRIVE_REPORT_BAD_TX_CRC:
-			vLog(eLogError, "Transmission error !");
+        case COMMAND_DRIVE_REPORT_WRITE_FAULT:
+            vLog(eLogError, "Write fault error !");
             m_uiTransmitErrors++;
 			vUpdateLights();
 			break;
 
-        case COMMAND_DRIVE_REPORT_BAD_ACKNOWLEDGE:
-			vLog(eLogError, "Acknowledge error !");
-            m_uiReceiveErrors++;
-			vUpdateLights();
-			break;
-
-        case COMMAND_DRIVE_REPORT_TIMEOUT:
-			vLog(eLogError, "Timeout error !");
+        case COMMAND_DRIVE_REPORT_DRIVE_NOT_READY:
+            vLog(eLogError, "Timeout error !");
             m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
