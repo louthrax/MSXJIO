@@ -846,18 +846,27 @@ void MainWindow::onButtonClicked()
 #endif
 	else if(poSender == m_poUI->fileSelectPushButton)
 	{
-		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-		QString oImagePath = QFileDialog::getOpenFileName
-			(
-				nullptr,
-				"Select Disk Image",
-				QStandardPaths::writableLocation(QStandardPaths::DownloadLocation),
-				"Disk Images (*.dsk);;All Files (*)"
-			);
-		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-		m_poUI->imagePathLineEdit->setText(oImagePath);
-	}
+        QString lastFilePath = m_poUI->imagePathLineEdit->text();
+        QString initialDir;
+
+        if (!lastFilePath.isEmpty() && QFileInfo::exists(lastFilePath)) {
+            initialDir = QFileInfo(lastFilePath).absolutePath();
+        } else {
+            initialDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        }
+
+        QString oImagePath = QFileDialog::getOpenFileName(
+            nullptr,
+            "Select Disk Image",
+            initialDir,
+            "Disk Images (*.dsk);;All Files (*)"
+            );
+
+        if (!oImagePath.isEmpty()) {
+            m_poUI->imagePathLineEdit->setText(oImagePath);
+        }
+    }
 	else if(poSender == m_poUI->connectPushButton)
 	{
 		if(m_eConnectionState == eCStateDisconnected)
