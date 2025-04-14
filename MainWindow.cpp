@@ -23,6 +23,9 @@ typedef struct
 static_assert(sizeof(tdReadWriteHeader) == 6, "tdReadWriteHeader must be 6 bytes");
 std::coroutine_handle<> ByteReader::	m_soHandle = nullptr;
 
+#define TRANSMIT_DELAY_NORMAL		3
+#define TRANSMIT_DELAY_ACKNOWLEDGE	7
+
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -59,36 +62,32 @@ quint16 MainWindow::uiTransmit
 	unsigned int	_uiLength,
 	unsigned char	_ucFlags,
 	quint16			_uiCRC,
-    bool			_bLast,
-    int             _iDelay
+	bool			_bLast,
+	int				_iDelay
 )
 {
+	vTransmitData(QByteArray((const char *) _pvAddress, _uiLength), _iDelay);
+
     if(_ucFlags & FLAG_RX_CRC)
 	{
-		_uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
-	}
+        _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 
-    vTransmitData(QByteArray((const char *) _pvAddress, _uiLength), _iDelay);
-
-    if(_bLast && (_ucFlags & FLAG_RX_CRC))
-	{
-        vTransmitData(QByteArray((const char *) &_uiCRC, sizeof(_uiCRC)), _iDelay);
+        if (_bLast)
+            vTransmitData(QByteArray((const char *) &_uiCRC, sizeof(_uiCRC)), _iDelay);
 	}
 
 	return _uiCRC;
 }
 
+/* Can't be a method because of co_await... */
 #define vReceive(_pvAddress, _uiSize, _ucFlags, _uiCRC) \
 	{ \
-        memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
-        if(_ucFlags & FLAG_TX_CRC) \
+		memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
+		if(_ucFlags & FLAG_TX_CRC) \
 		{ \
 			_uiCRC = uiXModemCRC16(_pvAddress, _uiSize, _uiCRC); \
 		} \
 	}
-
-#define TRANSMIT_DELAY_SHORT 3
-#define TRANSMIT_DELAY_LONG  7
 
 /*
  =======================================================================================================================
@@ -96,18 +95,18 @@ quint16 MainWindow::uiTransmit
  */
 Task MainWindow::oParser()
 {
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	const char		*signature = "JIO";
-	const size_t	sigLength = strlen(signature);
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	const char		*szSignature = "JIO";
+	const size_t	uiSignaturegLength = strlen(szSignature);
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	while(true)
 	{
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-        quint8				ucFlags;
-        quint8				ucCommand;
-        quint8				ucChar;
-        tdReadWriteHeader	oHeader;
+		quint8				ucFlags;
+		quint8				ucCommand;
+		quint8				ucChar;
+		tdReadWriteHeader	oHeader;
 		size_t				iSigPos;
 		quint16				uiCRC;
 		bool				bCRCOK;
@@ -117,15 +116,15 @@ Task MainWindow::oParser()
 		iSigPos = 0;
 		uiCRC = 0;
 
-		while(iSigPos < sigLength)
+		while(iSigPos < uiSignaturegLength)
 		{
-            vReceive(&ucChar, sizeof(ucChar), FLAG_TX_CRC, uiCRC);
+			vReceive(&ucChar, sizeof(ucChar), FLAG_TX_CRC, uiCRC);
 
-            if(ucChar == signature[iSigPos])
+			if(ucChar == szSignature[iSigPos])
 			{
 				iSigPos++;
 			}
-            else if(ucChar == signature[0])
+			else if(ucChar == szSignature[0])
 			{
 				iSigPos = 1;
 			}
@@ -136,18 +135,18 @@ Task MainWindow::oParser()
 			}
 		}
 
-        vReceive(&ucFlags, sizeof(ucFlags), FLAG_TX_CRC, uiCRC);
-        vReceive(&ucCommand, sizeof(ucCommand), FLAG_TX_CRC, uiCRC);
+		vReceive(&ucFlags, sizeof(ucFlags), FLAG_TX_CRC, uiCRC);
+		vReceive(&ucCommand, sizeof(ucCommand), FLAG_TX_CRC, uiCRC);
 
-        switch(ucCommand)
+		switch(ucCommand)
 		{
-        case COMMAND_DRIVE_INFO:
+		case COMMAND_DRIVE_INFO:
 			{
 				bCRCOK = true;
-                if(ucFlags & FLAG_TX_CRC)
+				if(ucFlags & FLAG_TX_CRC)
 				{
 					vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
-                    bCRCOK = uiReceivedCRC == uiCRC;
+					bCRCOK = uiReceivedCRC == uiCRC;
 				}
 
 				if(bCRCOK)
@@ -157,26 +156,26 @@ Task MainWindow::oParser()
 					/*~~~~~~~~~~~~~~~~~~*/
 
 					oInfoData = acGetServerInfo();
-                    uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, TRANSMIT_DELAY_SHORT);
+					uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
 				}
-                else
-                {
-                    vLog(eLogError, "Transmission error !");
-                    m_uiTransmitErrors++;
-                    vUpdateLights();
-                }
+				else
+				{
+					vLog(eLogError, "Transmission error !");
+					m_uiTransmitErrors++;
+					vUpdateLights();
+				}
 			}
 			break;
 
-        case COMMAND_DRIVE_READ:
+		case COMMAND_DRIVE_READ:
 			{
-                vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
+				vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
 
 				bCRCOK = true;
-                if(ucFlags & FLAG_TX_CRC)
+				if(ucFlags & FLAG_TX_CRC)
 				{
 					vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
-                    bCRCOK = uiReceivedCRC == uiCRC;
+					bCRCOK = uiReceivedCRC == uiCRC;
 				}
 
 				if(bCRCOK)
@@ -188,8 +187,8 @@ Task MainWindow::oParser()
 					vLog
 					(
 						eLogRead,
-                        "Read%s  %2d sector(s) at %10d to   0x%04X",
-                        ucFlags & FLAG_RX_CRC ? "✓" : " ",
+						"Read%s  %2d sector(s) at %10d to   0x%04X",
+						ucFlags & FLAG_RX_CRC ? "✓" : " ",
 						oHeader.m_ucLength,
 						oHeader.m_uiSector,
 						oHeader.m_uiAddress
@@ -197,114 +196,148 @@ Task MainWindow::oParser()
 					m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
 					oFileData = m_poImageFile->read(oHeader.m_ucLength * 512);
 
-                    uiTransmit(oFileData.constData(), oFileData.size(), ucFlags, 0, true, TRANSMIT_DELAY_SHORT);
+					uiTransmit(oFileData.constData(), oFileData.size(), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
 				}
-                else
-                {
-                    vLog(eLogError, "Transmission error !");
-                    m_uiTransmitErrors++;
-                    vUpdateLights();
-                }
+				else
+				{
+					vLog(eLogError, "Transmission error !");
+					m_uiTransmitErrors++;
+					vUpdateLights();
+				}
 			}
 			break;
 
-        case COMMAND_DRIVE_WRITE:
+		case COMMAND_DRIVE_WRITE:
 			{
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-                quint16 uiAcknowledgeWriteOK        = DRIVE_ACKNOWLEDGE_WRITE_OK;
-                quint16 uiAcknowledgeWriteFailed    = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
-                quint16 uiAcknowledgeWriteProtected = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
-                char *acData;
-                /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+				quint16 uiAcknowledgeWriteOK = DRIVE_ACKNOWLEDGE_WRITE_OK;
+				quint16 uiAcknowledgeWriteFailed = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+				quint16 uiAcknowledgeWriteProtected = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+				char	*acData;
+				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-                vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
+				vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
 
-                acData = (char*)malloc(oHeader.m_ucLength*512);
+				acData = (char *) malloc(oHeader.m_ucLength * 512);
 
-                vReceive(acData, oHeader.m_ucLength*512, ucFlags, uiCRC);
+				vReceive(acData, oHeader.m_ucLength * 512, ucFlags, uiCRC);
 
-                bCRCOK = true;
-                if(ucFlags & FLAG_TX_CRC)
+				bCRCOK = true;
+				if(ucFlags & FLAG_TX_CRC)
 				{
-                    vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
-                    bCRCOK = uiReceivedCRC == uiCRC;
+					vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
+					bCRCOK = uiReceivedCRC == uiCRC;
 				}
 
 				if(bCRCOK)
 				{
-                    if (m_bImageWriteProtected || m_bReadOnly)
-                    {
-                        uiTransmit(&uiAcknowledgeWriteProtected, sizeof(uiAcknowledgeWriteProtected), 0, 0, false, TRANSMIT_DELAY_LONG);
-                        vLog(eLogError, "Can't write to write-protected disk image.");
-                    }
-                    else
-                    {
-                        qint64 iBytesToWrite;
-                        qint64 iBytesWritten;
+					if(m_bImageWriteProtected || m_bReadOnly)
+					{
+						uiTransmit
+						(
+							&uiAcknowledgeWriteProtected,
+							sizeof(uiAcknowledgeWriteProtected),
+							0,
+							0,
+							false,
+							TRANSMIT_DELAY_ACKNOWLEDGE
+						);
+						vLog(eLogError, "Can't write to write-protected disk image.");
+					}
+					else
+					{
+						/*~~~~~~~~~~~~~~~~~~*/
+						qint64	iBytesToWrite;
+						qint64	iBytesWritten;
+						/*~~~~~~~~~~~~~~~~~~*/
 
-                        vLog
-                        (
-                            eLogWrite,
-                            "Write%s %2d sector(s) at %10d from 0x%04X",
-                            ucFlags & FLAG_TX_CRC ? "✓" : " ",
-                            oHeader.m_ucLength,
-                            oHeader.m_uiSector,
-                            oHeader.m_uiAddress
-                        );
+						vLog
+						(
+							eLogWrite,
+							"Write%s %2d sector(s) at %10d from 0x%04X",
+							ucFlags & FLAG_TX_CRC ? "✓" : " ",
+							oHeader.m_ucLength,
+							oHeader.m_uiSector,
+							oHeader.m_uiAddress
+						);
 
-                        m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
+						m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
 
-                        iBytesToWrite = oHeader.m_ucLength*512;
-                        iBytesWritten = m_poImageFile->write(acData, iBytesToWrite);
-                        m_poImageFile->flush();
+						iBytesToWrite = oHeader.m_ucLength * 512;
+						iBytesWritten = m_poImageFile->write(acData, iBytesToWrite);
+						m_poImageFile->flush();
 
-                        if (iBytesToWrite == iBytesWritten)
-                        {
-                            uiTransmit(&uiAcknowledgeWriteOK, sizeof(uiAcknowledgeWriteOK), 0, 0, false, TRANSMIT_DELAY_LONG);
-                        }
-                        else
-                        {
-                            uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, TRANSMIT_DELAY_LONG);
-                            vLog(eLogError, "Write error on disk image.");
-                        }
-                    }
+						if(iBytesToWrite == iBytesWritten)
+						{
+							uiTransmit
+							(
+								&uiAcknowledgeWriteOK,
+								sizeof(uiAcknowledgeWriteOK),
+								0,
+								0,
+								false,
+								TRANSMIT_DELAY_ACKNOWLEDGE
+							);
+						}
+						else
+						{
+							uiTransmit
+							(
+								&uiAcknowledgeWriteFailed,
+								sizeof(uiAcknowledgeWriteFailed),
+								0,
+								0,
+								false,
+								TRANSMIT_DELAY_ACKNOWLEDGE
+							);
+							vLog(eLogError, "Write error on disk image.");
+						}
+					}
 				}
 				else
 				{
-                    uiTransmit(&uiAcknowledgeWriteFailed, sizeof(uiAcknowledgeWriteFailed), 0, 0, false, TRANSMIT_DELAY_LONG);
-                    vLog(eLogError, "Transmission error !");
-                    m_uiTransmitErrors++;
-                    vUpdateLights();
+					uiTransmit
+					(
+						&uiAcknowledgeWriteFailed,
+						sizeof(uiAcknowledgeWriteFailed),
+						0,
+						0,
+						false,
+						TRANSMIT_DELAY_ACKNOWLEDGE
+					);
+					vLog(eLogError, "Transmission error !");
+					m_uiTransmitErrors++;
+					vUpdateLights();
 				}
 
-                free(acData);
+				free(acData);
 			}
 			break;
 
-        case COMMAND_DRIVE_REPORT_CRC_ERROR:
-            vLog(eLogError, "CRC error !");
-            m_uiReceiveErrors++;
+		case COMMAND_DRIVE_REPORT_CRC_ERROR:
+			vLog(eLogError, "CRC error !");
+			m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
 
-        case COMMAND_DRIVE_REPORT_WRITE_FAULT:
-            vLog(eLogError, "Write fault error !");
-            m_uiTransmitErrors++;
+		case COMMAND_DRIVE_REPORT_WRITE_FAULT:
+			vLog(eLogError, "Write fault error !");
+			m_uiTransmitErrors++;
 			vUpdateLights();
 			break;
 
-        case COMMAND_DRIVE_REPORT_DRIVE_NOT_READY:
-            vLog(eLogError, "Timeout error !");
-            m_uiReceiveErrors++;
+		case COMMAND_DRIVE_REPORT_DRIVE_NOT_READY:
+			vLog(eLogError, "Timeout error !");
+			m_uiReceiveErrors++;
 			vUpdateLights();
 			break;
 
-        case COMMAND_DRIVE_REPORT_WRITE_PROTECTED:
-            vLog(eLogError, "Write protected error !");
-            break;
+		case COMMAND_DRIVE_REPORT_WRITE_PROTECTED:
+			vLog(eLogError, "Write protected error !");
+			break;
 
 		default:
-            vLog(eLogError, "Unknown command: %d", ucCommand);
+			vLog(eLogError, "Unknown command: %d", ucCommand);
 			break;
 		}
 	}
@@ -353,16 +386,16 @@ MainWindow::MainWindow() :
 	vAdjustScrollBars(m_poUI->namesListWidget);
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QButtonGroup	*group = new QButtonGroup(this);
+    QButtonGroup	*poGroup = new QButtonGroup(this);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
-    m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
-    m_bAutoRetry = m_poSettings->value("AutoRetry", true).toBool();
-    m_bTimeout = m_poSettings->value("Timeout", true).toBool();
-    m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
+	m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
+	m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
+	m_bAutoRetry = m_poSettings->value("AutoRetry", true).toBool();
+    m_bTimeout = m_poSettings->value("Timeout", false).toBool();
+	m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
 
-    m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
+	m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
 
@@ -373,20 +406,20 @@ MainWindow::MainWindow() :
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
 	m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
-	group->setExclusive(true);
-	group->addButton(m_poUI->USBButton);
-	group->addButton(m_poUI->bluetoothButton);
+    poGroup->setExclusive(true);
+    poGroup->addButton(m_poUI->USBButton);
+    poGroup->addButton(m_poUI->bluetoothButton);
 
 	m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
 	m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
 #endif
 	m_poUI->logWidget->setFont(oFont);
 
-    m_poUI->RxCRC->setChecked(m_bRxCRC);
-    m_poUI->TxCRC->setChecked(m_bTxCRC);
-    m_poUI->autoRetry->setChecked(m_bAutoRetry);
-    m_poUI->timeout->setChecked(m_bTimeout);
-    m_poUI->readOnly->setChecked(m_bReadOnly);
+	m_poUI->RxCRC->setChecked(m_bRxCRC);
+	m_poUI->TxCRC->setChecked(m_bTxCRC);
+	m_poUI->autoRetry->setChecked(m_bAutoRetry);
+	m_poUI->timeout->setChecked(m_bTimeout);
+	m_poUI->readOnly->setChecked(m_bReadOnly);
 
 	vSetInterface(m_eSelectedInterface);
 
@@ -394,6 +427,24 @@ MainWindow::MainWindow() :
 	m_poUI->addressLineEdit->setText(roSelectedID());
 
 	vSetState(m_eConnectionState);
+
+	m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
+	m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
+	m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
+	m_poUI->imagePathLineEdit->setToolTip("Path to the disk image to serve.");
+	m_poUI->redLightLabel->setToolTip("Indicates transmission activity on the MSX.\nFirst line: total bytes transmitted.\nSecond line: total transmission errors.");
+	m_poUI->greenLightLabel->setToolTip("Indicates reception activity on the MSX.\nFirst line: total bytes received.\nSecond line: total reception errors.");
+	m_poUI->namesListWidget->setToolTip("List of available communication devices.");
+	m_poUI->bluetoothButton->setToolTip("Select the Bluetooth interface.");
+	m_poUI->USBButton->setToolTip("Select the USB interface.");
+	m_poUI->refreshPushButton->setToolTip("Search for available devices again.");
+	m_poUI->clearPushButton->setToolTip("Clear the log output.");
+	m_poUI->unlockPushButton->setToolTip("Send repeated data to the MSX until it responds.\nUseful when the MSX is stuck waiting for data.");
+	m_poUI->RxCRC->setToolTip("Enable CRC checking for incoming data on the MSX.\nApplied at MSX startup.");
+	m_poUI->TxCRC->setToolTip("Enable CRC for outgoing data to the MSX.\nApplied at MSX startup.");
+	m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.");
+	m_poUI->timeout->setToolTip("If enabled, abort the command after a timeout.\nIf disabled, wait indefinitely for a response.");
+	m_poUI->readOnly->setToolTip("Prevent writes to the disk image.");
 
 	oParser();
 }
@@ -576,17 +627,17 @@ void MainWindow::onDeviceDisconnected()
  */
 void MainWindow::vTransmitData(const QByteArray &_roData, int _iDelay)
 {
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    QByteArray	acDataToTransmit = QByteArray(_iDelay, 0xFF) + QByteArray(1, 0xF0) + _roData;
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	QByteArray	acDataToTransmit = QByteArray(_iDelay, 0xFF) + QByteArray(1, 0xF0) + _roData;
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	vSetFrameColor(m_poUI->greenLightLabel, 0, 255, 0);
 	m_poGreenLightOffTimer->start(m_poGreenLightOffTimer->remainingTime() + qMax(16, _roData.size() / 9));
-    m_uiBytesTransmitted += _roData.size();
+	m_uiBytesTransmitted += _roData.size();
 
 	vUpdateLights();
 
-    m_poInterface->vWrite(acDataToTransmit);
+	m_poInterface->vWrite(acDataToTransmit);
 }
 
 /*
@@ -623,17 +674,17 @@ QByteArray MainWindow::acGetServerInfo()
 
 	oText = QString::asprintf
 		(
-            "\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  : %s\r\nFlags : \r\n",
+			"\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  : %s\r\nFlags : \r\n",
 			qPrintable(oInfo.absoluteFilePath()),
 			qPrintable(oFormatSize(oInfo.size())),
 			qPrintable(oInfo.lastModified().toString(Qt::ISODate)),
-            (m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write"
+			(m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write"
 		);
 
-    if (m_bRxCRC) oText+="    Rx CRC\r\n";
-    if (m_bTxCRC) oText+="    Tx CRC\r\n";
-    if (m_bTimeout) oText+="    Timeout\r\n";
-    if (m_bAutoRetry) oText+="    Auto retry\r\n";
+	if(m_bRxCRC) oText += "    Rx CRC\r\n";
+	if(m_bTxCRC) oText += "    Tx CRC\r\n";
+	if(m_bTimeout) oText += "    Timeout\r\n";
+	if(m_bAutoRetry) oText += "    Auto retry\r\n";
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 	QByteArray	acPayload = oText.toUtf8().left(510);
@@ -641,10 +692,10 @@ QByteArray MainWindow::acGetServerInfo()
 
 	vLog(eLogInfo, oText);
 
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    quint8	ucFlags = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) |
-        (m_bTimeout ? FLAG_TIMEOUT : 0) | (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	quint8	ucFlags = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) | (m_bTimeout ? FLAG_TIMEOUT : 0) |
+		(m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	return QByteArray(1, ucFlags) + acPayload.leftJustified(511, '\0');
 }
@@ -660,9 +711,9 @@ void MainWindow::vSaveSettings()
 	m_poSettings->setValue("SelectedBlueToothID", m_oSelectedBlueToothID);
 	m_poSettings->setValue("RxCRC", m_bRxCRC);
 	m_poSettings->setValue("TxCRC", m_bTxCRC);
-    m_poSettings->setValue("AutoRetry", m_bAutoRetry);
-    m_poSettings->setValue("Timeout", m_bTimeout);
-    m_poSettings->setValue("ReadOnly", m_bReadOnly);
+	m_poSettings->setValue("AutoRetry", m_bAutoRetry);
+	m_poSettings->setValue("Timeout", m_bTimeout);
+	m_poSettings->setValue("ReadOnly", m_bReadOnly);
 #ifndef Q_OS_ANDROID
 	m_poSettings->setValue("SelectedInterface", m_eSelectedInterface);
 #endif
@@ -771,7 +822,7 @@ void MainWindow::onUnlockTimer()
 	QByteArray	ba = QByteArray(10, 0xAA);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    vTransmitData(ba, 1);
+	vTransmitData(ba, 1);
 }
 
 /*
@@ -796,8 +847,8 @@ void MainWindow::onItemActivated(QListWidgetItem *_poItem)
  */
 void MainWindow::vUpdateLights()
 {
-    m_poUI->redLightLabel->setText(QLocale().toString(m_uiBytesReceived) + "\n" + QLocale().toString(m_uiTransmitErrors));
-    m_poUI->greenLightLabel->setText(QLocale().toString(m_uiBytesTransmitted) + "\n" + QLocale().toString(m_uiReceiveErrors));
+	m_poUI->redLightLabel->setText(QLocale().toString(m_uiBytesReceived) + "\n" + QLocale().toString(m_uiTransmitErrors));
+	m_poUI->greenLightLabel->setText(QLocale().toString(m_uiBytesTransmitted) + "\n" + QLocale().toString(m_uiReceiveErrors));
 }
 
 /*
@@ -812,17 +863,17 @@ void MainWindow::onButtonClicked()
 
 	poSender = QObject::sender();
 
-    if(poSender == m_poUI->RxCRC)
+	if(poSender == m_poUI->RxCRC)
 		m_bRxCRC = ((QPushButton *) poSender)->isChecked();
-    else if(poSender == m_poUI->TxCRC)
+	else if(poSender == m_poUI->TxCRC)
 		m_bTxCRC = ((QPushButton *) poSender)->isChecked();
-    else if(poSender == m_poUI->autoRetry)
-        m_bAutoRetry = ((QPushButton *) poSender)->isChecked();
-    else if(poSender == m_poUI->timeout)
-        m_bTimeout = ((QPushButton *) poSender)->isChecked();
-    else if(poSender == m_poUI->readOnly)
-        m_bReadOnly = ((QPushButton *) poSender)->isChecked();
-    else if(poSender == m_poUI->unlockPushButton)
+	else if(poSender == m_poUI->autoRetry)
+		m_bAutoRetry = ((QPushButton *) poSender)->isChecked();
+	else if(poSender == m_poUI->timeout)
+		m_bTimeout = ((QPushButton *) poSender)->isChecked();
+	else if(poSender == m_poUI->readOnly)
+		m_bReadOnly = ((QPushButton *) poSender)->isChecked();
+	else if(poSender == m_poUI->unlockPushButton)
 	{
 		if(m_poUnlockTimer->isActive())
 			m_poUnlockTimer->stop();
@@ -837,9 +888,9 @@ void MainWindow::onButtonClicked()
 	else if(poSender == m_poUI->clearPushButton)
 	{
 		m_uiBytesReceived = 0;
-        m_uiBytesTransmitted = 0;
+		m_uiBytesTransmitted = 0;
 		m_uiReceiveErrors = 0;
-        m_uiTransmitErrors = 0;
+		m_uiTransmitErrors = 0;
 		vUpdateLights();
 		m_poUI->logWidget->clear();
 	}
@@ -856,27 +907,35 @@ void MainWindow::onButtonClicked()
 #endif
 	else if(poSender == m_poUI->fileSelectPushButton)
 	{
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		QString lastFilePath = m_poUI->imagePathLineEdit->text();
+		QString initialDir;
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        QString lastFilePath = m_poUI->imagePathLineEdit->text();
-        QString initialDir;
+		if(!lastFilePath.isEmpty() && QFileInfo::exists(lastFilePath))
+		{
+			initialDir = QFileInfo(lastFilePath).absolutePath();
+		}
+		else
+		{
+			initialDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+		}
 
-        if (!lastFilePath.isEmpty() && QFileInfo::exists(lastFilePath)) {
-            initialDir = QFileInfo(lastFilePath).absolutePath();
-        } else {
-            initialDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-        }
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		QString oImagePath = QFileDialog::getOpenFileName
+			(
+				nullptr,
+				"Select Disk Image",
+				initialDir,
+				"Disk Images (*.dsk);;All Files (*)"
+			);
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        QString oImagePath = QFileDialog::getOpenFileName(
-            nullptr,
-            "Select Disk Image",
-            initialDir,
-            "Disk Images (*.dsk);;All Files (*)"
-            );
-
-        if (!oImagePath.isEmpty()) {
-            m_poUI->imagePathLineEdit->setText(oImagePath);
-        }
-    }
+		if(!oImagePath.isEmpty())
+		{
+			m_poUI->imagePathLineEdit->setText(oImagePath);
+		}
+	}
 	else if(poSender == m_poUI->connectPushButton)
 	{
 		if(m_eConnectionState == eCStateDisconnected)
@@ -888,18 +947,20 @@ void MainWindow::onButtonClicked()
 				{
 					m_poImageFile = nullptr;
 				}
-                else
+				else
 				{
-                    if (m_poImageFile->open(QIODevice::ReadWrite)) {
-                        m_bImageWriteProtected = false;
-                    }
-                    else if (m_poImageFile->open(QIODevice::ReadOnly)) {
-                        m_bImageWriteProtected = true;
-                    }
-                    else
-                    {
-                        m_poImageFile = nullptr;
-                    }
+					if(m_poImageFile->open(QIODevice::ReadWrite))
+					{
+						m_bImageWriteProtected = false;
+					}
+					else if(m_poImageFile->open(QIODevice::ReadOnly))
+					{
+						m_bImageWriteProtected = true;
+					}
+					else
+					{
+						m_poImageFile = nullptr;
+					}
 				}
 			}
 
@@ -924,7 +985,7 @@ void MainWindow::onButtonClicked()
 		}
 	}
 
-    vSaveSettings();
+	vSaveSettings();
 }
 
 /*
