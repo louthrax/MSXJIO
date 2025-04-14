@@ -1100,7 +1100,6 @@ J4D9D:		CALL    C4DA3
 C4DA3:		PUSH    IY
                 LD      IY,(EXPTBL+0-1)
                 CALL    CALSLT
-                EI
                 POP     IY
                 RET
 
@@ -4121,7 +4120,6 @@ J6645:		LD      E,03BH
 
 ; Subroutine execute BASIC routine
 C664F:		CALL    CALBAS
-                EI
                 RET
 
 ; Subroutine check for BASIC character
@@ -4421,7 +4419,6 @@ J68FA:		CALL    GET_P2
                 LDIR    			; initialize secondary slot helper subroutines from BDOS code segment
                 EX      AF,AF'			; restore current segment page 2
                 CALL    PUT_P2
-                EI
                 POP     HL			; restore pointer to command line
                 LD      DE,DBUF+1
                 LD      B,-1
@@ -4591,7 +4588,6 @@ I6A26:		EX      AF,AF'
                 CALL    C6A37
                 LD      A,03H   ; 3
                 SUB     C
-                EI
                 RET
 
 ; Subroutine
@@ -4639,7 +4635,11 @@ J6A6A:		LD      HL,(RANDOM+0)
 
 I6A82:		LD      IX,(IX_BDOS)
 
-J6A86:		EX      AF,AF'
+J6A86:          EI
+                HALT
+                DI
+
+                EX      AF,AF'
                 EXX     			; alternative register set
                 LD      HL,I6A19		; BDOS abort handler
                 LD      (KAB_VE),HL		; install DOS2 abort handler
@@ -5009,7 +5009,6 @@ RAMD_DSKIO:	EI
                 LD      HL,I_BC00+32
                 LD      A,(DATA_S)		; BDOS data segment
                 CALL    RD_SEG                  ; RD_SEG
-                EI
                 SUB     'V'
                 CALL    NZ,C6E5B
                 RET     C
@@ -5067,7 +5066,6 @@ J6DB4:		LD      C,A
                 LD      A,C
                 ADD     A,40H   ; "@"
                 JR      NZ,J6DB4
-                EI
                 EX      AF,AF'
                 LD      B,00H
                 RET
@@ -5085,7 +5083,6 @@ C6DCA:		DI
                 CALL    RD_LDI
                 POP     AF
                 CALL    PUT_P1
-                EI
                 RET
 
 J6DE4:		CALL    GET_P0
@@ -5102,7 +5099,6 @@ J6DF6:		EX      AF,AF'
                 LDIR
                 POP     AF
                 CALL    PUT_P0
-                EI
                 RET
 
 ; Subroutine
@@ -5374,7 +5370,6 @@ ENDIF
                 CALL    PUT_P2
                 LD      A,(P0_TPA)
                 CALL    PUT_P0
-                EI
                 EX      AF,AF'
                 RET
 

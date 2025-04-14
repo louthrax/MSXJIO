@@ -444,12 +444,12 @@ bJIOReceive:
         ld      de,0
 
         dec	hl
+        di
         ld	b,(hl)	; What if HL=0 ?
         ld	c,$a2
         ld	ix,0
         add	ix,sp
         ld	a,15
-        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -618,7 +618,6 @@ RX_PE:	in	f,(c)	; 14
 ; Output: HL    = updated CRC-16
 
 uiXModemCRC16:
-        ei
         ld	l,c
         ld	h,b
         ld	b,l

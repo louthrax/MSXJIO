@@ -2223,7 +2223,6 @@ F_EXPLAIN:	LD	A,B
                 LD	IY,(MASTER-1)
                 LD	IX,(SERR_M)
                 CALL	CALSLT
-                EI
                 POP	IY
                 LD	B,A
                 OR	A
@@ -2771,7 +2770,6 @@ C1003:		PUSH	HL
                 CALL	C2731
                 EX	DE,HL
                 CALL	RD_SEG
-                EI
                 POP	HL
                 RET
 
@@ -2784,7 +2782,6 @@ C1012:		PUSH	HL
                 CALL	C2731
                 EX	DE,HL
                 CALL	WR_SEG
-                EI
                 POP	DE
                 POP	HL
                 RET
@@ -6920,7 +6917,6 @@ J27C1:		PUSH	DE
                 CALL	C2731
                 EX	DE,HL
                 CALL	RD_SEG
-                EI
                 EX	DE,HL
                 POP	DE
                 BIT	5,(IX+30)
@@ -6988,7 +6984,6 @@ J2830:		PUSH	DE
                 EX	DE,HL
                 LD	E,B
                 CALL	WR_SEG
-                EI
                 POP	HL
                 POP	DE
                 LD	A,C
@@ -9539,7 +9534,6 @@ C35C6:		CALL	K_CHARFLUSH
                 EXX
                 EX	AF,AF'
                 CALL	GO_DRV
-                EI
                 EX	AF,AF'
                 LD	A,(DATA_S)
                 CALL	PUT_P2
@@ -9620,7 +9614,6 @@ C3627:		PUSH	AF
 J364D:		LD	HL,TIM_TI
                 DI
                 LD	A,(HL)
-                EI
                 LD	(HL),00H
                 OR	A
                 JR	Z,J3683
