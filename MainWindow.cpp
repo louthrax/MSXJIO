@@ -4,6 +4,7 @@
 #include <QScrollBar>
 #include <QButtonGroup>
 #include <QThread>
+#include <QPixmap>
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -68,18 +69,21 @@ quint16 MainWindow::uiTransmit
 {
 	vTransmitData(QByteArray((const char *) _pvAddress, _uiLength), _iDelay);
 
-    if(_ucFlags & FLAG_RX_CRC)
+	if(_ucFlags & FLAG_RX_CRC)
 	{
-        _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
+		_uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 
-        if (_bLast)
-            vTransmitData(QByteArray((const char *) &_uiCRC, sizeof(_uiCRC)), _iDelay);
+		if(_bLast) vTransmitData(QByteArray((const char *) &_uiCRC, sizeof(_uiCRC)), _iDelay);
 	}
 
 	return _uiCRC;
 }
 
-/* Can't be a method because of co_await... */
+/*
+ =======================================================================================================================
+    Can't be a method because of co_await...
+ =======================================================================================================================
+ */
 #define vReceive(_pvAddress, _uiSize, _ucFlags, _uiCRC) \
 	{ \
 		memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
@@ -193,10 +197,21 @@ Task MainWindow::oParser()
 						oHeader.m_uiSector,
 						oHeader.m_uiAddress
 					);
-					m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
-					oFileData = m_poImageFile->read(oHeader.m_ucLength * 512);
 
-					uiTransmit(oFileData.constData(), oFileData.size(), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
+					if(m_oDrive.eReadSectors(oHeader.m_uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
+						uiTransmit
+						(
+							oFileData.constData(),
+							oFileData.size(),
+							ucFlags,
+							0,
+							true,
+							TRANSMIT_DELAY_ACKNOWLEDGE
+						);
+					else
+					{
+						vLog(eLogError, "Error reading from file !");
+					}
 				}
 				else
 				{
@@ -209,12 +224,10 @@ Task MainWindow::oParser()
 
 		case COMMAND_DRIVE_WRITE:
 			{
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-				quint16 uiAcknowledgeWriteOK = DRIVE_ACKNOWLEDGE_WRITE_OK;
-				quint16 uiAcknowledgeWriteFailed = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
-				quint16 uiAcknowledgeWriteProtected = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 				char	*acData;
-				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+				quint16 uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_OK;
+				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 				vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
 
@@ -231,85 +244,37 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-					if(m_bImageWriteProtected || m_bReadOnly)
+					switch(m_oDrive.eWriteSectors(oHeader.m_uiSector, oHeader.m_ucLength, acData))
 					{
-						uiTransmit
-						(
-							&uiAcknowledgeWriteProtected,
-							sizeof(uiAcknowledgeWriteProtected),
-							0,
-							0,
-							false,
-							TRANSMIT_DELAY_ACKNOWLEDGE
-						);
-						vLog(eLogError, "Can't write to write-protected disk image.");
-					}
-					else
-					{
-						/*~~~~~~~~~~~~~~~~~~*/
-						qint64	iBytesToWrite;
-						qint64	iBytesWritten;
-						/*~~~~~~~~~~~~~~~~~~*/
+					case eDriveErrorOK:
+						break;
 
-						vLog
-						(
-							eLogWrite,
-							"Write%s %2d sector(s) at %10d from 0x%04X",
-							ucFlags & FLAG_TX_CRC ? "✓" : " ",
-							oHeader.m_ucLength,
-							oHeader.m_uiSector,
-							oHeader.m_uiAddress
-						);
+					case eDriveErrorNoMedia:
+						vLog(eLogError, "No media !");
+						uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+						break;
 
-						m_poImageFile->seek (static_cast<quint64>(oHeader.m_uiSector) *512);
+					case eDriveErrorReadError:
+					case eDriveErrorWriteError:
+						vLog(eLogError, "Error writing to file !");
+						uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+						break;
 
-						iBytesToWrite = oHeader.m_ucLength * 512;
-						iBytesWritten = m_poImageFile->write(acData, iBytesToWrite);
-						m_poImageFile->flush();
-
-						if(iBytesToWrite == iBytesWritten)
-						{
-							uiTransmit
-							(
-								&uiAcknowledgeWriteOK,
-								sizeof(uiAcknowledgeWriteOK),
-								0,
-								0,
-								false,
-								TRANSMIT_DELAY_ACKNOWLEDGE
-							);
-						}
-						else
-						{
-							uiTransmit
-							(
-								&uiAcknowledgeWriteFailed,
-								sizeof(uiAcknowledgeWriteFailed),
-								0,
-								0,
-								false,
-								TRANSMIT_DELAY_ACKNOWLEDGE
-							);
-							vLog(eLogError, "Write error on disk image.");
-						}
+					case eDriveErrorWriteProtected:
+						vLog(eLogError, "Media write-protected !");
+						uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+						break;
 					}
 				}
 				else
 				{
-					uiTransmit
-					(
-						&uiAcknowledgeWriteFailed,
-						sizeof(uiAcknowledgeWriteFailed),
-						0,
-						0,
-						false,
-						TRANSMIT_DELAY_ACKNOWLEDGE
-					);
+					uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
 					vLog(eLogError, "Transmission error !");
 					m_uiTransmitErrors++;
 					vUpdateLights();
 				}
 
+				uiTransmit(&uiAcknowledge, sizeof(uiAcknowledge), 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
 				free(acData);
 			}
 			break;
@@ -385,19 +350,21 @@ MainWindow::MainWindow() :
 	vAdjustScrollBars(m_poUI->logWidget);
 	vAdjustScrollBars(m_poUI->namesListWidget);
 
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    QButtonGroup	*poGroup = new QButtonGroup(this);
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	QButtonGroup	*poGroup = new QButtonGroup(this);
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
 	m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
 	m_bAutoRetry = m_poSettings->value("AutoRetry", true).toBool();
-    m_bTimeout = m_poSettings->value("Timeout", false).toBool();
+	m_bTimeout = m_poSettings->value("Timeout", false).toBool();
 	m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
 
-	m_oSelectedImagePath = m_poSettings->value("SelectedImagePath").toString();
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
+	m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
+
+	m_poUI->imagePathLineEdit->setText(m_oDrive.oMediaPath());
 
 #ifdef Q_OS_ANDROID
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
@@ -406,9 +373,9 @@ MainWindow::MainWindow() :
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
 	m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
-    poGroup->setExclusive(true);
-    poGroup->addButton(m_poUI->USBButton);
-    poGroup->addButton(m_poUI->bluetoothButton);
+	poGroup->setExclusive(true);
+	poGroup->addButton(m_poUI->USBButton);
+	poGroup->addButton(m_poUI->bluetoothButton);
 
 	m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
 	m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
@@ -423,7 +390,6 @@ MainWindow::MainWindow() :
 
 	vSetInterface(m_eSelectedInterface);
 
-	m_poUI->imagePathLineEdit->setText(m_oSelectedImagePath);
 	m_poUI->addressLineEdit->setText(roSelectedID());
 
 	vSetState(m_eConnectionState);
@@ -563,6 +529,7 @@ void MainWindow::onDeviceConnected()
 void MainWindow::onDeviceReadyRead()
 {
 	m_poUnlockTimer->stop();
+	m_poUI->unlockPushButton->setChecked(false);
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 	QByteArray	acData = m_poInterface->acReadAll();
@@ -667,18 +634,17 @@ QString MainWindow::oFormatSize(qint64 _uiSizeBytes)
  */
 QByteArray MainWindow::acGetServerInfo()
 {
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QFileInfo	oInfo(*m_poImageFile);
-	QString		oText;
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	/*~~~~~~~~~~*/
+	QString oText;
+	/*~~~~~~~~~~*/
 
 	oText = QString::asprintf
 		(
 			"\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  : %s\r\nFlags : \r\n",
-			qPrintable(oInfo.absoluteFilePath()),
-			qPrintable(oFormatSize(oInfo.size())),
-			qPrintable(oInfo.lastModified().toString(Qt::ISODate)),
-			(m_bReadOnly | m_bImageWriteProtected) ? "Read only" : "Read and write"
+			qPrintable(m_oDrive.oMediaPath()),
+			qPrintable(oFormatSize(m_oDrive.iMediaSize())),
+			qPrintable(m_oDrive.oMediaLastModified()),
+			(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) ? "Read only" : "Read and write"
 		);
 
 	if(m_bRxCRC) oText += "    Rx CRC\r\n";
@@ -706,7 +672,7 @@ QByteArray MainWindow::acGetServerInfo()
  */
 void MainWindow::vSaveSettings()
 {
-	m_poSettings->setValue("SelectedImagePath", m_oSelectedImagePath);
+	m_poSettings->setValue("SelectedImagePath", m_oDrive.oMediaPath());
 	m_poSettings->setValue("SelectedSerialID", m_oSelectedSerialID);
 	m_poSettings->setValue("SelectedBlueToothID", m_oSelectedBlueToothID);
 	m_poSettings->setValue("RxCRC", m_bRxCRC);
@@ -875,10 +841,10 @@ void MainWindow::onButtonClicked()
 		m_bReadOnly = ((QPushButton *) poSender)->isChecked();
 	else if(poSender == m_poUI->unlockPushButton)
 	{
-		if(m_poUnlockTimer->isActive())
-			m_poUnlockTimer->stop();
-		else
+		if(m_poUI->unlockPushButton->isChecked())
 			m_poUnlockTimer->start(10);
+		else
+			m_poUnlockTimer->stop();
 	}
 	else if(poSender == m_poUI->refreshPushButton)
 	{
@@ -925,9 +891,9 @@ void MainWindow::onButtonClicked()
 		QString oImagePath = QFileDialog::getOpenFileName
 			(
 				nullptr,
-				"Select Disk Image",
+				"Select disk image",
 				initialDir,
-				"Disk Images (*.dsk);;All Files (*)"
+				"Floppy & Hard disk Images (*.hd *.dsk);;All Files (*)"
 			);
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -940,41 +906,8 @@ void MainWindow::onButtonClicked()
 	{
 		if(m_eConnectionState == eCStateDisconnected)
 		{
-			m_poImageFile = new QFile(m_oSelectedImagePath);
-			if(m_poImageFile)
-			{
-				if(!QFile::exists(m_poImageFile->fileName()))
-				{
-					m_poImageFile = nullptr;
-				}
-				else
-				{
-					if(m_poImageFile->open(QIODevice::ReadWrite))
-					{
-						m_bImageWriteProtected = false;
-					}
-					else if(m_poImageFile->open(QIODevice::ReadOnly))
-					{
-						m_bImageWriteProtected = true;
-					}
-					else
-					{
-						m_poImageFile = nullptr;
-					}
-				}
-			}
-
-			if(m_poImageFile)
-			{
-				m_poUI->connectPushButton->setIcon(QIcon(":/icons/connecting.svg"));
-				m_bLastButtonClickedIsConnect = true;
-				vSetState(eCStateConnecting);
-				m_poInterface->vConnectDevice(roSelectedID());
-			}
-			else
-			{
-				vLog(eLogError, "Failed to open image file " + m_oSelectedImagePath);
-			}
+			vSetState(eCStateConnecting);
+			m_poInterface->vConnectDevice(roSelectedID());
 		}
 		else if((m_eConnectionState == eCStateConnected) || (m_eConnectionState == eCStateConnecting))
 		{
@@ -983,6 +916,11 @@ void MainWindow::onButtonClicked()
 			m_poInterface->vDisconnectDevice();
 			vSetState(eCStateDisconnected);
 		}
+	}
+	else if(poSender == m_poUI->fileEjectPushButton)
+	{
+		m_oDrive.vEjectMedia();
+		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg"));
 	}
 
 	vSaveSettings();
@@ -1001,16 +939,19 @@ void MainWindow::vSetState(tdConnectionState _eCState)
 	case eCStateConnecting:
 		m_poUI->connectPushButton->setIcon(QIcon(":/icons/connecting.svg"));
 		m_poUI->connectPushButton->setEnabled(true);
+		m_poUI->unlockPushButton->setEnabled(false);
 		break;
 
 	case eCStateConnected:
 		m_poUI->connectPushButton->setIcon(QIcon(":/icons/connected.svg"));
 		m_poUI->connectPushButton->setEnabled(true);
+		m_poUI->unlockPushButton->setEnabled(true);
 		break;
 
 	case eCStateDisconnected:
 		m_poUI->connectPushButton->setIcon(QIcon(":/icons/disconnected.svg"));
-		m_poUI->connectPushButton->setEnabled(!m_oSelectedImagePath.isEmpty() && !roSelectedID().isEmpty());
+		m_poUI->connectPushButton->setEnabled(!roSelectedID().isEmpty());
+		m_poUI->unlockPushButton->setEnabled(false);
 		break;
 	}
 }
@@ -1076,8 +1017,22 @@ void MainWindow::onTextChanged(QString _oText)
 
 	if(poSender == m_poUI->imagePathLineEdit)
 	{
-		m_oSelectedImagePath = _oText;
-		vSetState(m_eConnectionState);
+		if(!m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
+		{
+			vLog(eLogError, "Failed to open image file.");
+		}
+		else
+		{
+			m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/hardDisk.svg"));
+			vLog(eLogInfo, "Successfully open media.");
+		}
+
+		switch(m_oDrive.eMediaType())
+		{
+		case eMediaEmpty:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg")); break;
+		case eMediaFloppy:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/floppy.svg")); break;
+		case eMediaHardDisk:	m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/hardDisk.svg")); break;
+		}
 	}
 	else if(poSender == m_poUI->addressLineEdit)
 	{

@@ -10,6 +10,7 @@
 #include "ByteReader.h"
 #include "Interface.h"
 #include "Common.h"
+#include "Drive.h"
 
 typedef enum {
     eInterfaceBluetooth,
@@ -86,14 +87,13 @@ private:
     QTimer							*m_poGreenLightOffTimer = nullptr;
     QTimer							*m_poUnlockTimer = nullptr;
     Interface                       *m_poInterface = nullptr;
-    QFile							*m_poImageFile = nullptr;
     QByteArray						m_acBuffer;
+    Drive                           m_oDrive;
 
     bool                            m_bRxCRC;
     bool                            m_bTxCRC;
     bool                            m_bTimeout;
     bool                            m_bAutoRetry;
-    bool                            m_bImageWriteProtected;
     bool                            m_bReadOnly;
 
     bool                            m_bLastButtonClickedIsConnect = false;
@@ -103,7 +103,6 @@ private:
     quint64                         m_uiReceiveErrors = 0;
     quint64                         m_uiTransmitErrors = 0;
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
-    QString                         m_oSelectedImagePath;
     QString                         m_oSelectedSerialID;
     QString                         m_oSelectedBlueToothID;
     QString                         &roSelectedID();

@@ -1,11 +1,12 @@
 ; ------------------------------------------------------------------------------
 ; drv_jio.asm
 ;
-; Copyright (C) 2025 [put your copyright notice here]
-;
-; [put your license terms here]
+; Copyright (C) 2025 All rights reserved
+; JIO MSX-DOS 2 driver by Louthrax
+; JIO MSX-DOS 1 driver and CRC routines by H.J. Berends
+; 115K2 transmit/receive routines based on code by Nyyrikki
 ; ------------------------------------------------------------------------------
-; [optional: description and highlights of the driver]
+; Work in progress!!!
 ; ------------------------------------------------------------------------------
 
         INCLUDE	"disk.inc"	; Assembler directives
@@ -36,9 +37,9 @@
         EXTERN	PrintString
 
 ; Hardware driver variables
-W_FLAGS     equ	DRVSIZE
-W_COMMAND   equ	DRVSIZE+1
-DRVMEM      equ	2
+W_FLAGS		equ	DRVSIZE
+W_COMMAND	equ	DRVSIZE+1
+DRVMEM		equ	2
 
 #include "flags.inc"
 
@@ -52,9 +53,9 @@ GETCPU	equ	$183
 DRVINIT:
         call	PrintMsg
 IFDEF IDEDOS1
-        db	"JIO MSX-DOS1",13,10
+        db	12,"JIO MSX-DOS 1",13,10
 ELSE
-        db	"JIO MSX-DOS2",13,10
+        db	12,"JIO MSX-DOS 2",13,10
 ENDIF
         db	"Rev.: "
         INCLUDE	"rdate.inc"	; Revision date
@@ -126,11 +127,11 @@ TestInterface:	ld	a,(hl)
         ld	b,(ix+W_BOOTDRV)	; Get boot drive
         add	a,b
         ld	(ix+W_BOOTDRV),a	; Set boot drive
-        call	PrintMsg
-        db	"Drives: ",0
-        ld	a,(ix+W_DRIVES)
-        add	a,'0'
-        rst	$18
+        ;call	PrintMsg
+        ;db	"Drives: ",0
+        ;ld	a,(ix+W_DRIVES)
+        ;add	a,'0'
+        ;rst	$18
         jp	PrintCRLF
 
 ;********************************************************************************************************************************
@@ -164,17 +165,17 @@ TestInterface:	ld	a,(hl)
 ;********************************************************************************************************************************
 
 DSKIO:	push	hl
-	push	de
-	push	bc
+        push	de
+        push	bc
 
-	push	af
-	cp	$08	; Max 8 drives (partitions) supported
-	jr	nc,r404
-	call	GETWRK	; Base address of workarea in hl and ix
-	pop	af
+        push	af
+        cp	$08	; Max 8 drives (partitions) supported
+        jp	nc,r404
+        call	GETWRK	; Base address of workarea in hl and ix
+        pop	af
 
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
-	jr	c,WriteFlag
+        jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
 WriteFlag:
 
@@ -216,21 +217,72 @@ r402:	ld	c,(iy+$00)
         ld	c,(iy+$02)
         ld	b,(iy+$03)
         adc	hl,bc
-	ld	c,l	; LBA address: c=16..23
-	pop	hl	; Restore transfer address
-	pop	af	; Restore sector counter
-	ld	b,a
+        ld	c,l	; LBA address: c=16..23
+        pop	hl	; Restore transfer address
+        pop	af	; Restore sector counter
+        ld	b,a
 
+IFDEF IDEDOS1
+rw_loop:
+        bit	7,h
+        jr	nz,rw_multi
+        push	bc
+        push	de
+        ld	b,1
+        ld      a,(ix+W_COMMAND)
+        cp	COMMAND_DRIVE_READ
+        jr	nz,sec_write
+        push	hl
+        ld	hl,(SSECBUF)
+        call	ReadOrWriteSectors
+        pop	de
+        jr	nz,sec_err
+        ld	hl,(SSECBUF)
+        ld	bc,$0200
+        call	XFER
+        ex	de,hl
+        jr	sec_next
+sec_write:
+        push	hl
+        push	de
+        push	bc
+        ld	de,(SSECBUF)
+        ld	bc,$0200
+        call	XFER
+        pop	bc
+        pop	de
+        ld	hl,(SSECBUF)
+        call	ReadOrWriteSectors
+        pop	hl
+        jr	nz,sec_err
+        inc	h
+sec_next:
+        xor	a
+sec_err:
+        pop	de
+        pop	bc
+        jr	nz,r405
+        inc	e
+        jr	nz,sec_loop
+        inc	d
+        jr	nz,sec_loop
+        inc	c
+sec_loop:
+        djnz	rw_loop
+        xor	a
+        ret
+rw_multi:
+ENDIF
         jp	ReadOrWriteSectors
 
-	; Disk i/o error
+        ; Disk i/o error
 r404:	pop	af
-	pop	bc
-	pop	de
-	pop	hl
+        pop	bc
+        pop	de
+        pop	hl
 
 r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
-	scf
+        scf
         ret
 
 ;********************************************************************************************************************************
@@ -444,12 +496,12 @@ bJIOReceive:
         ld      de,0
 
         dec	hl
-        di
         ld	b,(hl)	; What if HL=0 ?
         ld	c,$a2
         ld	ix,0
         add	ix,sp
         ld	a,15
+        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -617,6 +669,62 @@ RX_PE:	in	f,(c)	; 14
 ;         Stack = CRC-16
 ; Output: HL    = updated CRC-16
 
+IFDEF IDEDOS1
+
+uiXModemCRC16:
+        ei
+        ld	l,c
+        ld	h,b
+
+        ld	b,l
+        dec	hl
+        inc	h
+        ld	c,h
+
+        push    ix
+        ld      ix,0
+        add     ix,sp
+        ld      l,(ix+4)
+        ld      h,(ix+5)
+        pop     ix
+
+crc16:
+        push bc
+        ld	a,(de)
+        inc	de
+        xor     h
+        ld      b,a
+        ld      c,l
+        rrca
+        rrca
+        rrca
+        rrca
+        ld      l,a
+        and     0fh
+        ld      h,a
+        xor     b
+        ld      b,a
+        xor     l
+        and     0f0h
+        ld      l,a
+        xor     c
+        add     hl,hl
+        xor     h
+        ld      h,a
+        ld      a,l
+        xor     b
+        ld      l,a
+
+        pop     bc
+        djnz    crc16
+
+        dec     c
+        jp      nz,crc16
+        ret
+
+ELSE
+
+; compute CRC with lookup table
 uiXModemCRC16:
         ei
         ld	l,c
@@ -723,3 +831,4 @@ CrcTab:	; high bytes
         db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
         db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
 
+ENDIF

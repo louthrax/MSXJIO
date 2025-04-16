@@ -54,14 +54,11 @@
       <widget class="QPushButton" name="fileSelectPushButton">
        <property name="geometry">
         <rect>
-         <x>320</x>
+         <x>280</x>
          <y>540</y>
          <width>31</width>
          <height>26</height>
         </rect>
-       </property>
-       <property name="text">
-        <string/>
        </property>
        <property name="icon">
         <iconset resource="Icons.qrc">
@@ -113,9 +110,9 @@
       <widget class="QLineEdit" name="imagePathLineEdit">
        <property name="geometry">
         <rect>
-         <x>10</x>
+         <x>40</x>
          <y>540</y>
-         <width>301</width>
+         <width>231</width>
          <height>26</height>
         </rect>
        </property>
@@ -335,7 +332,7 @@
         </size>
        </property>
        <property name="checkable">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
       </widget>
       <widget class="QPushButton" name="RxCRC">
@@ -415,6 +412,42 @@
         <string>Read only</string>
        </property>
        <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectPushButton">
+       <property name="geometry">
+        <rect>
+         <x>320</x>
+         <y>540</y>
+         <width>31</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>22</width>
+         <height>22</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QLabel" name="iconMediaType">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>540</y>
+         <width>26</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="pixmap">
+        <pixmap resource="Icons.qrc">:/icons/floppy.svg</pixmap>
+       </property>
+       <property name="scaledContents">
         <bool>true</bool>
        </property>
       </widget>
@@ -660,6 +693,22 @@
     <hint type="sourcelabel">
      <x>230</x>
      <y>422</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>fileEjectPushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>335</x>
+     <y>552</y>
     </hint>
     <hint type="destinationlabel">
      <x>180</x>

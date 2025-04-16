@@ -10,5 +10,9 @@
         <file>icons/refresh.svg</file>
         <file>icons/clear.svg</file>
         <file>icons/unlock.svg</file>
+        <file>icons/eject.svg</file>
+        <file>icons/empty.svg</file>
+        <file>icons/floppy.svg</file>
+        <file>icons/hardDisk.svg</file>
     </qresource>
 </RCC>

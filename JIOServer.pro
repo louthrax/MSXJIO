@@ -64,6 +64,7 @@ win32 {
 }
 
 SOURCES += \
+    Drive.cpp \
     InterfaceBluetoothSocket.cpp \
     InterfaceSerialPort.cpp \
     Main.cpp \
@@ -72,6 +73,7 @@ SOURCES += \
 HEADERS += \
     ByteReader.h \
     Common.h \
+    Drive.h \
     Interface.h \
     InterfaceBluetoothSocket.h \
     InterfaceSerialPort.h \
