@@ -60,13 +60,12 @@ private:
     void		vTransmitData(const QByteArray &_roData, int _iDelay);
     quint16     uiTransmit(const void *_pvAddress, unsigned int	_uiLength, unsigned char _ucFlags, quint16 _uiCRC, bool _bLast, int _iDelay);
     quint16     uiXModemCRC16(const void * _pucData, size_t _uiSize, quint16 _uiCRC);
-    QByteArray	acGetServerInfo();
+    QString     szGetServerInfo();
 
     void		vSetInterface(tdInterface _eInterface);
     void		vSetState(tdConnectionState _eCState);
 
     void		vLog(tdLogType _eLogType, QString fmt, ...);
-    QString		oFormatSize(qint64 _uiSizeBytes);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
     void		vSaveSettings();
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);

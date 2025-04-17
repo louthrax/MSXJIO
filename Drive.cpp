@@ -121,7 +121,7 @@ tdDriveError Drive::eReadSectors(unsigned char _uiPartition, unsigned int _uiSec
 {
 	if(m_poMediaFile)
 	{
-        if (m_oPartitions.size())
+        if (m_oPartitions.size() > _uiPartition)
         {
             _uiSector += m_oPartitions[_uiPartition].startSector;
         }
@@ -161,7 +161,7 @@ tdDriveError Drive::eWriteSectors(unsigned char _uiPartition, unsigned int _uiSe
 			unsigned int	uiBytesWritten;
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-            if (m_oPartitions.size())
+            if (m_oPartitions.size() > _uiPartition)
             {
                 _uiSector += m_oPartitions[_uiPartition].startSector;
             }
@@ -234,4 +234,14 @@ unsigned int Drive::uiPartitionCount()
     }
     else
         return 0;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+
+QString Drive::szDescription()
+{
+    return describePartitions(m_oPartitions);
 }

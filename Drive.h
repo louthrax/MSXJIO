@@ -36,6 +36,7 @@ public:
 
     tdMediaType     eMediaType();
     unsigned int    uiPartitionCount();
+    QString         szDescription();
     tdDriveError    eReadSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, QByteArray& _roResult);
     tdDriveError    eWriteSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, char * _pcData);
     void            vEjectMedia();

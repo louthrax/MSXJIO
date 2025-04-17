@@ -97,6 +97,35 @@ quint16 MainWindow::uiTransmit
  =======================================================================================================================
  =======================================================================================================================
  */
+QString MainWindow::szGetServerInfo()
+{
+    /*~~~~~~~~~~*/
+    QString oText;
+    QString oFlags;
+    /*~~~~~~~~~~*/
+
+    if(m_bRxCRC) oFlags += "RxCRC ";
+    if(m_bTxCRC) oFlags += "TxCRC ";
+    if(m_bTimeout) oFlags += "Timeout ";
+    if(m_bAutoRetry) oFlags += "AutoRetry ";
+    if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly";
+
+    oText = QString::asprintf
+        (
+            "\r\nFile  : %s\r\n%s\r\nDate  : %s\r\nFlags : %s\r\n",
+            qPrintable(m_oDrive.oMediaPath()),
+            qPrintable(m_oDrive.szDescription()),
+            qPrintable(m_oDrive.oMediaLastModified()),
+            qPrintable(oFlags)
+            );
+
+    return oText;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 Task MainWindow::oParser()
 {
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -157,9 +186,17 @@ Task MainWindow::oParser()
 				{
 					/*~~~~~~~~~~~~~~~~~~*/
 					QByteArray	oInfoData;
-					/*~~~~~~~~~~~~~~~~~~*/
+                    quint8	W_FLAGS = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) | (m_bTimeout ? FLAG_TIMEOUT : 0) |
+                                     (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
+                    quint8	W_DRIVES = m_oDrive.uiPartitionCount();
+                    quint8	W_BOOTDRV = 0;
+                    /*~~~~~~~~~~~~~~~~~~*/
 
-					oInfoData = acGetServerInfo();
+                    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+                    QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
+                    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+                    oInfoData = QByteArray(1, W_FLAGS) + QByteArray(1, W_DRIVES) + QByteArray(1, W_BOOTDRV) + acPayload.leftJustified(509, '\0');
 					uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
 				}
 				else
@@ -405,7 +442,6 @@ MainWindow::MainWindow() :
     m_poUI->imagePathLineEdit->setText(m_poSettings->value("SelectedImagePath").toString());
     m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
 
-
 #ifdef Q_OS_ANDROID
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
 	m_eSelectedInterface = eInterfaceBluetooth;
@@ -647,66 +683,6 @@ void MainWindow::vTransmitData(const QByteArray &_roData, int _iDelay)
 	m_poInterface->vWrite(acDataToTransmit);
 }
 
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-QString MainWindow::oFormatSize(qint64 _uiSizeBytes)
-{
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QStringList aoUnits = { "B", "KiB", "MiB", "GiB", "TiB", "PiB" };
-	qint64		ulSize = _uiSizeBytes;
-	int			unitIndex = 0;
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-	while(ulSize >= 1024 && unitIndex < aoUnits.size() - 1)
-	{
-		ulSize = (ulSize + 512) / 1024;
-		unitIndex++;
-	}
-
-	return QString::number(ulSize) + aoUnits[unitIndex];
-}
-
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-QByteArray MainWindow::acGetServerInfo()
-{
-	/*~~~~~~~~~~*/
-	QString oText;
-	/*~~~~~~~~~~*/
-
-	oText = QString::asprintf
-		(
-			"\r\nFile  : %s\r\nSize  : %s\r\nDate  : %s\r\nMode  : %s\r\nFlags : \r\n",
-			qPrintable(m_oDrive.oMediaPath()),
-			qPrintable(oFormatSize(m_oDrive.iMediaSize())),
-			qPrintable(m_oDrive.oMediaLastModified()),
-			(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) ? "Read only" : "Read and write"
-		);
-
-	if(m_bRxCRC) oText += "    Rx CRC\r\n";
-	if(m_bTxCRC) oText += "    Tx CRC\r\n";
-	if(m_bTimeout) oText += "    Timeout\r\n";
-	if(m_bAutoRetry) oText += "    Auto retry\r\n";
-
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QByteArray	acPayload = oText.toUtf8().left(510);
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-	vLog(eLogInfo, oText);
-
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    quint8	W_FLAGS = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) | (m_bTimeout ? FLAG_TIMEOUT : 0) |
-		(m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
-    quint8	W_DRIVES = m_oDrive.uiPartitionCount();
-    quint8	W_BOOTDRV = 0;
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-    return QByteArray(1, W_FLAGS) + QByteArray(1, W_DRIVES) + QByteArray(1, W_BOOTDRV) + acPayload.leftJustified(509, '\0');
-}
 
 /*
  =======================================================================================================================
@@ -1067,7 +1043,8 @@ void MainWindow::onTextChanged(QString _oText)
 		}
 		else
 		{
-			vLog(eLogInfo, "Successfully open media.");
+            vLog(eLogInfo, "Media opened successfully.");
+            vLog(eLogInfo, szGetServerInfo());
 		}
 
 		switch(m_oDrive.eMediaType())

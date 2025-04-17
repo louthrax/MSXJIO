@@ -95,10 +95,31 @@ static FilesystemType detectFilesystem(QFile &file, quint64 sectorStart)
  =======================================================================================================================
  =======================================================================================================================
  */
+QString oFormatSize(qint64 _uiSizeBytes)
+{
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	QStringList aoUnits = { "B", "KiB", "MiB", "GiB", "TiB", "PiB" };
+	qint64		ulSize = _uiSizeBytes;
+	int			unitIndex = 0;
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+	while(ulSize >= 1024 && unitIndex < aoUnits.size() - 1)
+	{
+		ulSize = (ulSize + 512) / 1024;
+		unitIndex++;
+	}
+
+	return(QString::number(ulSize) + aoUnits[unitIndex]).rightJustified(7, ' ');
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 QString describePartitions(const QList<DiskPartition> &partitions)
 {
 	/*~~~~~~~~~~~~~~*/
-	QStringList lines;
+    QString result;
 	/*~~~~~~~~~~~~~~*/
 
 	for(int i = 0; i < partitions.size(); ++i)
@@ -107,16 +128,12 @@ QString describePartitions(const QList<DiskPartition> &partitions)
 		const DiskPartition &p = partitions[i];
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-		lines << QString("#%1 - Start: %2, Size: %3 sectors, Scheme: %4, FS: %5, MBR Type: 0x%6").arg(i + 1).arg(p.startSector).arg(p.sectorCount).arg(toString(p.scheme)).arg(toString(p.fsType)).arg
-			(
-				p.mbrType,
-				2,
-				16,
-				QLatin1Char('0')
-			).toUpper();
-	}
+        result += QString("  P%1  : %2 %3 %4").arg(i).arg(oFormatSize(p.sectorCount * 512)).arg(toString(p.fsType)).arg(toString(p.scheme));
+        if (i < partitions.size() - 1)
+            result += "\r\n";
+    }
 
-	return lines.join('\n');
+    return result;
 }
 
 /*
@@ -188,8 +205,8 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 				/*~~~~~~~~~~~~~~~~~~*/
 
 				part.fsType = detectFilesystem(file, part.startSector);
-                if ((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
-                    partitions.append(part);
+				if((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
+					partitions.append(part);
 			}
 		}
 	}
@@ -224,8 +241,8 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 						logical.startSector += nextEbr;
 						logical.scheme = PartitionScheme::Logical;
 						logical.fsType = detectFilesystem(file, logical.startSector);
-                        if ((logical.fsType == FilesystemType::FAT12) || (logical.fsType == FilesystemType::FAT16))
-                            partitions.append(logical);
+						if((logical.fsType == FilesystemType::FAT12) || (logical.fsType == FilesystemType::FAT16))
+							partitions.append(logical);
 					}
 
 					if(ebrParts.size() > 1 && ebrParts[1].sectorCount > 0)
@@ -246,10 +263,20 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 
 				part.scheme = PartitionScheme::MBR;
 				part.fsType = detectFilesystem(file, part.startSector);
-                if ((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
-                    partitions.append(part);
+				if((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
+					partitions.append(part);
 			}
 		}
+	}
+
+	if(partitions.size() == 0)
+	{
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		const quint64	iSectorsCount = file.size() / 512;
+		DiskPartition	part = { 0, iSectorsCount, PartitionScheme::Unknown, FilesystemType::Unknown, 0 };
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+		partitions.append(part);
 	}
 
 	return partitions;
@@ -265,8 +292,8 @@ QString toString(PartitionScheme scheme)
 	{
 	case PartitionScheme::MBR:		return "MBR";
 	case PartitionScheme::GPT:		return "GPT";
-	case PartitionScheme::Logical:	return "Logical";
-	default:						return "Unknown";
+	case PartitionScheme::Logical:	return "LOG";
+	default:						return "RAW";
 	}
 }
 
@@ -284,6 +311,6 @@ QString toString(FilesystemType fsType)
 	case FilesystemType::NTFS:	return "NTFS";
 	case FilesystemType::exFAT: return "exFAT";
 	case FilesystemType::EXT:	return "ext2/3/4";
-	default:					return "Unknown";
+	default:					return "Floppy";
 	}
 }
