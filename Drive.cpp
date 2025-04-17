@@ -1,10 +1,6 @@
 
-#include "Drive.h"
 
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
+#include "Drive.h"
 Drive::Drive()
 {
 }
@@ -51,10 +47,10 @@ bool Drive::bInsertMedia(QString _szMediaPath)
 		}
 	}
 
-    if (m_poMediaFile)
-    {
-        m_oPartitions = extractDiskPartitions(*m_poMediaFile);
-    }
+	if(m_poMediaFile)
+	{
+		m_oPartitions = extractDiskPartitions(*m_poMediaFile);
+	}
 
 	return m_poMediaFile != nullptr;
 }
@@ -117,15 +113,22 @@ QString Drive::oMediaLastModified()
  =======================================================================================================================
  =======================================================================================================================
  */
-tdDriveError Drive::eReadSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, QByteArray& _roResult)
+tdDriveError Drive::eReadSectors
+(
+	unsigned char	_uiPartition,
+	unsigned int	_uiSector,
+	unsigned int	_uiSectorsCount,
+	QByteArray		&_roResult
+)
 {
 	if(m_poMediaFile)
 	{
-        if (m_oPartitions.size() > _uiPartition)
-        {
-            _uiSector += m_oPartitions[_uiPartition].startSector;
-        }
-        if(m_poMediaFile->seek((_uiSector) * 512))
+		if(m_oPartitions.size() > _uiPartition)
+		{
+			_uiSector += m_oPartitions[_uiPartition].startSector;
+		}
+
+		if(m_poMediaFile->seek((_uiSector) * 512))
 		{
 			_roResult = m_poMediaFile->read(_uiSectorsCount * 512);
 			return(_roResult.size() == _uiSectorsCount * 512) ? eDriveErrorOK : eDriveErrorReadError;
@@ -143,7 +146,13 @@ tdDriveError Drive::eReadSectors(unsigned char _uiPartition, unsigned int _uiSec
  =======================================================================================================================
  =======================================================================================================================
  */
-tdDriveError Drive::eWriteSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, char *_pcData)
+tdDriveError Drive::eWriteSectors
+(
+	unsigned char	_uiPartition,
+	unsigned int	_uiSector,
+	unsigned int	_uiSectorsCount,
+	char			*_pcData
+)
 {
 	if(!m_poMediaFile)
 	{
@@ -161,25 +170,25 @@ tdDriveError Drive::eWriteSectors(unsigned char _uiPartition, unsigned int _uiSe
 			unsigned int	uiBytesWritten;
 			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-            if (m_oPartitions.size() > _uiPartition)
-            {
-                _uiSector += m_oPartitions[_uiPartition].startSector;
-            }
+			if(m_oPartitions.size() > _uiPartition)
+			{
+				_uiSector += m_oPartitions[_uiPartition].startSector;
+			}
 
-            if(m_poMediaFile->seek((_uiSector) * 512))
-            {
-                uiBytesWritten = m_poMediaFile->write(_pcData, _uiSectorsCount * 512);
-                m_poMediaFile->flush();
+			if(m_poMediaFile->seek((_uiSector) * 512))
+			{
+				uiBytesWritten = m_poMediaFile->write(_pcData, _uiSectorsCount * 512);
+				m_poMediaFile->flush();
 
-                if(uiBytesWritten == _uiSectorsCount * 512)
-                    return eDriveErrorOK;
-                else
-                    return eDriveErrorWriteError;
-            }
-            else
-            {
-                return eDriveErrorWriteError;
-            }
+				if(uiBytesWritten == _uiSectorsCount * 512)
+					return eDriveErrorOK;
+				else
+					return eDriveErrorWriteError;
+			}
+			else
+			{
+				return eDriveErrorWriteError;
+			}
 		}
 	}
 }
@@ -195,7 +204,7 @@ void Drive::vEjectMedia()
 		m_poMediaFile->close();
 		delete m_poMediaFile;
 		m_poMediaFile = nullptr;
-        m_oPartitions.empty();
+		m_oPartitions.empty();
 	}
 }
 
@@ -214,12 +223,12 @@ bool Drive::bIsMediaWriteProtected()
  */
 tdMediaType Drive::eMediaType()
 {
-    if (m_poMediaFile)
-    {
-        return (m_oPartitions.size() > 0) ? eMediaHardDisk : eMediaFloppy;
-    }
-    else
-        return eMediaEmpty;
+	if(m_poMediaFile)
+	{
+		return(m_oPartitions.size() > 0) ? eMediaHardDisk : eMediaFloppy;
+	}
+	else
+		return eMediaEmpty;
 }
 
 /*
@@ -228,20 +237,42 @@ tdMediaType Drive::eMediaType()
  */
 unsigned int Drive::uiPartitionCount()
 {
-    if (m_poMediaFile)
-    {
-        return (m_oPartitions.size() > 0) ? m_oPartitions.size() : 1;
-    }
-    else
-        return 0;
+	if(m_poMediaFile)
+	{
+		return(m_oPartitions.size() > 0) ? m_oPartitions.size() : 1;
+	}
+	else
+		return 0;
 }
 
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
+unsigned int Drive::uiFirstActivePartition()
+{
+	/*~~~~~~~~~~~~~~~~~~~~~*/
+	unsigned int	uiResult;
+	/*~~~~~~~~~~~~~~~~~~~~~*/
 
+	uiResult = 0;
+
+	for(unsigned int i = 0; i < m_oPartitions.size(); ++i)
+	{
+		if(m_oPartitions[i].isActive)
+		{
+			return i;
+		}
+	}
+
+	return uiResult;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 QString Drive::szDescription()
 {
-    return describePartitions(m_oPartitions);
+	return describePartitions(m_oPartitions);
 }

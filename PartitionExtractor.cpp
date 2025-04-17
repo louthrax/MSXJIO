@@ -36,11 +36,9 @@ static QList<DiskPartition> parsePartitionTable(const QByteArray &sector, quint6
 
 		if(type != 0 && sectors > 0)
 		{
-			list.append(
-		{
-			baseLBA + lbaStart, sectors, PartitionScheme::MBR, FilesystemType::Unknown, type
-		});
-		}
+            bool active = (entry[0] == 0x80);
+            list.append({ baseLBA + lbaStart, sectors, PartitionScheme::MBR, FilesystemType::Unknown, type, active });
+        }
 	}
 
 	return list;
@@ -128,7 +126,13 @@ QString describePartitions(const QList<DiskPartition> &partitions)
 		const DiskPartition &p = partitions[i];
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        result += QString("  P%1 %2 %3 %4").arg(i).arg(oFormatSize(p.sectorCount * 512)).arg(toString(p.fsType)).arg(toString(p.scheme));
+        result += QString("  P%1 %2 %3 %4 %5")
+            .arg(i)
+            .arg(oFormatSize(p.sectorCount * 512))
+            .arg(toString(p.fsType))
+            .arg(toString(p.scheme))
+            .arg(p.isActive ? "*" : "");
+
         if (i < partitions.size() - 1)
             result += "\r\n";
     }
@@ -200,7 +204,7 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 				DiskPartition	part =
 				{
 					firstLBA, lastLBA - firstLBA + 1, PartitionScheme::GPT,
-					FilesystemType::Unknown, 0
+                    FilesystemType::Unknown, 0, false
 				};
 				/*~~~~~~~~~~~~~~~~~~*/
 
@@ -273,7 +277,7 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 	{
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 		const quint64	iSectorsCount = file.size() / 512;
-		DiskPartition	part = { 0, iSectorsCount, PartitionScheme::Unknown, FilesystemType::Unknown, 0 };
+        DiskPartition	part = { 0, iSectorsCount, PartitionScheme::Unknown, FilesystemType::Unknown, 0, false };
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 		partitions.append(part);

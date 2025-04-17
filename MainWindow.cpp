@@ -16,7 +16,7 @@
 #pragma pack(push, 1)
 typedef struct
 {
-    quint32 m_uiSector;
+	quint32 m_uiSector;
 	quint8	m_ucLength;
 	quint16 m_uiAddress;
 } tdReadWriteHeader;
@@ -99,27 +99,27 @@ quint16 MainWindow::uiTransmit
  */
 QString MainWindow::szGetServerInfo()
 {
-    /*~~~~~~~~~~*/
-    QString oText;
-    QString oFlags;
-    /*~~~~~~~~~~*/
+	/*~~~~~~~~~~~*/
+	QString oText;
+	QString oFlags;
+	/*~~~~~~~~~~~*/
 
-    if(m_bRxCRC) oFlags += "RxCRC ";
-    if(m_bTxCRC) oFlags += "TxCRC ";
-    if(m_bTimeout) oFlags += "Timeout ";
-    if(m_bAutoRetry) oFlags += "AutoRetry ";
-    if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly";
+	if(m_bRxCRC) oFlags += "RxCRC ";
+	if(m_bTxCRC) oFlags += "TxCRC ";
+	if(m_bTimeout) oFlags += "Timeout ";
+	if(m_bAutoRetry) oFlags += "AutoRetry ";
+	if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly";
 
-    oText = QString::asprintf
-        (
-            "\r\nDrive :\r\n\%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
-            qPrintable(m_oDrive.szDescription()),
-            qPrintable(m_oDrive.oMediaLastModified()),
-            qPrintable(oFlags),
-            qPrintable(m_oDrive.oMediaPath())
-        );
+	oText = QString::asprintf
+		(
+			"\r\nDrive :\r\n\%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
+			qPrintable(m_oDrive.szDescription()),
+			qPrintable(m_oDrive.oMediaLastModified()),
+			qPrintable(oFlags),
+			qPrintable(m_oDrive.oMediaPath())
+		);
 
-    return oText;
+	return oText;
 }
 
 /*
@@ -184,19 +184,19 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-					/*~~~~~~~~~~~~~~~~~~*/
+					/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 					QByteArray	oInfoData;
-                    quint8	W_FLAGS = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) | (m_bTimeout ? FLAG_TIMEOUT : 0) |
-                                     (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
-                    quint8	W_DRIVES = m_oDrive.uiPartitionCount();
-                    quint8	W_BOOTDRV = 0;
-                    /*~~~~~~~~~~~~~~~~~~*/
+					quint8		W_FLAGS = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) |
+						(m_bTimeout ? FLAG_TIMEOUT : 0) | (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
+					quint8		W_DRIVES = m_oDrive.uiPartitionCount();
+					quint8		W_BOOTDRV = m_oDrive.uiFirstActivePartition();
+					QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
+					/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-                    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-                    QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
-                    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-                    oInfoData = QByteArray(1, W_FLAGS) + QByteArray(1, W_DRIVES) + QByteArray(1, W_BOOTDRV) + acPayload.leftJustified(509, '\0');
+					oInfoData = QByteArray(1, W_FLAGS) +
+						QByteArray(1, W_DRIVES) +
+						QByteArray(1, W_BOOTDRV) +
+						acPayload.leftJustified(509, '\0');
 					uiTransmit(oInfoData.constData(), oInfoData.size(), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
 				}
 				else
@@ -221,31 +221,30 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-					/*~~~~~~~~~~~~~~~~~~*/
-					QByteArray	oFileData;
-                    unsigned char ucPartition;
-                    unsigned int uiSector;
-					/*~~~~~~~~~~~~~~~~~~*/
+					/*~~~~~~~~~~~~~~~~~~~~~~~~*/
+					QByteArray		oFileData;
+					unsigned char	ucPartition;
+					unsigned int	uiSector;
+					/*~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-                    ucPartition = oHeader.m_uiSector >> 24;
+					ucPartition = oHeader.m_uiSector >> 24;
 
-                    uiSector = oHeader.m_uiSector & 0xFFFFFF;
+					uiSector = oHeader.m_uiSector & 0xFFFFFF;
 
-                    if (uiSector & 0x800000)
-                        uiSector &= 0xFFFF;
+					if(uiSector & 0x800000) uiSector &= 0xFFFF;
 
-                    vLog
-                        (
-                            eLogRead,
-                            "Read%s  %2d sec. at P%c: %10d to   0x%04X",
-                            ucFlags & FLAG_RX_CRC ? "✓" : " ",
-                            oHeader.m_ucLength,
-                            ucPartition+'0',
-                            uiSector,
-                            oHeader.m_uiAddress
-                            );
+					vLog
+					(
+						eLogRead,
+						"Read%s  %2d sec. at P%c: %10d to   0x%04X",
+						ucFlags & FLAG_RX_CRC ? "✓" : " ",
+						oHeader.m_ucLength,
+						ucPartition + '0',
+						uiSector,
+						oHeader.m_uiAddress
+					);
 
-                    if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
+					if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
 						uiTransmit
 						(
 							oFileData.constData(),
@@ -291,57 +290,56 @@ Task MainWindow::oParser()
 
 				if(bCRCOK)
 				{
-                    /*~~~~~~~~~~~~~~~~~~*/
-                    unsigned char ucPartition;
-                    unsigned int uiSector;
-                    /*~~~~~~~~~~~~~~~~~~*/
+					/*~~~~~~~~~~~~~~~~~~~~~~~~*/
+					unsigned char	ucPartition;
+					unsigned int	uiSector;
+					/*~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-                    ucPartition = oHeader.m_uiSector >> 24;
+					ucPartition = oHeader.m_uiSector >> 24;
 
-                    uiSector = oHeader.m_uiSector & 0xFFFFFF;
+					uiSector = oHeader.m_uiSector & 0xFFFFFF;
 
-                    if (uiSector & 0x800000)
-                        uiSector &= 0xFFFF;
+					if(uiSector & 0x800000) uiSector &= 0xFFFF;
 
-                    vLog
-                        (
-                            eLogWrite,
-                            "Write%s %2d sec. at P%c: %10d from 0x%04X",
-                            ucFlags & FLAG_RX_CRC ? "✓" : " ",
-                            oHeader.m_ucLength,
-                            ucPartition+'0',
-                            uiSector,
-                            oHeader.m_uiAddress
-                            );
+					vLog
+					(
+						eLogWrite,
+						"Write%s %2d sec. at P%c: %10d from 0x%04X",
+						ucFlags & FLAG_RX_CRC ? "✓" : " ",
+						oHeader.m_ucLength,
+						ucPartition + '0',
+						uiSector,
+						oHeader.m_uiAddress
+					);
 
-                    if (m_bReadOnly)
-                    {
-                        uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
-                    }
-                    else
-                    {
-                        switch(m_oDrive.eWriteSectors(ucPartition, uiSector, oHeader.m_ucLength, acData))
-                        {
-                        case eDriveErrorOK:
-                            break;
+					if(m_bReadOnly)
+					{
+						uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+					}
+					else
+					{
+						switch(m_oDrive.eWriteSectors(ucPartition, uiSector, oHeader.m_ucLength, acData))
+						{
+						case eDriveErrorOK:
+							break;
 
-                        case eDriveErrorNoMedia:
-                            vLog(eLogError, "No media !");
-                            uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
-                            break;
+						case eDriveErrorNoMedia:
+							vLog(eLogError, "No media !");
+							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+							break;
 
-                        case eDriveErrorReadError:
-                        case eDriveErrorWriteError:
-                            vLog(eLogError, "Error writing to file !");
-                            uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
-                            break;
+						case eDriveErrorReadError:
+						case eDriveErrorWriteError:
+							vLog(eLogError, "Error writing to file !");
+							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+							break;
 
-                        case eDriveErrorWriteProtected:
-                            vLog(eLogError, "Media write-protected !");
-                            uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
-                            break;
-                        }
-                    }
+						case eDriveErrorWriteProtected:
+							vLog(eLogError, "Media write-protected !");
+							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+							break;
+						}
+					}
 				}
 				else
 				{
@@ -439,8 +437,8 @@ MainWindow::MainWindow() :
 
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
-    m_poUI->imagePathLineEdit->setText(m_poSettings->value("SelectedImagePath").toString());
-    m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
+	m_poUI->imagePathLineEdit->setText(m_poSettings->value("SelectedImagePath").toString());
+	m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
 
 #ifdef Q_OS_ANDROID
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
@@ -683,7 +681,6 @@ void MainWindow::vTransmitData(const QByteArray &_roData, int _iDelay)
 	m_poInterface->vWrite(acDataToTransmit);
 }
 
-
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -915,19 +912,19 @@ void MainWindow::onButtonClicked()
 			);
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        if(!oImagePath.isEmpty())
-        {
-            m_poUI->imagePathLineEdit->setText(oImagePath);
-        }
-    }
+		if(!oImagePath.isEmpty())
+		{
+			m_poUI->imagePathLineEdit->setText(oImagePath);
+		}
+	}
 	else if(poSender == m_poUI->connectPushButton)
 	{
 		if(m_eConnectionState == eCStateDisconnected)
 		{
 			vSetState(eCStateConnecting);
 			m_poInterface->vConnectDevice(roSelectedID());
-            m_bLastButtonClickedIsConnect = true;
-        }
+			m_bLastButtonClickedIsConnect = true;
+		}
 		else if((m_eConnectionState == eCStateConnected) || (m_eConnectionState == eCStateConnecting))
 		{
 			m_bLastButtonClickedIsConnect = false;
@@ -939,7 +936,7 @@ void MainWindow::onButtonClicked()
 	else if(poSender == m_poUI->fileEjectPushButton)
 	{
 		m_oDrive.vEjectMedia();
-        m_poUI->imagePathLineEdit->setText("");
+		m_poUI->imagePathLineEdit->setText("");
 		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg"));
 	}
 
@@ -1037,10 +1034,10 @@ void MainWindow::onTextChanged(QString _oText)
 
 	if(poSender == m_poUI->imagePathLineEdit)
 	{
-        if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
+		if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
 		{
-            vLog(eLogInfo, "Media opened successfully.");
-            vLog(eLogInfo, szGetServerInfo());
+			vLog(eLogInfo, "Media opened successfully.");
+			vLog(eLogInfo, szGetServerInfo());
 		}
 
 		switch(m_oDrive.eMediaType())

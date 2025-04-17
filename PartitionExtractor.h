@@ -28,6 +28,7 @@ struct DiskPartition {
     PartitionScheme scheme;
     FilesystemType fsType;
     quint8 mbrType;
+    bool isActive;
 };
 
 QList<DiskPartition> extractDiskPartitions(QFile &file);
