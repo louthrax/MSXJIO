@@ -15,11 +15,10 @@
         SECTION	DRV_JIO
 
         ; Mandatory symbols defined by the disk hardware interface driver
-        PUBLIC	DRVINIT	; Initialize hardware interface driver
+        PUBLIC	DRIVES	; Initialize hardware interface driver
         PUBLIC	INIENV	; Initialize driver environment
         PUBLIC	DSKIO	; Disk I/O routine
         PUBLIC	DSKCHG	; Disk change routine
-        PUBLIC	READSEC	; Read sector (MBR / bootsector) routine
         PUBLIC	DRVMEM	; Memory for hardware interface variables
 
         EXTERN	GETWRK	; Get address of disk driver's work area
@@ -28,6 +27,7 @@
         EXTERN	W_CURDRV	; Workarea variable defined by the DOS driver
         EXTERN	W_BOOTDRV	; "
         EXTERN	W_DRIVES	; "
+        EXTERN	MYSIZE	; "
 
         ; Driver routines, use in DRVINIT/INIENV only
         EXTERN	PART_BUF
@@ -50,7 +50,32 @@ GETCPU	equ	$183
 ; Initialize hardware interface driver
 ;********************************************************************************************************************************
 
-DRVINIT:
+; ------------------------------------------
+; DRIVES - Get number of drives connected
+; A maximum of 8 partitions (drives) is supported.
+; Input:
+;   F = The zero flag is reset if one physical drive must act as two logical drives.
+; Output:
+;   L = Number of drives connected. A value of 0 is not allowed for DOS 1.
+; May corrupt: F,HL,IX,IY
+;
+; The DRIVES routine will also initialize the work environment
+; ------------------------------------------
+
+DRIVES:
+        push	af
+        push	bc
+        push	de
+
+        ; initialize work buffer
+        call	GETWRK			; HL and IX point to work buffer
+        ld	d,h
+        ld	e,l
+        inc	de
+        ld	(hl),$00
+        ld	bc,MYSIZE-1
+        ldir
+
         call	PrintMsg
 IFDEF IDEDOS1
         db	12,"JIO MSX-DOS 1",13,10
@@ -86,12 +111,24 @@ DRVINIT_Retry:
         jr	c,DRVINIT_Retry
 
         ld	hl,PART_BUF
+
         ld	a,(hl)
         ld	(ix+W_FLAGS),a
-        inc	hl
+        inc     hl
+        ld      a,(hl)
+        ld	(ix+W_DRIVES),a
+        inc     hl
+        ld      a,(hl)
+        ld	(ix+W_BOOTDRV),a
+        inc     hl
+
         call	PrintString
 
-        xor	a
+        pop     de
+        pop     bc
+        pop     af
+
+        ld	l,(ix+W_DRIVES)
         ret
 
 ;********************************************************************************************************************************
@@ -127,12 +164,7 @@ TestInterface:	ld	a,(hl)
         ld	b,(ix+W_BOOTDRV)	; Get boot drive
         add	a,b
         ld	(ix+W_BOOTDRV),a	; Set boot drive
-        ;call	PrintMsg
-        ;db	"Drives: ",0
-        ;ld	a,(ix+W_DRIVES)
-        ;add	a,'0'
-        ;rst	$18
-        jp	PrintCRLF
+        ret
 
 ;********************************************************************************************************************************
 ; DSKIO - Disk Input / Output
@@ -165,62 +197,17 @@ TestInterface:	ld	a,(hl)
 ;********************************************************************************************************************************
 
 DSKIO:	push	hl
-        push	de
         push	bc
-
         push	af
-        cp	$08	; Max 8 drives (partitions) supported
-        jp	nc,r404
-        call	GETWRK	; Base address of workarea in hl and ix
+        call	GETWRK
         pop	af
+        pop	bc
+        pop	hl
 
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
 WriteFlag:
-
-        ld	e,a
-        add	a,a
-        add	a,a
-        add	a,e
-        ld	e,a	; a * 5
-        ld	d,$00
-        add	hl,de
-
-        push	hl
-        pop	iy
-
-        pop	bc
-        pop	de
-        pop	hl
-
-        xor	a
-        or	(iy+$04)	; Test if partition exists (must have nonzero partition type)
-        jr	z,r405
-
-        ; Translate logical to physical sector number
-        push	bc	; Save sector counter
-        push 	hl	; Save transfer address
-        ex	de,hl
-        bit	7,c	; If bit 7 of media descriptor is 0 then use 23-bit sector number
-        jr	nz,r401	; nz if 16-bit sector number
-        ld	e,c	; Bit 16-22 of sector number
-        ld	d,$00
-        jr	r402
-
-r401:	ld	de,$0000
-
-r402:	ld	c,(iy+$00)
-        ld	b,(iy+$01)
-        add	hl,bc
-        ex	de,hl	; LBA address: de=00..15
-        ld	c,(iy+$02)
-        ld	b,(iy+$03)
-        adc	hl,bc
-        ld	c,l	; LBA address: c=16..23
-        pop	hl	; Restore transfer address
-        pop	af	; Restore sector counter
-        ld	b,a
 
 IFDEF IDEDOS1
 rw_loop:
@@ -271,19 +258,16 @@ sec_loop:
         djnz	rw_loop
         xor	a
         ret
-rw_multi:
-ENDIF
-        jp	ReadOrWriteSectors
-
-        ; Disk i/o error
-r404:	pop	af
-        pop	bc
-        pop	de
-        pop	hl
 
 r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
         scf
         ret
+
+rw_multi:
+ENDIF
+        jp	ReadOrWriteSectors
+
+
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
@@ -327,14 +311,6 @@ ENDIF
 INCLUDE	"drv_jio_c.asm"
 INCLUDE	"crt.asm"
 
-;********************************************************************************************************************************
-; Read (boot) sector
-; Input: C,DE = sector number
-;********************************************************************************************************************************
-READSEC:
-        ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
-        ld	b,1
-
 ; CDE : Sector
 ; B   : Length
 ; HL  : Address
@@ -342,13 +318,9 @@ READSEC:
 ReadOrWriteSectors:
         push    ix              ; _pucFlagsAndCommand
         push    hl              ; _pvAddress
+        push    bc              ; _uiLength
 
-        ld      a,c
-        ld      c,b             ; _ucLength
-        push    bc
-
-        ld      b,0             ; _ulSector in BCDE
-        ld      c,a
+        ld      b,a             ; _ulSector in BCDE
 
         call    ucReadOrWriteSectors
         pop hl
@@ -669,61 +641,6 @@ RX_PE:	in	f,(c)	; 14
 ;         Stack = CRC-16
 ; Output: HL    = updated CRC-16
 
-IFDEF IDEDOS1
-
-uiXModemCRC16:
-        ei
-        ld	l,c
-        ld	h,b
-
-        ld	b,l
-        dec	hl
-        inc	h
-        ld	c,h
-
-        push    ix
-        ld      ix,0
-        add     ix,sp
-        ld      l,(ix+4)
-        ld      h,(ix+5)
-        pop     ix
-
-crc16:
-        push bc
-        ld	a,(de)
-        inc	de
-        xor     h
-        ld      b,a
-        ld      c,l
-        rrca
-        rrca
-        rrca
-        rrca
-        ld      l,a
-        and     0fh
-        ld      h,a
-        xor     b
-        ld      b,a
-        xor     l
-        and     0f0h
-        ld      l,a
-        xor     c
-        add     hl,hl
-        xor     h
-        ld      h,a
-        ld      a,l
-        xor     b
-        ld      l,a
-
-        pop     bc
-        djnz    crc16
-
-        dec     c
-        jp      nz,crc16
-        ret
-
-ELSE
-
 ; compute CRC with lookup table
 uiXModemCRC16:
         ei
@@ -830,5 +747,3 @@ CrcTab:	; high bytes
         db	026h,007h,064h,045h,0A2h,083h,0E0h,0C1h
         db	01Fh,03Eh,05Dh,07Ch,09Bh,0BAh,0D9h,0F8h
         db	017h,036h,055h,074h,093h,0B2h,0D1h,0F0h
-
-ENDIF

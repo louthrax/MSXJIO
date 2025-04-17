@@ -77,32 +77,40 @@ ucReadOrWriteSectors:
 	LD	B,(IX+13)
 	ADD	HL,BC
 	LD	D,(HL)
-	LD	(IX-5),D
+	LD	(IX-4),D
 	LD	HL,W_COMMAND
 	ADD	HL,BC
 	LD	B,(HL)
 	LD	IYH,B
 	CALL	eGetCPU
-	LD	(IX-7),A
+	LD	(IX-6),A
 	LD	(IX-18),74
 	LD	(IX-17),73
 	LD	(IX-16),79
 	LD	(IX-15),D
-	LD	B,(IX+2)
-	LD	(IX-13),B
+	LD	HL,36
+	ADD	HL,SP
+	INC	HL
+	LD	B,(HL)
+	DEC	HL
+	LD	(HL),B
+	LD	C,(IX+4)
+	LD	B,(IX+5)
+	LD	L,(IX+2)
 	LD	H,(IX+3)
+	LD	(IX-13),L
 	LD	(IX-12),H
-	LD	L,(IX+4)
-	LD	BC,0
-	LD	(IX-11),L
-	LD	B,(IX+8)
+	LD	(IX-11),C
 	LD	(IX-10),B
+	LD	B,(IX+8)
+	LD	(IX-9),B
 	LD	L,(IX+10)
 	LD	H,(IX+11)
-	LD	(IX-9),L
-	LD	(IX-8),H
-	LD	H,B
-	LD	L,C
+	LD	(IX-8),L
+	LD	(IX-7),H
+	LD	L,B
+	LD	H,L
+	LD	L,0
 	ADD	HL,HL
 	LD	(IX-26),L
 	LD	(IX-25),H
@@ -121,7 +129,7 @@ _0043:
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,5
 	LD	L,16
@@ -138,9 +146,9 @@ _0017:
 	LD	C,0
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
-	LD	BC,6
+	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -151,7 +159,7 @@ _0017:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	C,(IX-26)
 	LD	B,(IX-25)
@@ -161,10 +169,10 @@ _0017:
 	POP	AF
 	POP	AF
 	POP	AF
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,2
-	LD	HL,27
+	LD	HL,28
 	ADD	HL,SP
 	EX	DE,HL
 	CALL	ucReceive
@@ -174,8 +182,8 @@ _0017:
 	JR	NZ,_0022
 _0019:
 	LD	HL,4369
-	LD	C,(IX-3)
-	LD	B,(IX-2)
+	LD	C,(IX-2)
+	LD	B,(IX-1)
 	AND	A
 	SBC	HL,BC
 	JR	Z,_0022
@@ -200,9 +208,9 @@ _0027:
 	LD	C,1
 	PUSH	BC
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
-	LD	BC,6
+	LD	BC,7
 	LD	HL,21
 	ADD	HL,SP
 	EX	DE,HL
@@ -211,7 +219,7 @@ _0027:
 	POP	AF
 	POP	AF
 _0028:
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	C,(IX-26)
 	LD	B,(IX-25)
@@ -222,12 +230,12 @@ _0028:
 	LD	IYL,A
 	OR	A
 	JR	NZ,_0036
-	BIT	0,(IX-5)
+	BIT	0,(IX-4)
 	JR	Z,_0036
 _0032:
 _0031:
 _0029:
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,2
 	LD	HL,6
@@ -270,7 +278,7 @@ _0037:
 	PUSH	BC
 	LD	HL,0
 	PUSH	HL
-	LD	L,(IX-5)
+	LD	L,(IX-4)
 	PUSH	HL
 	LD	BC,5
 	LD	L,16
@@ -285,10 +293,10 @@ _0038:
 	INC	B
 	DEC	B
 	JR	Z,_0014
-	BIT	3,(IX-5)
+	BIT	3,(IX-4)
 	JP	NZ,_0016
 _0014:
-	LD	E,(IX-7)
+	LD	E,(IX-6)
 	CALL	vSetCPU
 	LD	A,IYL
 	POP	IY

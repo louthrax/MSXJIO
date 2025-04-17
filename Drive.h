@@ -4,6 +4,7 @@
 #include <QString>
 #include <QFile>
 #include <QFileInfo>
+#include "PartitionExtractor.h"
 
 typedef enum {
     eMediaEmpty,
@@ -34,16 +35,17 @@ public:
     QString         oMediaLastModified();
 
     tdMediaType     eMediaType();
-    tdDriveError    eReadSectors(unsigned int _uiSector, unsigned int _uiSectorsCount, QByteArray& _roResult);
-    tdDriveError    eWriteSectors(unsigned int _uiSector, unsigned int _uiSectorsCount, char * _pcData);
+    unsigned int    uiPartitionCount();
+    tdDriveError    eReadSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, QByteArray& _roResult);
+    tdDriveError    eWriteSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, char * _pcData);
     void            vEjectMedia();
     bool            bIsMediaWriteProtected();
 
 private:
-    tdMediaType m_eMediaType = eMediaEmpty;
     QFile       *m_poMediaFile = nullptr;
     bool        m_bMediaWriteProtected = false;
     bool        m_bDriveWriteProtected = false;
+    QList<DiskPartition> m_oPartitions;
 };
 
 #endif

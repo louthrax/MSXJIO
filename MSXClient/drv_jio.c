@@ -15,7 +15,7 @@ typedef struct
 
 typedef struct
 {
-	unsigned char	m_aucSector[3];
+    unsigned long	m_uiSector;
 	unsigned char	m_ucLength;
 	void			*m_pvAddress;
 } tdReadWriteData;
@@ -93,7 +93,7 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
 unsigned char ucReadOrWriteSectors
 (
 	unsigned long	_ulSector,
-	unsigned char	_ucLength,
+    unsigned int	_uiLength,
 	void			*_pvAddress,
     unsigned char	*_pucFlagsAndCommand
 )
@@ -121,13 +121,13 @@ unsigned char ucReadOrWriteSectors
 	oCommonHeader.m_acSig[2] = 'O';
     oCommonHeader.m_ucFlags = ucFlags;
 
-    oReadWriteHeader.m_aucSector[0] = (_ulSector >> 0);
-    oReadWriteHeader.m_aucSector[1] = (_ulSector >> 8);
-    oReadWriteHeader.m_aucSector[2] = (_ulSector >> 16);
-	oReadWriteHeader.m_ucLength = _ucLength;
+    _uiLength >>= 8;
+
+    oReadWriteHeader.m_uiSector = _ulSector;
+    oReadWriteHeader.m_ucLength = _uiLength;
 	oReadWriteHeader.m_pvAddress = _pvAddress;
 
-	uiTotalLength = _ucLength * 512;
+    uiTotalLength = _uiLength * 512;
 
 	do
 	{

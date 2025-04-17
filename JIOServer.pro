@@ -68,7 +68,8 @@ SOURCES += \
     InterfaceBluetoothSocket.cpp \
     InterfaceSerialPort.cpp \
     Main.cpp \
-    MainWindow.cpp
+    MainWindow.cpp \
+    PartitionExtractor.cpp
 
 HEADERS += \
     ByteReader.h \
@@ -77,7 +78,8 @@ HEADERS += \
     Interface.h \
     InterfaceBluetoothSocket.h \
     InterfaceSerialPort.h \
-    MainWindow.h
+    MainWindow.h \
+    PartitionExtractor.h
 
 RESOURCES += \
     Icons.qrc
