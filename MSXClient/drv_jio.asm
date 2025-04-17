@@ -110,26 +110,21 @@ ENDIF
         db	"press [ESC] to cancel",0
 
 
-DRVINIT_Retry:
+DRIVES_Retry:
         ld	a,7
         call	SNSMAT
         and	4
-        ret     z
+        jr      z,DRIVES_Exit
 
         ld	a,'.'
         rst	$18
 
-        ld	e,0xFF
-        ld	d,e
-        ld	c,e
-
-        ld	b,1
-        ld	hl,PART_BUF
-
         ld	(ix+W_FLAGS),FLAG_RX_CRC|FLAG_TX_CRC|FLAG_TIMEOUT
         ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
+        ld      b,1
+        ld	hl,PART_BUF
         call	ReadOrWriteSectors
-        jr	c,DRVINIT_Retry
+        jr	c,DRIVES_Retry
 
         ld	hl,PART_BUF
 
@@ -145,6 +140,7 @@ DRVINIT_Retry:
 
         call	PrintString
 
+DRIVES_Exit:
         pop     de
         pop     bc
         pop     af

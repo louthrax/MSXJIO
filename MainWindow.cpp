@@ -193,6 +193,12 @@ Task MainWindow::oParser()
 					QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
 					/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
+                    vLog
+                        (
+                            eLogRead,
+                            "Info%s",
+                            ucFlags & FLAG_RX_CRC ? "✓" : " ");
+
 					oInfoData = QByteArray(1, W_FLAGS) +
 						QByteArray(1, W_DRIVES) +
 						QByteArray(1, W_BOOTDRV) +
