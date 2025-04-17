@@ -11,6 +11,7 @@
 
         INCLUDE	"disk.inc"	; Assembler directives
         INCLUDE	"msx.inc"	; MSX constants and definitions
+        INCLUDE "flags.inc"
 
         SECTION	DRV_JIO
 
@@ -19,36 +20,56 @@
         PUBLIC	INIENV	; Initialize driver environment
         PUBLIC	DSKIO	; Disk I/O routine
         PUBLIC	DSKCHG	; Disk change routine
-        PUBLIC	DRVMEM	; Memory for hardware interface variables
+        PUBLIC	GETDPB
+        PUBLIC	CHOICE
+        PUBLIC	DSKFMT
+        PUBLIC	MTOFF
+        PUBLIC	OEMSTA
+        PUBLIC	DEFDPB
+        PUBLIC	SECLEN
+        PUBLIC	INIHRD
+        PUBLIC	BOOTMBR
 
         EXTERN	GETWRK	; Get address of disk driver's work area
         EXTERN	GETSLT	; Get slot of this interface
-        EXTERN	DRVSIZE	; DOS driver workarea size (offset)
-        EXTERN	W_CURDRV	; Workarea variable defined by the DOS driver
-        EXTERN	W_BOOTDRV	; "
-        EXTERN	W_DRIVES	; "
         EXTERN	MYSIZE	; "
 
-        ; Driver routines, use in DRVINIT/INIENV only
-        EXTERN	PART_BUF
-
-        EXTERN	PrintMsg
-        EXTERN	PrintCRLF
-        EXTERN	PrintString
-
 ; Hardware driver variables
-W_FLAGS		equ	DRVSIZE
-W_COMMAND	equ	DRVSIZE+1
 DRVMEM		equ	2
 
-#include "flags.inc"
+W_CURDRV	equ	$0	; Current drive
+W_BOOTDRV	equ	$1	; Boot drive (partition)
+W_DRIVES	equ	$2	; Number of drives (partitions) on disk
+W_FLAGS		equ	$3
+W_COMMAND	equ	$4
+MYSIZE		equ	$5
 
-CHGCPU	equ	$180
-GETCPU	equ	$183
+SECLEN		equ	512
+PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
 
-;********************************************************************************************************************************
-; Initialize hardware interface driver
-;********************************************************************************************************************************
+CHGCPU          equ	$180
+GETCPU          equ	$183
+
+        INCLUDE	"drv_jio_c.asm"
+        INCLUDE	"crt.asm"
+
+; ------------------------------------------
+; INIHRD - Initialize the disk
+; Input : None
+; Output: None
+; May corrupt: AF,BC,DE,HL,IX,IY
+; Note: the workbuffer is not available yet so most of the initialization is moved to the DRIVES routine.
+; ------------------------------------------
+INIHRD:		ld	a,$06
+                call	SNSMAT			; Check if CTRL key is pressed
+                and	2
+                jr	z,r101			; z=yes: exit disk init
+                xor	a
+                ret
+r101:		inc	sp
+                inc	sp
+                ret
+
 
 ; ------------------------------------------
 ; DRIVES - Get number of drives connected
@@ -267,8 +288,6 @@ rw_multi:
 ENDIF
         jp	ReadOrWriteSectors
 
-
-
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
 ; Input:
@@ -308,8 +327,6 @@ ELSE
         ret
 ENDIF
 
-INCLUDE	"drv_jio_c.asm"
-INCLUDE	"crt.asm"
 
 ; CDE : Sector
 ; B   : Length
@@ -675,6 +692,324 @@ crc16:
         dec	c
         jp	nz,crc16
         ret
+
+; ------------------------------------------
+; GETDPB - Set DPB using sector 0 / bootsector of partition
+; Called by DOS 1 only, not used by DOS 2.2
+; Input:
+;   A  = Drive number
+;   B  = First byte of FAT
+;   C  = Media descriptor
+;   HL = Base address of DPB
+; Output:
+;   [HL+1] .. [HL+18] = DPB fo the specified drive
+; ------------------------------------------
+        IFNDEF IDEDOS1
+GETDPB:		EQU	SUBRET
+        ELSE
+GETDPB:		ei
+                push	hl
+                ld	de,0			; first logical sector
+                ld	hl,(SSECBUF)		; transfer address
+                ld	b,1			; number of sectors is 1
+                or	a			; carry flag cleared ==> read sector
+                call	DSKIO
+                pop	iy
+                ret	c
+                ld	ix,(SSECBUF)
+                ld	a,(ix+$15)		; Media ID
+                ld	(iy+$01),a
+                ld	(iy+$02),$00		; Sector size is 0200h
+                ld	(iy+$03),$02
+                ld	(iy+$04),$0f		; Directory mask 00fh: 512/32-1
+                ld	(iy+$05),$04		; Directory shift 004h
+                ld	a,(ix+$0d)		; Cluster size (in sectors)
+                dec	a
+                ld	(iy+$06),a		; Cluster mask
+                ld	c,$00
+r601:		inc	c
+                rra
+                jr	c,r601
+                ld	(iy+$07),c		; Cluster shift
+                ld	l,(ix+$0e)		; Number of unused sectors
+                ld	h,(ix+$0f)
+                ld	(iy+$08),l		; FIRFAT - first FAT sector
+                ld	(iy+$09),h
+                ld	e,(ix+$16)		; Size of FAT (in sectors)
+                ld	(iy+$10),e		; FATSIZ - Sectors per FAT
+                ld	d,$00
+                ld	b,(ix+$10)		; Number of FATs
+                ld	(iy+$0A),b
+r602:		add	hl,de
+                djnz	r602
+                ld	(iy+$11),l		; FIRDIR - First directory sector
+                ld	(iy+$12),h
+                ld	a,(ix+$12)		; Number of directory entries (high byte)
+                ex	de,hl
+                ld	h,a
+                ld	l,(ix+$11)		; Number of directory entries (low byte)
+                ld	bc,$000f
+                add	hl,bc
+                add	hl,hl
+                add	hl,hl
+                add	hl,hl
+                add	hl,hl			; 16 directory entries per sector
+                ld	l,h
+                ld	h,$00
+                ex	de,hl
+                or	a			; number of directory entries < 256?
+                jr	z,r603			; z=yes
+                ld	a,$ff			; set max 255 directory entries
+                jr	r604
+r603:		ld	a,(ix+$11)		; set max directory entries to directory entries low byte
+r604:		ld	(iy+$0b),a		; MAXENT - Max directory entries
+                add	hl,de
+                ld	(iy+$0c),l		; FIRREC - first data sector
+                ld	(iy+$0d),h
+                ex	de,hl
+                ld	l,(ix+$13)		; Total number of sectors
+                ld	h,(ix+$14)
+                ld	bc,$0000
+                ld	a,l
+                or	h
+                jr	nz,r605
+                ld	l,(ix+$20)
+                ld	h,(ix+$21)
+                ld	c,(ix+$22)
+                ld	b,(ix+$23)
+r605: 		or	a
+                sbc	hl,de
+                jr	nc,r606
+                dec	bc
+r606:		ld	a,(iy+$07)
+r607:	  	dec	a
+                jr	z,r608
+                srl	b
+                rr	c
+                rr	h
+                rr	l
+                jr	r607
+r608:		inc	hl
+                ld	(iy+$0e),l		; MAXCLUS - number of clusters + 1
+                ld 	(iy+$0f),h
+                xor	a
+                ret
+        ENDIF
+
+; ------------------------------------------
+; CHOICE - Choice for FORMAT
+; Input : None
+; Output: HL = pointer to string, terminated by 0
+; ------------------------------------------
+CHOICE:
+        IFDEF IDEDOS1
+                ; No choice: HL = 0
+                xor	a
+                ld	l,a
+                ld	h,a
+                ret
+        ELSE
+                ; Cannot format this drive: (HL) = 0
+                ld	hl,choice_txt
+                ret
+choice_txt:	db	$00
+        ENDIF
+
+; ------------------------------------------
+; DSKFMT - Format not implemented
+; MTOFF - Motors off not implemented
+; ------------------------------------------
+DSKFMT:
+        IFDEF IDEDOS1
+                ; This routine will be called by DOS1 only
+                ; Error $0c = Bad parameter
+                ld	a,$0c
+                scf
+        ENDIF
+SUBRET:
+MTOFF:		ret
+
+; -------------------------------------------
+; OEMSTATEMENT - BASIC System statement expansion
+; -------------------------------------------
+OEMSTA:		scf
+                ret
+
+; ------------------------------------------
+; Default DPB pattern (DOS 1)
+; ------------------------------------------
+DEFDPB:		db	$00		; +00 DRIVE	Drive number
+                db	$f9		; +01 MEDIA	Media type
+                dw	$0200		; +02 SECSIZ	Sector size
+                db	$0f		; +04 DIRMSK	Directory mask
+                db	$04		; +05 DIRSHFT	Directory shift
+                db	$03		; +06 CLUSMSK	Cluster mask
+                db	$03		; +07 CLUSSFT	Cluster shift
+                dw	$0001		; +08 FIRFAT	First FAT sector
+                db	$02		; +0A FATCNT	Number of FATs
+                db	$70		; +0B MAXENT	Number of directory entries
+                dw	$000e		; +0C FIRREC	First data sector
+                dw	$02ca		; +0E MAXCLUS	Number of clusters+1
+                db	$03		; +10 FATSIZ	Sectors per FAT
+                dw	$0007		; +11 FIRDIR	First directory sector
+                dw	$0000		; +12 FATPTR	FAT pointer
+
+; ------------------------------------------
+; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
+; Parameters for boot code:
+;   hl,ix = pointer to driver workspace
+;   a     = master disk major DOS version (1 or 2)
+; Output:
+;   Zx set ==> show boot choice (if this option is enabled)
+;   Cx set ==> start Disk BASIC
+; May corrupt: AF,BC,DE,HL,IX,IY
+; ------------------------------------------
+        IFNDEF BOOTCODE
+BOOTMBR:	EQU	SUBRET
+        ELSE
+BOOTMBR:	; check for boot code signature 'BC'
+                ld	a,(PART_BUF+$40)
+                cp	'B'
+                jr	nz,bcret
+                ld	a,(PART_BUF+$41)
+                cp	'C'
+                jr	nz,bcret
+
+                ; set parameters
+                call	GETWRK
+        IFDEF IDEDOS1
+                ld	a,1
+        ELSE
+                ld	a,2
+        ENDIF
+
+                ; execute bootcode
+                jp	PART_BUF+$42
+
+bcret:		xor	a
+                ret
+
+        ENDIF ; BOOTCODE
+; ------------------------------------------
+; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
+; MSX-DOS 1:
+; 	The default boot drive is the last primary partition that is flagged active.
+;	If DOS1 can't boot from the specified drive the machine will restart or start BASIC.
+; MSX-DOS 2:
+; 	The default boot drive is the first drive with a valid MSX-DOS 2 boot loader.
+;	If DOS2 can't boot from the  specified drive the machine will boot from the first drive or start BASIC.
+; ------------------------------------------
+        IFNDEF BOOTCHOICE
+BOOTMENU:	EQU	SUBRET
+        ELSE
+BOOTMENU:	ei
+                call	GETWRK
+                xor	a
+                or	(ix+W_DRIVES)		; are there any IDE drives?
+        IFDEF IDEDOS1
+                ret	z
+                ld	a,(ix+W_BOOTDRV)
+                ld	(CURDRV),a
+        ELSE
+                ld	a,(CUR_DRV)
+                ret	z			; z=no IDE drives
+                dec	a
+        ENDIF
+                push	af
+                call	PrintMsg
+                db	"Boot  : ",0
+                pop	af
+                add	a,'A'
+                rst	$18
+                call	PrintMsg
+                db	13,10,13,10,"Press drive key or [ESC] to cancel.. ",0
+                ld	hl,BTWAIT		; wait time is defined in disk.inc
+boot_r1:	push	hl
+                call	SelectDrive
+                pop	hl
+                ret	c
+                push	hl
+                ld	hl,SNUMDR		; Number of drives in the system
+                cp	(hl)
+                pop	hl
+                jr	c,boot_valid
+                dec	hl
+                ld	a,h
+                or	l
+                jr	nz,boot_r1
+        IFDEF IDEDOS1
+                ld	a,(CURDRV)
+boot_valid:	ld	(CURDRV),a
+        ELSE
+                ld	a,(CUR_DRV)
+                dec	a
+boot_valid:	inc	a
+                ld	(CUR_DRV),a
+        ENDIF
+                push	af
+                ld	a,$0c			; clear screen
+                rst	$18
+                ld	hl,$1000		; wait until boot key is released
+boot_r2:	dec	hl
+                ld	a,h
+                or	l
+                jr	nz,boot_r2
+                call	KILBUF			; clear keyboard buffer
+                pop	af
+                or	a			; clear carry flag
+                ret
+
+; -----------------------------------------
+; Get drive character from keyboard
+; Output: A=0..7 or ff if no key pressed
+;         carry flag if ESC is pressed
+; -----------------------------------------
+SelectDrive:	call	CHSNS			; check keyboard buffer
+                jr	z,nokey			; z=empty
+                ld	a,$01
+                ld	(REPCNT),a		; not to wait until repeat
+                call	CHGET           	; get a character (if exists)
+                cp	$1b			; [ESC]
+                scf
+                ret	z
+                cp	'A'
+                jr	c,nokey
+                cp	'I'
+                jr	c,setdrive
+                cp	'a'
+                jr	c,nokey
+                cp	'i'
+                jr	nc,nokey
+                sub	$20
+setdrive:	sub	'A'
+                ret
+nokey:		or	$ff
+                ret
+
+        ENDIF ; BOOTCHOICE
+
+; ------------------------------------------------------------------------------
+; *** Print subroutines ***
+; ------------------------------------------------------------------------------
+PrintMsg:	ex      (sp),hl
+                call    PrintString
+                ex      (sp),hl
+                ret
+
+PrintString:	ld      a,(hl)
+                inc     hl
+                and     a
+                ret     z
+                rst	$18			; print character
+                jr      PrintString
+
+; Print CR+LF
+PrintCRLF:	ld	a,$0d
+                rst	$18
+                ld	a,$0a
+                rst	$18
+                ret
+
 
         SECTION	DRV_CRCTAB
 

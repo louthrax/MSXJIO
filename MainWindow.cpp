@@ -112,12 +112,12 @@ QString MainWindow::szGetServerInfo()
 
     oText = QString::asprintf
         (
-            "\r\nFile  : %s\r\n%s\r\nDate  : %s\r\nFlags : %s\r\n",
-            qPrintable(m_oDrive.oMediaPath()),
+            "\r\nDrive :\r\n\%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
             qPrintable(m_oDrive.szDescription()),
             qPrintable(m_oDrive.oMediaLastModified()),
-            qPrintable(oFlags)
-            );
+            qPrintable(oFlags),
+            qPrintable(m_oDrive.oMediaPath())
+        );
 
     return oText;
 }
@@ -1037,11 +1037,7 @@ void MainWindow::onTextChanged(QString _oText)
 
 	if(poSender == m_poUI->imagePathLineEdit)
 	{
-        if(!m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
-		{
-			vLog(eLogError, "Failed to open image file.");
-		}
-		else
+        if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
 		{
             vLog(eLogInfo, "Media opened successfully.");
             vLog(eLogInfo, szGetServerInfo());

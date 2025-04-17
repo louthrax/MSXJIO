@@ -128,7 +128,7 @@ QString describePartitions(const QList<DiskPartition> &partitions)
 		const DiskPartition &p = partitions[i];
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        result += QString("  P%1  : %2 %3 %4").arg(i).arg(oFormatSize(p.sectorCount * 512)).arg(toString(p.fsType)).arg(toString(p.scheme));
+        result += QString("  P%1 %2 %3 %4").arg(i).arg(oFormatSize(p.sectorCount * 512)).arg(toString(p.fsType)).arg(toString(p.scheme));
         if (i < partitions.size() - 1)
             result += "\r\n";
     }
