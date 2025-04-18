@@ -112,7 +112,7 @@ QString MainWindow::szGetServerInfo()
 
 	oText = QString::asprintf
 		(
-			"\r\nDrive :\r\n\%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
+            "\r\nDrive :\r\n%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
 			qPrintable(m_oDrive.szDescription()),
 			qPrintable(m_oDrive.oMediaLastModified()),
 			qPrintable(oFlags),
@@ -675,7 +675,7 @@ void MainWindow::onDeviceDisconnected()
 void MainWindow::vTransmitData(const QByteArray &_roData, int _iDelay)
 {
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QByteArray	acDataToTransmit = QByteArray(_iDelay, 0xFF) + QByteArray(1, 0xF0) + _roData;
+    QByteArray	acDataToTransmit = QByteArray(_iDelay, (char)0xFF) + QByteArray(1, (char)0xF0) + _roData;
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	vSetFrameColor(m_poUI->greenLightLabel, 0, 255, 0);
@@ -806,7 +806,7 @@ void MainWindow::onGreenLightTimer()
 void MainWindow::onUnlockTimer()
 {
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QByteArray	ba = QByteArray(10, 0xAA);
+    QByteArray	ba = QByteArray(10, (char)0xAA);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 	vTransmitData(ba, 1);

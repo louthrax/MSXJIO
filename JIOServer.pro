@@ -52,16 +52,24 @@ android {
     CLEAN_FILES += $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
 }
 
-win32 {
-    ICON_TARGET = $$OUT_PWD/icons/JIOServer.ico
-    SVG_SOURCE = $$PWD/icons/JIOServer.svg
+win32:CONFIG(release, debug|release) {
+    DESTDIR = release
+    TARGET_EXE = $$OUT_PWD/$$DESTDIR/$${TARGET}.exe
+    DEPLOYDIR = $$OUT_PWD/deploy
+    WINDEPLOYQT = $$[QT_INSTALL_BINS]/windeployqt.exe
 
-    ICON_GEN = convert $$SVG_SOURCE -define icon:auto-resize=64,48,32,16 $$ICON_TARGET
+    OUT_EXE_WIN = $$shell_path($$TARGET_EXE)
+    DEPLOYDIR_WIN = $$shell_path($$DEPLOYDIR)
+    WINDEPLOYQT_WIN = $$shell_path($$WINDEPLOYQT)
+    ZIPFILE = $$shell_path($$OUT_PWD/$$TARGET-win.zip)
 
-    system($$ICON_GEN)
-
-    RC_ICONS += $$ICON_TARGET
+    QMAKE_POST_LINK += \
+        "$$WINDEPLOYQT_WIN" "$$OUT_EXE_WIN" --dir "$$DEPLOYDIR_WIN" && \
+        copy /Y "$${OUT_EXE_WIN}" "$${DEPLOYDIR_WIN}\\$${TARGET}.exe" && \
+        powershell -Command "Compress-Archive -Path '$$DEPLOYDIR_WIN\\*' -DestinationPath '$$ZIPFILE' -Force" && \
+        echo ZIP created at $$ZIPFILE
 }
+
 
 SOURCES += \
     Drive.cpp \
