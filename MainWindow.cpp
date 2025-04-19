@@ -450,8 +450,10 @@ MainWindow::MainWindow() :
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
 	m_eSelectedInterface = eInterfaceBluetooth;
 #else
-	oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
-	m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
+#ifdef Q_OS_LINUX
+    oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
+#endif
+    m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
 	poGroup->setExclusive(true);
 	poGroup->addButton(m_poUI->USBButton);
