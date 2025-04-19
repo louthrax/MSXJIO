@@ -4,6 +4,8 @@ CONFIG += c++20
 
 FORMS += MainWindow.ui
 
+MAKEFILE = makefile
+
 unix:!android:CONFIG(release, debug|release) {
     APPNAME = JIOServer
     OUTDIR = $$OUT_PWD
