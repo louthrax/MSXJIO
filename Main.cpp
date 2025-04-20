@@ -1,5 +1,6 @@
 
 #include <QApplication>
+#include <QStyleFactory>
 
 #include "MainWindow.h"
 
@@ -18,6 +19,9 @@ int main(int argc, char *argv[])
 	/*~~~~~~~~~~*/
 	MainWindow	w;
 	/*~~~~~~~~~~*/
+
+    QApplication::setStyle(QStyleFactory::create("Fusion"));
+    a.setPalette(QApplication::style()->standardPalette());
 
 	if(argc <= 1)
 	{

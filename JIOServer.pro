@@ -6,17 +6,6 @@ FORMS += MainWindow.ui
 
 MAKEFILE = makefile
 
-unix:!android:CONFIG(release, debug|release) {
-    APPNAME = JIOServer
-    OUTDIR = $$OUT_PWD
-    DEPLOYDIR = $$OUT_PWD/deploy
-    SCRIPT = $$PWD/deploy_linux.sh
-
-    QMAKE_POST_LINK += \
-        echo "==[ Linux Deployment ]==" && \
-        $$SCRIPT $$OUTDIR/$$APPNAME $$DEPLOYDIR
-}
-
 android {
     QT += svg
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
@@ -72,6 +61,35 @@ win32:CONFIG(release, debug|release) {
         echo ZIP created at $$ZIPFILE
 }
 
+macx:CONFIG(release, debug|release) {
+    DESTDIR = release
+    APP_BUNDLE = $$OUT_PWD/$$DESTDIR/$${TARGET}.app
+    DEPLOYDIR = $$OUT_PWD/deploy
+    MACDEPLOYQT = $$[QT_INSTALL_BINS]/macdeployqt
+    DMGFILE = $$OUT_PWD/$${TARGET}-mac.dmg
+
+    QMAKE_POST_LINK += \
+        echo "==[ macOS Deployment ]==" && \
+        "$$MACDEPLOYQT" "$$APP_BUNDLE" -verbose=1 && \
+        rm -rf "$$APP_BUNDLE/Contents/Resources/qt.conf" \
+        rm -rf "$$DEPLOYDIR" && \
+        mkdir -p "$$DEPLOYDIR" && \
+        cp -R "$$APP_BUNDLE" "$$DEPLOYDIR/" && \
+        hdiutil create -volname "$${TARGET}" -srcfolder "$$DEPLOYDIR" -ov -format UDZO ~/Tmp/$${TARGET}-mac.dmg && \
+        mv ~/Tmp/$${TARGET}-mac.dmg $$OUT_PWD/$${TARGET}-mac.dmg && \
+        echo "DMG created at $$DMGFILE"
+}
+
+unix:!android:CONFIG(release, debug|release) {
+    APPNAME = JIOServer
+    OUTDIR = $$OUT_PWD
+    DEPLOYDIR = $$OUT_PWD/deploy
+    SCRIPT = $$PWD/deploy_linux.sh
+
+    QMAKE_POST_LINK += \
+        echo "==[ Linux Deployment ]==" && \
+        $$SCRIPT $$OUTDIR/$$APPNAME $$DEPLOYDIR
+}
 
 SOURCES += \
     Drive.cpp \
