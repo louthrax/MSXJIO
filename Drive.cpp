@@ -225,7 +225,21 @@ tdMediaType Drive::eMediaType()
 {
 	if(m_poMediaFile)
 	{
-		return(m_oPartitions.size() > 0) ? eMediaHardDisk : eMediaFloppy;
+		switch(m_oPartitions.size())
+		{
+		case 0:
+			return eMediaFloppy;
+
+		case 1:
+			return
+				(
+					(m_oPartitions[0].sectorCount == 1440)
+				||	(m_oPartitions[0].sectorCount == 720)
+				) ? eMediaFloppy : eMediaHardDisk;
+
+		default:
+			return eMediaHardDisk;
+		}
 	}
 	else
 		return eMediaEmpty;

@@ -86,7 +86,7 @@ static FilesystemType detectFilesystem(QFile &file, quint64 sectorStart)
 		return FilesystemType::EXT;
 	}
 
-	return FilesystemType::Unknown;
+    return FilesystemType::Unknown;
 }
 
 /*
@@ -209,8 +209,7 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 				/*~~~~~~~~~~~~~~~~~~*/
 
 				part.fsType = detectFilesystem(file, part.startSector);
-				if((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
-					partitions.append(part);
+                partitions.append(part);
 			}
 		}
 	}
@@ -245,8 +244,7 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 						logical.startSector += nextEbr;
 						logical.scheme = PartitionScheme::Logical;
 						logical.fsType = detectFilesystem(file, logical.startSector);
-						if((logical.fsType == FilesystemType::FAT12) || (logical.fsType == FilesystemType::FAT16))
-							partitions.append(logical);
+                        partitions.append(logical);
 					}
 
 					if(ebrParts.size() > 1 && ebrParts[1].sectorCount > 0)
@@ -267,8 +265,7 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 
 				part.scheme = PartitionScheme::MBR;
 				part.fsType = detectFilesystem(file, part.startSector);
-				if((part.fsType == FilesystemType::FAT12) || (part.fsType == FilesystemType::FAT16))
-					partitions.append(part);
+                partitions.append(part);
 			}
 		}
 	}
@@ -315,6 +312,6 @@ QString toString(FilesystemType fsType)
 	case FilesystemType::NTFS:	return "NTFS";
 	case FilesystemType::exFAT: return "exFAT";
 	case FilesystemType::EXT:	return "ext2/3/4";
-	default:					return "Floppy";
+    default:					return "Unknown";
 	}
 }

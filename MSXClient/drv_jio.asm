@@ -29,20 +29,21 @@
         PUBLIC	SECLEN
         PUBLIC	INIHRD
         PUBLIC	BOOTMBR
+	PUBLIC	BOOTMENU
 
         EXTERN	GETWRK	; Get address of disk driver's work area
         EXTERN	GETSLT	; Get slot of this interface
         EXTERN	MYSIZE	; "
 
 ; Hardware driver variables
-DRVMEM		equ	2
 
 W_CURDRV	equ	$0	; Current drive
 W_BOOTDRV	equ	$1	; Boot drive (partition)
 W_DRIVES	equ	$2	; Number of drives (partitions) on disk
 W_FLAGS		equ	$3
 W_COMMAND	equ	$4
-MYSIZE		equ	$5
+W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
+MYSIZE		equ	$6
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK		; Copy of disk info / Master Boot Record
@@ -141,11 +142,17 @@ DRIVES_Retry:
         call	PrintString
 
 DRIVES_Exit:
+        ld	a,(ix+W_DRIVES)
+IFDEF IDEDOS1
+	or	a
+	jr	nz,r206
+	inc	a			; Return value of 0 drives is not allowed in DOS 1
+r206:
+ENDIF
+	ld	l,a
         pop     de
         pop     bc
         pop     af
-
-        ld	l,(ix+W_DRIVES)
         ret
 
 ;********************************************************************************************************************************
@@ -227,6 +234,7 @@ DSKIO:	push	hl
 WriteFlag:
 
 IFDEF IDEDOS1
+	ld	(ix+W_DRIVE),a		; save drive number
 rw_loop:
         bit	7,h
         jr	nz,rw_multi
@@ -238,6 +246,7 @@ rw_loop:
         jr	nz,sec_write
         push	hl
         ld	hl,(SSECBUF)
+	ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	de
         jr	nz,sec_err
@@ -256,6 +265,7 @@ sec_write:
         pop	bc
         pop	de
         ld	hl,(SSECBUF)
+	ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	hl
         jr	nz,sec_err
@@ -860,32 +870,10 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
 ;   Cx set ==> start Disk BASIC
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ; ------------------------------------------
-        IFNDEF BOOTCODE
+
+; Not implemented in JIO driver
 BOOTMBR:	EQU	SUBRET
-        ELSE
-BOOTMBR:	; check for boot code signature 'BC'
-                ld	a,(PART_BUF+$40)
-                cp	'B'
-                jr	nz,bcret
-                ld	a,(PART_BUF+$41)
-                cp	'C'
-                jr	nz,bcret
 
-                ; set parameters
-                call	GETWRK
-        IFDEF IDEDOS1
-                ld	a,1
-        ELSE
-                ld	a,2
-        ENDIF
-
-                ; execute bootcode
-                jp	PART_BUF+$42
-
-bcret:		xor	a
-                ret
-
-        ENDIF ; BOOTCODE
 ; ------------------------------------------
 ; Boot MSX-DOS from selected partition, to be used in a modified MSX-DOS boot process.
 ; MSX-DOS 1:

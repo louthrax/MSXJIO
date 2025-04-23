@@ -4,7 +4,7 @@ CONFIG += c++20
 
 FORMS += MainWindow.ui
 
-MAKEFILE = makefile
+MAKEFILE = Makefile
 
 android {
     QT += svg
@@ -52,7 +52,7 @@ win32:CONFIG(release, debug|release) {
     OUT_EXE_WIN = $$shell_path($$TARGET_EXE)
     DEPLOYDIR_WIN = $$shell_path($$DEPLOYDIR)
     WINDEPLOYQT_WIN = $$shell_path($$WINDEPLOYQT)
-    ZIPFILE = $$shell_path($$OUT_PWD/$$TARGET-win.zip)
+    ZIPFILE = $$shell_path($$OUT_PWD/../$$TARGET-win.zip)
 
     QMAKE_POST_LINK += \
         "$$WINDEPLOYQT_WIN" "$$OUT_EXE_WIN" --dir "$$DEPLOYDIR_WIN" && \
@@ -76,7 +76,7 @@ macx:CONFIG(release, debug|release) {
         mkdir -p "$$DEPLOYDIR" && \
         cp -R "$$APP_BUNDLE" "$$DEPLOYDIR/" && \
         hdiutil create -volname "$${TARGET}" -srcfolder "$$DEPLOYDIR" -ov -format UDZO ~/Tmp/$${TARGET}-mac.dmg && \
-        mv ~/Tmp/$${TARGET}-mac.dmg $$OUT_PWD/$${TARGET}-mac.dmg && \
+        mv ~/Tmp/$${TARGET}-mac.dmg $$OUT_PWD/../$${TARGET}-mac.dmg && \
         echo "DMG created at $$DMGFILE"
 }
 

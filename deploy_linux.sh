@@ -21,6 +21,6 @@ mkdir -p "$DEST/platforms"
 cp "$(qtpaths6 --plugin-dir)/platforms/libqxcb.so" "$DEST/platforms/"
 
 echo "→ Creating zip..."
-cd "$DEST" && rm -f "../$(basename "$APP")-linux.zip" && zip -r "../$(basename "$APP")-linux.zip" * && cd -
+cd "$DEST" && rm -f "../$(basename "$APP")-linux.zip" && zip -r "../../$(basename "$APP")-linux.zip" * && cd -
 
 echo "✅ Deployment finished."

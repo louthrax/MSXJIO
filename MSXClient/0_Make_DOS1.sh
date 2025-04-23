@@ -7,7 +7,7 @@ wine iccZ80.exe drv_jio.c -z9 -uu -a drv_jio_c.as
 
 rm -r -f ./obj rdate.inc
 date +"db \"%Y-%m-%d\"" > rdate.inc
-z88dk.z88dk-z80asm -b -d -l -m -DJIO -DIDEDOS1 -Oobj -o=jio_dos1.bin p1_main.asm p3_paging.asm drv_jio.asm p0_kernel.asm
+z88dk.z88dk-z80asm -b -d -l -m -DJIO -DIDEDOS1 -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm
 z88dk.z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
 
 z88dk.z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1.rom -s 32768 --org 0
