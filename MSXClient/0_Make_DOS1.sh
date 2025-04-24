@@ -10,7 +10,7 @@ date +"db \"%Y-%m-%d\"" > rdate.inc
 z88dk.z88dk-z80asm -b -d -l -m -DJIO -DIDEDOS1 -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm
 z88dk.z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
 
-z88dk.z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1.rom -s 32768 --org 0
+z88dk.z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1.rom -s 16384 --org 0
 
 z88dk.z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1_64k.rom -s 65536 --org 16384 --fill 0xFF
 

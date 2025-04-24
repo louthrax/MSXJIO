@@ -29,8 +29,6 @@ extern unsigned int W_COMMAND;
 unsigned int	uiXModemCRC16(void *_pvAddress, unsigned int _uiLength, unsigned int _uiCRC);
 bool			bJIOReceive(void *_pvDestination, unsigned int _uiSize);
 void			vJIOTransmit(void *_pvSource, unsigned int _uiSize);
-tdCPUMode		eGetCPU();
-void			vSetCPU(tdCPUMode _eMode);
 
 /*
  =======================================================================================================================
@@ -48,11 +46,9 @@ unsigned int uiTransmit
 {
     if(_ucFlags & FLAG_TX_CRC)
 	{
-        vSetCPU(eR800_DRAM);
         _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 	}
 
-    vSetCPU(eZ80);
     vJIOTransmit(_pvAddress, _uiLength);
 
     if(_bLast && (_ucFlags & FLAG_TX_CRC))
@@ -69,12 +65,6 @@ unsigned int uiTransmit
  */
 unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char _ucFlags)
 {
-    /* Avoid interrupt before reading acknowledge or checksum */
-    if (_uiLength != 2)
-    {
-        vSetCPU(eZ80);
-    }
-
     while(!bJIOReceive(_pvAddress, _uiLength))
 	{
         if(_ucFlags & FLAG_TIMEOUT)
@@ -113,8 +103,6 @@ unsigned char ucReadOrWriteSectors
 
     ucFlags = _pucFlagsAndCommand[(unsigned int)&W_FLAGS];
     ucCommand = _pucFlagsAndCommand[(unsigned int)&W_COMMAND];
-
-	eCPUMode = eGetCPU();
 
 	oCommonHeader.m_acSig[0] = 'J';
 	oCommonHeader.m_acSig[1] = 'I';
@@ -168,7 +156,6 @@ unsigned char ucReadOrWriteSectors
                 ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), ucFlags);
                 if (ucResult == COMMAND_DRIVE_REPORT_OK)
                 {
-                    vSetCPU(eR800_DRAM);
                     uiComputedCRC = uiXModemCRC16(_pvAddress, uiTotalLength, 0);
 
                     if (uiReceivedCRC != uiComputedCRC)
@@ -185,8 +172,6 @@ unsigned char ucReadOrWriteSectors
             uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, true);
         }
     } while((ucResult != COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_AUTO_RETRY));
-
-	vSetCPU(eCPUMode);
 
     return ucResult;
 }
