@@ -29,7 +29,7 @@
         PUBLIC	SECLEN
         PUBLIC	INIHRD
         PUBLIC	BOOTMBR
-	PUBLIC	BOOTMENU
+        PUBLIC	BOOTMENU
 
         EXTERN	GETWRK	; Get address of disk driver's work area
         EXTERN	GETSLT	; Get slot of this interface
@@ -144,12 +144,12 @@ DRIVES_Retry:
 DRIVES_Exit:
         ld	a,(ix+W_DRIVES)
 IFDEF IDEDOS1
-	or	a
-	jr	nz,r206
-	inc	a			; Return value of 0 drives is not allowed in DOS 1
+        or	a
+        jr	nz,r206
+        inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
 ENDIF
-	ld	l,a
+        ld	l,a
         pop     de
         pop     bc
         pop     af
@@ -220,7 +220,7 @@ TestInterface:	ld	a,(hl)
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-DSKIO:	push	hl
+DSKIO:  push	hl
         push	bc
         push	af
         call	GETWRK
@@ -234,7 +234,7 @@ DSKIO:	push	hl
 WriteFlag:
 
 IFDEF IDEDOS1
-	ld	(ix+W_DRIVE),a		; save drive number
+        ld	(ix+W_DRIVE),a		; save drive number
 rw_loop:
         bit	7,h
         jr	nz,rw_multi
@@ -246,7 +246,7 @@ rw_loop:
         jr	nz,sec_write
         push	hl
         ld	hl,(SSECBUF)
-	ld	a,(ix+W_DRIVE)		; load drive number
+        ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	de
         jr	nz,sec_err
@@ -265,7 +265,7 @@ sec_write:
         pop	bc
         pop	de
         ld	hl,(SSECBUF)
-	ld	a,(ix+W_DRIVE)		; load drive number
+        ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	hl
         jr	nz,sec_err
@@ -291,8 +291,14 @@ r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
         ret
 
 rw_multi:
+ELSE
+        push    bc
+        call	ReadOrWriteSectors
+        pop     bc
+        ret     c
+        ld      b,0
+        ret
 ENDIF
-        jp	ReadOrWriteSectors
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
