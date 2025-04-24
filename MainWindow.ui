@@ -451,6 +451,22 @@
         <bool>true</bool>
        </property>
       </widget>
+      <widget class="QPushButton" name="noInt">
+       <property name="geometry">
+        <rect>
+         <x>190</x>
+         <y>440</y>
+         <width>81</width>
+         <height>26</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>No int</string>
+       </property>
+       <property name="checkable">
+        <bool>true</bool>
+       </property>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -709,6 +725,22 @@
     <hint type="sourcelabel">
      <x>335</x>
      <y>552</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>180</x>
+     <y>348</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>noInt</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>onButtonClicked()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>230</x>
+     <y>452</y>
     </hint>
     <hint type="destinationlabel">
      <x>180</x>

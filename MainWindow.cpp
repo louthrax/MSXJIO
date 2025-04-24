@@ -107,8 +107,9 @@ QString MainWindow::szGetServerInfo()
 	if(m_bRxCRC) oFlags += "RxCRC ";
 	if(m_bTxCRC) oFlags += "TxCRC ";
 	if(m_bTimeout) oFlags += "Timeout ";
-	if(m_bAutoRetry) oFlags += "AutoRetry ";
-	if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly";
+    if(m_bNoInt) oFlags += "NoInt ";
+    if(m_bAutoRetry) oFlags += "AutoRetry ";
+    if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly";
 
 	oText = QString::asprintf
 		(
@@ -187,7 +188,7 @@ Task MainWindow::oParser()
 					/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 					QByteArray	oInfoData;
 					quint8		W_FLAGS = (m_bRxCRC ? FLAG_RX_CRC : 0) | (m_bTxCRC ? FLAG_TX_CRC : 0) |
-						(m_bTimeout ? FLAG_TIMEOUT : 0) | (m_bAutoRetry ? FLAG_AUTO_RETRY : 0);
+                        (m_bTimeout ? FLAG_TIMEOUT : 0) | (m_bAutoRetry ? FLAG_AUTO_RETRY : 0) | (m_bNoInt ? FLAG_NOINT : 0);
 					quint8		W_DRIVES = m_oDrive.uiPartitionCount();
 					quint8		W_BOOTDRV = m_oDrive.uiFirstActivePartition();
 					QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
@@ -438,8 +439,9 @@ MainWindow::MainWindow() :
 	m_bRxCRC = m_poSettings->value("RxCRC", true).toBool();
 	m_bTxCRC = m_poSettings->value("TxCRC", true).toBool();
 	m_bAutoRetry = m_poSettings->value("AutoRetry", true).toBool();
-	m_bTimeout = m_poSettings->value("Timeout", false).toBool();
-	m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
+    m_bTimeout = m_poSettings->value("Timeout", false).toBool();
+    m_bNoInt = m_poSettings->value("NoInt", false).toBool();
+    m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
 
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
@@ -467,8 +469,9 @@ MainWindow::MainWindow() :
 	m_poUI->RxCRC->setChecked(m_bRxCRC);
 	m_poUI->TxCRC->setChecked(m_bTxCRC);
 	m_poUI->autoRetry->setChecked(m_bAutoRetry);
-	m_poUI->timeout->setChecked(m_bTimeout);
-	m_poUI->readOnly->setChecked(m_bReadOnly);
+    m_poUI->timeout->setChecked(m_bTimeout);
+    m_poUI->noInt->setChecked(m_bNoInt);
+    m_poUI->readOnly->setChecked(m_bReadOnly);
 
 	vSetInterface(m_eSelectedInterface);
 
@@ -701,8 +704,9 @@ void MainWindow::vSaveSettings()
 	m_poSettings->setValue("RxCRC", m_bRxCRC);
 	m_poSettings->setValue("TxCRC", m_bTxCRC);
 	m_poSettings->setValue("AutoRetry", m_bAutoRetry);
-	m_poSettings->setValue("Timeout", m_bTimeout);
-	m_poSettings->setValue("ReadOnly", m_bReadOnly);
+    m_poSettings->setValue("Timeout", m_bTimeout);
+    m_poSettings->setValue("NoInt", m_bNoInt);
+    m_poSettings->setValue("ReadOnly", m_bReadOnly);
 #ifndef Q_OS_ANDROID
 	m_poSettings->setValue("SelectedInterface", m_eSelectedInterface);
 #endif
@@ -858,9 +862,11 @@ void MainWindow::onButtonClicked()
 		m_bTxCRC = ((QPushButton *) poSender)->isChecked();
 	else if(poSender == m_poUI->autoRetry)
 		m_bAutoRetry = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->timeout)
-		m_bTimeout = ((QPushButton *) poSender)->isChecked();
-	else if(poSender == m_poUI->readOnly)
+    else if(poSender == m_poUI->timeout)
+        m_bTimeout = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->noInt)
+        m_bNoInt = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->readOnly)
 		m_bReadOnly = ((QPushButton *) poSender)->isChecked();
 	else if(poSender == m_poUI->unlockPushButton)
 	{

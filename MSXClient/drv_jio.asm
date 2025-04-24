@@ -228,6 +228,8 @@ DSKIO:  push	hl
         pop	bc
         pop	hl
 
+        di
+
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
@@ -249,7 +251,7 @@ rw_loop:
         ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	de
-        jr	nz,sec_err
+        jr	c,sec_err
         ld	hl,(SSECBUF)
         ld	bc,$0200
         call	XFER
@@ -268,14 +270,14 @@ sec_write:
         ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	hl
-        jr	nz,sec_err
+        jr	c,sec_err
         inc	h
 sec_next:
         xor	a
 sec_err:
         pop	de
         pop	bc
-        jr	nz,r405
+        ret     c
         inc	e
         jr	nz,sec_loop
         inc	d
@@ -286,19 +288,15 @@ sec_loop:
         xor	a
         ret
 
-r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
-        scf
-        ret
-
 rw_multi:
-ELSE
+ENDIF
         push    bc
         call	ReadOrWriteSectors
         pop     bc
         ret     c
         ld      b,0
         ret
-ENDIF
+
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
@@ -672,7 +670,6 @@ RX_PE:	in	f,(c)	; 14
 
 ; compute CRC with lookup table
 uiXModemCRC16:
-        ei
         ld	l,c
         ld	h,b
         ld	b,l

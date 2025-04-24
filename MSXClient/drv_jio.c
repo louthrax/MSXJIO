@@ -2,6 +2,13 @@
 
 #include "flags.inc"
 
+
+#pragma function=intrinsic(0)
+void _opc(unsigned char);
+#define cei()	_opc(0xFB)
+#define cdi()	_opc(0xF3)
+
+
 typedef unsigned char bool;
 
 typedef enum { eZ80 = 0, eR800_ROM = 1, eR800_DRAM = 2 } tdCPUMode;
@@ -48,11 +55,15 @@ unsigned int uiTransmit
 {
     if(_ucFlags & FLAG_TX_CRC)
 	{
-        vSetCPU(eR800_DRAM);
+        if (!(_ucFlags & FLAG_NOINT))
+        {
+            vSetCPU(eR800_DRAM);
+            cei();
+        }
         _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
 	}
 
-    vSetCPU(eZ80);
+    if (!(_ucFlags & FLAG_NOINT)) vSetCPU(eZ80);
     vJIOTransmit(_pvAddress, _uiLength);
 
     if(_bLast && (_ucFlags & FLAG_TX_CRC))
@@ -72,7 +83,7 @@ unsigned char ucReceive(void *_pvAddress, unsigned int _uiLength, unsigned char 
     /* Avoid interrupt before reading acknowledge or checksum */
     if (_uiLength != 2)
     {
-        vSetCPU(eZ80);
+        if (!(_ucFlags & FLAG_NOINT)) vSetCPU(eZ80);
     }
 
     while(!bJIOReceive(_pvAddress, _uiLength))
@@ -114,7 +125,7 @@ unsigned char ucReadOrWriteSectors
     ucFlags = _pucFlagsAndCommand[(unsigned int)&W_FLAGS];
     ucCommand = _pucFlagsAndCommand[(unsigned int)&W_COMMAND];
 
-	eCPUMode = eGetCPU();
+    if (!(ucFlags & FLAG_NOINT))  eCPUMode = eGetCPU();
 
 	oCommonHeader.m_acSig[0] = 'J';
 	oCommonHeader.m_acSig[1] = 'I';
@@ -168,7 +179,11 @@ unsigned char ucReadOrWriteSectors
                 ucResult = ucReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), ucFlags);
                 if (ucResult == COMMAND_DRIVE_REPORT_OK)
                 {
-                    vSetCPU(eR800_DRAM);
+                    if (!(ucFlags & FLAG_NOINT))
+                    {
+                        vSetCPU(eR800_DRAM);
+                        cei();
+                    }
                     uiComputedCRC = uiXModemCRC16(_pvAddress, uiTotalLength, 0);
 
                     if (uiReceivedCRC != uiComputedCRC)
@@ -176,7 +191,7 @@ unsigned char ucReadOrWriteSectors
                         ucResult = COMMAND_DRIVE_REPORT_CRC_ERROR;
                     }
                 }
-			}
+            }
 		}
 
         if(ucResult != COMMAND_DRIVE_REPORT_OK)
@@ -186,7 +201,7 @@ unsigned char ucReadOrWriteSectors
         }
     } while((ucResult != COMMAND_DRIVE_REPORT_OK) && (ucFlags & FLAG_AUTO_RETRY));
 
-	vSetCPU(eCPUMode);
+    if (!(ucFlags & FLAG_NOINT)) vSetCPU(eCPUMode);
 
     return ucResult;
 }

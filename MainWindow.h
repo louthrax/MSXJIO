@@ -94,6 +94,7 @@ private:
     bool                            m_bTimeout;
     bool                            m_bAutoRetry;
     bool                            m_bReadOnly;
+    bool                            m_bNoInt;
 
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;
