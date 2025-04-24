@@ -249,7 +249,7 @@ rw_loop:
         ld	a,(ix+W_DRIVE)		; load drive number
         call	ReadOrWriteSectors
         pop	de
-        jr	nz,sec_err
+        ret     c
         ld	hl,(SSECBUF)
         ld	bc,$0200
         call	XFER
@@ -275,7 +275,7 @@ sec_next:
 sec_err:
         pop	de
         pop	bc
-        jr	nz,r405
+        ret     c
         inc	e
         jr	nz,sec_loop
         inc	d
@@ -286,19 +286,14 @@ sec_loop:
         xor	a
         ret
 
-r405:	ld	a,$04	; Error 4 = Data (CRC) error (abort,retry,ignore message)
-        scf
-        ret
-
 rw_multi:
-ELSE
+ENDIF
         push    bc
         call	ReadOrWriteSectors
         pop     bc
         ret     c
         ld      b,0
         ret
-ENDIF
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
