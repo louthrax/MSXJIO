@@ -221,7 +221,9 @@ TestInterface:	ld	a,(hl)
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-DSKIO:  di
+DSKIO:
+        di
+
         push	hl
         push	bc
         push	af
@@ -230,7 +232,6 @@ DSKIO:  di
         pop	bc
         pop	hl
 
-        di
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ

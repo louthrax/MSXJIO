@@ -38,6 +38,8 @@
                 PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
                 PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
                 PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
+                PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz).
+                PUBLIC  PRVINT		; Calls previous timer interrupt routine...
 
                 ; Symbols which must be defined by the disk hardware driver
                 EXTERN	INIHRD		; Initialize hardware
@@ -147,6 +149,12 @@ DOS_SSBIOS:  	JP      J4177
                 DEFS	04043H-$-S_ORG0,0
 C4043:		CALL    C410C
                 JP      FCALSA
+
+; Subroutine H_TIMI handler
+C4049:		PUSH    AF
+                CALL    C4CF3                  	; H_TIMI handler
+                POP     AF
+                RET
 
 J4177:		LD      HL,A0086		; CONST
                 JR      J4185
@@ -973,6 +981,48 @@ J4CD8:		INC     HL
                 DJNZ    J4CD8
                 RET
 
+; Subroutine DOS2 H_TIMI handler
+C4CF3:		PUSH    AF			; store VDP status register
+                CALL    C6A44			; DOS2 interrupt handler
+                CALL    C4CFE			; execute disk interface interrupt handlers
+                POP     AF			; restore VDP status register
+                JP      TIMI_S			; next H_TIMI handler
+
+; Subroutine execute disk interface interrupt handlers
+C4CFE:		LD      DE,DRVTBL
+                LD      HL,HOOKSA
+                LD      B,4
+J4D06:		LD      A,(DE)
+                AND     A			; entry used ?
+                RET     Z			; nope, end of table, quit
+                INC     DE
+                LD      A,(DE)			; slot id interface
+                INC     DE
+                CP      (HL)			; does interface have a driver interrupt handler ?
+                JR      NZ,J4D27		; nope, next entry
+                LD      A,(MASTER)
+                CP      (HL)			; driver interrupt handler in DOS master ROM ?
+                LD      A,(HL)			; slot id
+                PUSH    BC
+                PUSH    DE
+                PUSH    HL
+                INC     HL
+                LD      E,(HL)
+                INC     HL
+                LD      D,(HL)			; address interrupt handler
+                PUSH    AF
+                POP     IY			; IYH = slot id
+                PUSH    DE
+                POP     IX			; IX = address interrupt handler
+                CALL    C4D2D			; call driver interrupt handler
+                POP     HL
+                POP     DE
+                POP     BC
+J4D27:		INC     HL
+                INC     HL
+                INC     HL
+                DJNZ    J4D06			; next entry
+                RET
 
 ; Subroutine call driver interrupt handler
 C4D2D:		JP      NZ,CALSLT		; not in MASTER rom, use CALSLT
@@ -1106,6 +1156,25 @@ C4DDC:		LD      C,A
                 LD      B,0
                 ADD     HL,BC
                 RET
+
+; Subroutine register disk driver interrupt handler
+SETINT:	        EX      DE,HL
+                CALL    GETSLT
+                PUSH    AF
+                LD      A,(DISKID)		; current disk interface count
+                LD      HL,HOOKSA
+                CALL    C4DDC			; HL = HL+A
+                ADD     HL,BC
+                ADD     HL,BC			; pointer to HOOKSA entry
+                POP     AF
+                LD      (HL),A			; store slot id interface
+                INC     HL
+                LD      (HL),E
+                INC     HL
+                LD      (HL),D			; store address driver interrupt handler
+
+; Subroutine previous interrupt handler
+PRVINT:	        RET
 
 ; -------------------------------------
                 DOSENT  04775H
@@ -4540,6 +4609,39 @@ J6A3C:		PUSH    HL
                 EX      (SP),HL
                 JP      SDOSOF
 
+; Subroutine
+C6A44:		DI
+                LD      A,1
+                LD      (ST_COU),A
+                LD      HL,TIM_CO
+                INC     (HL)
+                LD      A,(TIM_RA)
+                CP      (HL)
+                JR      NZ,J6A6A
+                LD      (HL),00H
+                LD      A,(CH_COU)
+                CP      02H
+                ADC     A,0FFH
+                LD      (CH_COU),A
+                LD      A,(TIM_TI)
+                CP      07H
+                ADC     A,00H
+                LD      (TIM_TI),A
+J6A6A:		LD      HL,(RANDOM+0)
+                LD      A,(RANDOM+2)
+                LD      C,A
+                RRCA
+                RRCA
+                RRCA
+                XOR     C
+                RLA
+                RLA
+                ADC     HL,HL
+                LD      A,C
+                ADC     A,A
+                LD      (RANDOM+2),A
+                LD      (RANDOM+0),HL
+                RET
 
 I6A82:		LD      IX,(IX_BDOS)
 
