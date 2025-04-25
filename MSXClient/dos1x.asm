@@ -32,8 +32,6 @@
 	PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
 	PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
 	PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
-	PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz0.
-	PUBLIC  PRVINT		; Calls previous timer interrupt routine...
 
         ; Symbols which must be defined by the disk hardware driver
 	EXTERN	INIHRD		; Initialize hardware
@@ -5640,67 +5638,6 @@ A5FF3:  ld      c,a
 ;	     Outputs ________________________
 ;            Remark  used by the disk hardware driver
 
-SETINT:
-A5FF6:  ld      a,(H_TIMI+0)
-        cp      0C9H
-        jr      z,A6012                 ; H_TIMI not hooked, skip saving H_TIMI
-        push    hl
-        ld      a,(DISKID)              ; current disk interface number
-        ld      hl,HOOKSA
-        call    A5FF1
-        add     hl,bc
-        add     hl,bc                   ; get pointer to DRVINT entry
-        ex      de,hl
-        ld      hl,H_TIMI+1
-        ld      c,3
-        ldir                            ; save slotid and address (assumes that is hooked by a CALLF!)
-        pop     hl
-A6012:  di
-        ld      a,0F7H
-        ld      (H_TIMI+0),a
-        ld      (H_TIMI+2),hl           ; disk hardware driver interrupt handler
-        ld      a,0C9H
-        ld      (H_TIMI+4),a
-        call    A402D                   ; get slotid of this disk interface
-        ld      (H_TIMI+1),a            ; slotid of this disk interface
-        ret
-
-;       Subroutine      call orginal interrupt handler
-;       Inputs          -
-;       Outputs         -
-;       Remark          used by the disk hardware driver
-
-PRVINT:
-A6027:  push    af                      ; store VDP status register
-        call    A402D                   ; get slotid of this disk interface
-        ld      b,4
-        ld      de,HOOKSA
-        ld      hl,DRVTBL+1
-A6033:  cp      (hl)                    ; is this my DRVTBL entry ?
-        jr      z,A603F                 ; yep, get the saved interrupt handler and jump to it
-        inc     de
-        inc     de
-        inc     de
-        inc     hl
-        inc     hl
-        djnz    A6033                   ; next DRVTBL and DRVINT entry
-A603D:  pop     af                      ; restore VDP status register
-        ret                             ; quit
-
-A603F:  ex      de,hl
-        ld      a,(hl)
-        and     a                       ; disk interface has saved a interrupt handler ?
-        jr      z,A603D                 ; nope, quit
-        push    af
-        pop     iy                      ; slotid
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        push    bc
-        pop     ix                      ; address interrupt handler
-        pop     af                      ; restore VDP status register
-        jp      CALSLT                  ; call interrupt handler
 
 ;       Subroutine      read disksector
 ;       Inputs          A = driveid, B = number of sectors, C = mediadescriptor, DE = start sector, HL = transferaddress

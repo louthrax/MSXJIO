@@ -124,6 +124,7 @@ DRIVES_Retry:
         ld      (ix+W_COMMAND),COMMAND_DRIVE_INFO
         ld      b,1
         ld	hl,PART_BUF
+        di
         call	ReadOrWriteSectors
         jr	c,DRIVES_Retry
 
@@ -220,7 +221,8 @@ TestInterface:	ld	a,(hl)
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-DSKIO:  push	hl
+DSKIO:  di
+        push	hl
         push	bc
         push	af
         call	GETWRK
@@ -228,6 +230,7 @@ DSKIO:  push	hl
         pop	bc
         pop	hl
 
+        di
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
         ld      (ix+W_COMMAND),COMMAND_DRIVE_READ
@@ -358,25 +361,6 @@ ReadOrWriteSectors:
         ret
 
 ;********************************************************************************************************************************
-;********************************************************************************************************************************
-
-eGetCPU:
-        ld	a,(GETCPU)
-        cp	$C3
-        ret     nz
-        jp      GETCPU
-
-;********************************************************************************************************************************
-;********************************************************************************************************************************
-
-vSetCPU:
-        ld	a,(CHGCPU)
-        cp	$C3
-        ret     nz
-        ld      a,e
-        jp      CHGCPU
-
-;********************************************************************************************************************************
 ; IN:  HL = DATA
 ;      BC = LENGTH
 ;********************************************************************************************************************************
@@ -386,7 +370,6 @@ vJIOTransmit:
         inc	bc
         exx
         ld	a,15
-        di
         out	($a0),a
         in	a,($a2)
         or	4
@@ -497,7 +480,6 @@ bJIOReceive:
         ld	ix,0
         add	ix,sp
         ld	a,15
-        di
         out	($a0),a
         in	a,($a2)
         or	64
@@ -667,7 +649,6 @@ RX_PE:	in	f,(c)	; 14
 
 ; compute CRC with lookup table
 uiXModemCRC16:
-        ei
         ld	l,c
         ld	h,b
         ld	b,l
