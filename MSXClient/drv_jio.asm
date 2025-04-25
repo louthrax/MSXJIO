@@ -372,6 +372,20 @@ DoCommand:
 ;********************************************************************************************************************************
 
 vJIOTransmit:
+        exx
+        push    bc
+        push    de
+        exx
+
+        call vJIOTransmit2
+
+        exx
+        pop     de
+        pop     bc
+        exx
+        ret
+
+vJIOTransmit2:
         ex      de,hl
         inc	bc
         exx
@@ -669,6 +683,10 @@ uiXModemCRC16:
         ld      h,(ix+5)
         pop     ix
 
+        ex      af,af'
+        push    af
+        ex      af,af'
+
 crc16:
         ld	a,l
         ex	af,af'
@@ -685,6 +703,10 @@ crc16:
         djnz	crc16
         dec	c
         jp	nz,crc16
+
+        ex      af,af'
+        pop     af
+        ex      af,af'
         ret
 
 ; ------------------------------------------
