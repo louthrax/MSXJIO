@@ -11,7 +11,7 @@
 
         INCLUDE	"disk.inc"	; Assembler directives
         INCLUDE	"msx.inc"	; MSX constants and definitions
-        INCLUDE "flags.inc"
+        INCLUDE "drv_jio.inc"
 
         SECTION	DRV_JIO
 
@@ -125,7 +125,7 @@ DRIVES_Retry:
         ld      b,1
         ld	hl,PART_BUF
         di
-        call	ReadOrWriteSectors
+        call	DoCommand
         jr	c,DRIVES_Retry
 
         ld	hl,PART_BUF
@@ -251,7 +251,7 @@ rw_loop:
         push	hl
         ld	hl,(SSECBUF)
         ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop	de
         ret     c
         ld	hl,(SSECBUF)
@@ -270,7 +270,7 @@ sec_write:
         pop	de
         ld	hl,(SSECBUF)
         ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop	hl
         jr	nz,sec_err
         inc	h
@@ -293,7 +293,7 @@ sec_loop:
 rw_multi:
 ENDIF
         push    bc
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop     bc
         ret     c
         ld      b,0
@@ -317,40 +317,45 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
-IFDEF IDEDOS1
+        di
         push	af
         call	GETWRK
         pop	af
         cp	(ix+W_CURDRV)	; current drive
         ld	(ix+W_CURDRV),a
         jr	nz,DiskChanged
-        ld	b,$01	; unchanged
+
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
+        call	DoCommand
+        ld      b,1
+        cp      RESULT_DRIVE_DISK_UNCHANGED-1
+        ret     z
+        ld      b,0xFF
+        cp      RESULT_DRIVE_DISK_CHANGED-1
+        ret     z
+        ld      b,0
+        scf
+        ret
+
+DiskChanged:
+        ld	b,0xFF	; changed
         xor	a
         ret
 
-DiskChanged:	ld	b,$FF	; changed
-        xor	a
-        ret
-ELSE
-        ; Always return unchanged for DOS2 (disks are not hot-pluggable)
-        ld	b,$01
-        xor	a
-        ret
-ENDIF
-
+;********************************************************************************************************************************
 
 ; CDE : Sector
 ; B   : Length
 ; HL  : Address
 
-ReadOrWriteSectors:
+DoCommand:
         push    ix              ; _pucFlagsAndCommand
         push    hl              ; _pvAddress
         push    bc              ; _uiLength
 
         ld      b,a             ; _ulSector in BCDE
 
-        call    ucReadOrWriteSectors
+        call    ucDoCommand
         pop hl
         pop hl
         pop hl
