@@ -97,6 +97,7 @@ private:
 
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;
+    bool                            m_bDiskChanged = false;
     quint64                         m_uiBytesReceived = 0;
     quint64                         m_uiBytesTransmitted = 0;
     quint64                         m_uiReceiveErrors = 0;

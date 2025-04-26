@@ -11,7 +11,7 @@
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
 
-#include "MSXClient/flags.inc"
+#include "MSXClient/drv_jio.inc"
 
 #pragma pack(push, 1)
 typedef struct
@@ -173,7 +173,27 @@ Task MainWindow::oParser()
 
 		switch(ucCommand)
 		{
-		case COMMAND_DRIVE_INFO:
+        case COMMAND_DRIVE_DISK_CHANGED:
+            bCRCOK = true;
+            if(ucFlags & FLAG_TX_CRC)
+            {
+                vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
+                bCRCOK = uiReceivedCRC == uiCRC;
+            }
+
+            if(bCRCOK)
+            {
+                quint16 uiAnswer;
+
+                vLog(eLogInfo, "Disk changed ➜ %s", m_bDiskChanged ? "Yes" : "No");
+                uiAnswer = m_bDiskChanged ? DRIVE_ANSWER_DISK_CHANGED : DRIVE_ANSWER_DISK_UNCHANGED;
+
+                uiTransmit(&uiAnswer, sizeof(uiAnswer), 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
+                m_bDiskChanged = false;
+            }
+            break;
+
+        case COMMAND_DRIVE_INFO:
 			{
 				bCRCOK = true;
 				if(ucFlags & FLAG_TX_CRC)
@@ -278,7 +298,7 @@ Task MainWindow::oParser()
 			{
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 				char	*acData;
-				quint16 uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_OK;
+                quint16 uiAcknowledge = DRIVE_ANSWER_WRITE_OK;
 				/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
 				vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
@@ -320,7 +340,7 @@ Task MainWindow::oParser()
 
 					if(m_bReadOnly)
 					{
-						uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+                        uiAcknowledge = DRIVE_ANSWER_WRITE_PROTECTED;
 					}
 					else
 					{
@@ -331,25 +351,25 @@ Task MainWindow::oParser()
 
 						case eDriveErrorNoMedia:
 							vLog(eLogError, "No media !");
-							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+                            uiAcknowledge = DRIVE_ANSWER_WRITE_FAILED;
 							break;
 
 						case eDriveErrorReadError:
 						case eDriveErrorWriteError:
 							vLog(eLogError, "Error writing to file !");
-							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+                            uiAcknowledge = DRIVE_ANSWER_WRITE_FAILED;
 							break;
 
 						case eDriveErrorWriteProtected:
 							vLog(eLogError, "Media write-protected !");
-							uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_PROTECTED;
+                            uiAcknowledge = DRIVE_ANSWER_WRITE_PROTECTED;
 							break;
 						}
 					}
 				}
 				else
 				{
-					uiAcknowledge = DRIVE_ACKNOWLEDGE_WRITE_FAILED;
+                    uiAcknowledge = DRIVE_ANSWER_WRITE_FAILED;
 					vLog(eLogError, "Transmission error !");
 					m_uiTransmitErrors++;
 					vUpdateLights();
@@ -448,11 +468,12 @@ MainWindow::MainWindow() :
 
 #ifdef Q_OS_ANDROID
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
-	m_eSelectedInterface = eInterfaceBluetooth;
 #else
 #ifdef Q_OS_LINUX
     oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
 #endif
+#endif
+
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
 	poGroup->setExclusive(true);
@@ -461,7 +482,6 @@ MainWindow::MainWindow() :
 
 	m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
 	m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
-#endif
 	m_poUI->logWidget->setFont(oFont);
 
 	m_poUI->RxCRC->setChecked(m_bRxCRC);
@@ -1042,7 +1062,9 @@ void MainWindow::onTextChanged(QString _oText)
 
 	if(poSender == m_poUI->imagePathLineEdit)
 	{
-		if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
+        m_bDiskChanged = true;
+
+        if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
 		{
 			vLog(eLogInfo, "Media opened successfully.");
 			vLog(eLogInfo, szGetServerInfo());

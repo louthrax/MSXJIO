@@ -11,7 +11,7 @@
 
         INCLUDE	"disk.inc"	; Assembler directives
         INCLUDE	"msx.inc"	; MSX constants and definitions
-        INCLUDE "flags.inc"
+        INCLUDE "drv_jio.inc"
 
         SECTION	DRV_JIO
 
@@ -125,7 +125,7 @@ DRIVES_Retry:
         ld      b,1
         ld	hl,PART_BUF
         di
-        call	ReadOrWriteSectors
+        call	DoCommand
         jr	c,DRIVES_Retry
 
         ld	hl,PART_BUF
@@ -251,9 +251,9 @@ rw_loop:
         push	hl
         ld	hl,(SSECBUF)
         ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop	de
-        ret     c
+        jr	c,sec_err		; review: bc and de are still pushed on the stack
         ld	hl,(SSECBUF)
         ld	bc,$0200
         call	XFER
@@ -270,9 +270,9 @@ sec_write:
         pop	de
         ld	hl,(SSECBUF)
         ld	a,(ix+W_DRIVE)		; load drive number
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop	hl
-        jr	nz,sec_err
+        jr	c,sec_err		; review: use c-flag
         inc	h
 sec_next:
         xor	a
@@ -293,7 +293,7 @@ sec_loop:
 rw_multi:
 ENDIF
         push    bc
-        call	ReadOrWriteSectors
+        call	DoCommand
         pop     bc
         ret     c
         ld      b,0
@@ -317,21 +317,46 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
-IFDEF IDEDOS1
+IFDEF IDEDOS1 
+	; Review:
+	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
+	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
+	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
+	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
+        di
         push	af
         call	GETWRK
         pop	af
-        cp	(ix+W_CURDRV)	; current drive
+        cp	(ix+W_CURDRV)		; current drive
         ld	(ix+W_CURDRV),a
         jr	nz,DiskChanged
-        ld	b,$01	; unchanged
+
+        ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
+        call	DoCommand
+        ld      b,1
+        cp      RESULT_DRIVE_DISK_UNCHANGED-1
+        ret     z
+        cp      RESULT_DRIVE_DISK_CHANGED-1
+	jr	nz,DiskChangeError
+
+; Update DPB if disk for current drive has changed
+UpdateDPB:
+	call	GETDPB			; returns updated DPB pointed to by HL
+	jr	c,DiskChangeError	; if cx then error reading boot sector
+
+DiskChanged:
+        ld	b,0xFF			; disk (drive) changed
         xor	a
         ret
 
-DiskChanged:	ld	b,$FF	; changed
-        xor	a
+DiskChangeError:
+        ld      b,0
+        scf
         ret
+
 ELSE
+	; Review: 
+	; DOS 2 uses internal routines to detect disk change by comparing serial numbers and media byte.
         ; Always return unchanged for DOS2 (disks are not hot-pluggable)
         ld	b,$01
         xor	a
@@ -339,18 +364,20 @@ ELSE
 ENDIF
 
 
+;********************************************************************************************************************************
+
 ; CDE : Sector
 ; B   : Length
 ; HL  : Address
 
-ReadOrWriteSectors:
+DoCommand:
         push    ix              ; _pucFlagsAndCommand
         push    hl              ; _pvAddress
         push    bc              ; _uiLength
 
         ld      b,a             ; _ulSector in BCDE
 
-        call    ucReadOrWriteSectors
+        call    ucDoCommand
         pop hl
         pop hl
         pop hl
@@ -367,6 +394,20 @@ ReadOrWriteSectors:
 ;********************************************************************************************************************************
 
 vJIOTransmit:
+        exx
+        push    bc
+        push    de
+        exx
+
+        call vJIOTransmit2
+
+        exx
+        pop     de
+        pop     bc
+        exx
+        ret
+
+vJIOTransmit2:
         ex      de,hl
         inc	bc
         exx
@@ -664,6 +705,10 @@ uiXModemCRC16:
         ld      h,(ix+5)
         pop     ix
 
+        ex      af,af'
+        push    af
+        ex      af,af'
+
 crc16:
         ld	a,l
         ex	af,af'
@@ -680,6 +725,10 @@ crc16:
         djnz	crc16
         dec	c
         jp	nz,crc16
+
+        ex      af,af'
+        pop     af
+        ex      af,af'
         ret
 
 ; ------------------------------------------

@@ -121,8 +121,8 @@ DISTFILES += \
     MSXClient/driver.asm \
     MSXClient/drv_jio.asm \
     MSXClient/drv_jio.c \
+    MSXClient/drv_jio.inc \
     MSXClient/drv_jio_c.asm \
-    MSXClient/flags.inc \
     MSXClient/msx.inc \
     MSXClient/p0_kernel.asm \
     MSXClient/p1_main.asm \
