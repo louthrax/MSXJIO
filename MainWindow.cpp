@@ -468,11 +468,12 @@ MainWindow::MainWindow() :
 
 #ifdef Q_OS_ANDROID
 	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
-	m_eSelectedInterface = eInterfaceBluetooth;
 #else
 #ifdef Q_OS_LINUX
     oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
 #endif
+#endif
+
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
 	poGroup->setExclusive(true);
@@ -481,7 +482,6 @@ MainWindow::MainWindow() :
 
 	m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
 	m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
-#endif
 	m_poUI->logWidget->setFont(oFont);
 
 	m_poUI->RxCRC->setChecked(m_bRxCRC);
