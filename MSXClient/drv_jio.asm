@@ -253,7 +253,7 @@ rw_loop:
         ld	a,(ix+W_DRIVE)		; load drive number
         call	DoCommand
         pop	de
-        jr	c,sec_err		; review: bc and de are still pushed on the stack
+        jr	c,sec_err
         ld	hl,(SSECBUF)
         ld	bc,$0200
         call	XFER
@@ -272,7 +272,7 @@ sec_write:
         ld	a,(ix+W_DRIVE)		; load drive number
         call	DoCommand
         pop	hl
-        jr	c,sec_err		; review: use c-flag
+        jr	c,sec_err
         inc	h
 sec_next:
         xor	a
@@ -318,29 +318,36 @@ ENDIF
 ;********************************************************************************************************************************
 DSKCHG:
 IFDEF IDEDOS1 
-	; Review:
 	; In IDEDOS1 whenever the current drive is changed this routine returns that the disk has changed in order
 	; to flush the FAT cache, this is a deviation from the original MSX-DOS 1.03 without FAT swapper.
 	; In case of multiple drives (i.e. fixed disk) it is assumed that the DPB for each drive is never changed.
 	; The initial value for ix+W_CURDRV is 0xFF (set in INIENV) to make sure that the FAT cache is flushed at boot.
         di
-        push	af
+        ld	b,a			; save drive
+	push	bc
+	push	hl
         call	GETWRK
-        pop	af
+	pop	hl
+	pop	bc
+	ld	a,b			; restore drive
         cp	(ix+W_CURDRV)		; current drive
         ld	(ix+W_CURDRV),a
         jr	nz,DiskChanged
 
         ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
+	push	bc
+	push	hl
         call	DoCommand
-        ld      b,1
+	pop	hl
+	pop	bc
         cp      RESULT_DRIVE_DISK_UNCHANGED-1
-        ret     z
+        jr	z,DiskNotChanged
         cp      RESULT_DRIVE_DISK_CHANGED-1
 	jr	nz,DiskChangeError
 
 ; Update DPB if disk for current drive has changed
 UpdateDPB:
+	ld	a,b			; restore drive
 	call	GETDPB			; returns updated DPB pointed to by HL
 	jr	c,DiskChangeError	; if cx then error reading boot sector
 
@@ -349,13 +356,17 @@ DiskChanged:
         xor	a
         ret
 
+DiskNotChanged:
+        ld      b,1
+	xor	a
+	ret
+
 DiskChangeError:
         ld      b,0
         scf
         ret
 
 ELSE
-	; Review: 
 	; DOS 2 uses internal routines to detect disk change by comparing serial numbers and media byte.
         ; Always return unchanged for DOS2 (disks are not hot-pluggable)
         ld	b,$01
