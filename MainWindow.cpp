@@ -443,13 +443,10 @@ MainWindow::MainWindow() :
 
 	connect(m_poUnlockTimer, &QTimer::timeout, this, &MainWindow::onUnlockTimer);
 
-	m_poUI->logWidget->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_poUI->logWidget->setFont(QFont("DejaVu Sans Mono", LOG_WIDGET_FONT_SIZE));
+    m_poUI->namesListWidget->setFont(QFont("DejaVu Sans", NAMES_LIST_WIDGET_FONT_SIZE));
 
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QFont	oFont = m_poUI->logWidget->font();
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-	vAdjustScrollBars(m_poUI->logWidget);
+    vAdjustScrollBars(m_poUI->logWidget);
 	vAdjustScrollBars(m_poUI->namesListWidget);
 
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -467,14 +464,6 @@ MainWindow::MainWindow() :
 	m_poUI->imagePathLineEdit->setText(m_poSettings->value("SelectedImagePath").toString());
 	m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
 
-#ifdef Q_OS_ANDROID
-	oFont.setPointSizeF(oFont.pointSizeF() * 0.6);
-#else
-#ifdef Q_OS_LINUX
-    oFont.setPointSizeF(oFont.pointSizeF() * 0.8);
-#endif
-#endif
-
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 
 	poGroup->setExclusive(true);
@@ -483,7 +472,6 @@ MainWindow::MainWindow() :
 
 	m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
 	m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
-	m_poUI->logWidget->setFont(oFont);
 
 	m_poUI->RxCRC->setChecked(m_bRxCRC);
 	m_poUI->TxCRC->setChecked(m_bTxCRC);

@@ -6,6 +6,14 @@ FORMS += MainWindow.ui
 
 MAKEFILE = Makefile
 
+linux:!android:!macx {
+    STATIC_LIBS += -lxcb-cursor -lxcb-icccm -lwebpdemux -lwebpmux -lbrotlidec -lbrotlicommon
+    STATIC_LIBS += -lxcb-image -lxcb-util -lxcb-render-util -lwebp -lsharpyuv -lSM -lICE
+    STATIC_LIBS += -ltiff -lz -llzma -ljbig -ldeflate -lLerc
+
+    QMAKE_LINK = $$PWD/mylinker.sh $$join(STATIC_LIBS, " ")
+}
+
 android {
     QT += svg
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
@@ -80,17 +88,6 @@ macx:CONFIG(release, debug|release) {
         echo "DMG created at $$DMGFILE"
 }
 
-unix:!android:CONFIG(release, debug|release) {
-    APPNAME = JIOServer
-    OUTDIR = $$OUT_PWD
-    DEPLOYDIR = $$OUT_PWD/deploy
-    SCRIPT = $$PWD/deploy_linux.sh
-
-    QMAKE_POST_LINK += \
-        echo "==[ Linux Deployment ]==" && \
-        $$SCRIPT $$OUTDIR/$$APPNAME $$DEPLOYDIR
-}
-
 SOURCES += \
     Drive.cpp \
     InterfaceBluetoothSocket.cpp \
@@ -110,10 +107,12 @@ HEADERS += \
     PartitionExtractor.h
 
 RESOURCES += \
-    Icons.qrc
+    Icons.qrc \
+    Fonts.qrc
 
 DISTFILES += \
     MSXClient/0_Make.sh \
+    mylinker.sh \
     MSXClient/bootcode.inc \
     MSXClient/crt.asm \
     MSXClient/disk.inc \
