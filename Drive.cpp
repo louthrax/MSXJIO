@@ -50,7 +50,9 @@ bool Drive::bInsertMedia(QString _szMediaPath)
 	if(m_poMediaFile)
 	{
 		m_oPartitions = extractDiskPartitions(*m_poMediaFile);
-	}
+        m_oLastMediaInserted = _szMediaPath;
+        m_oLastPathBrowsed = _szMediaPath;
+    }
 
 	return m_poMediaFile != nullptr;
 }
@@ -204,6 +206,7 @@ void Drive::vEjectMedia()
 		m_poMediaFile->close();
 		delete m_poMediaFile;
 		m_poMediaFile = nullptr;
+        m_oLastMediaInserted = "";
 		m_oPartitions.empty();
 	}
 }

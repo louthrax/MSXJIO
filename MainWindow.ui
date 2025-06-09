@@ -116,6 +116,9 @@
          <height>26</height>
         </rect>
        </property>
+       <property name="placeholderText">
+        <string>Disk image to serve</string>
+       </property>
       </widget>
       <widget class="QLabel" name="redLightLabel">
        <property name="geometry">
@@ -296,8 +299,8 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>32</width>
-         <height>32</height>
+         <width>40</width>
+         <height>40</height>
         </size>
        </property>
        <property name="checkable">
@@ -425,8 +428,8 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>22</width>
-         <height>22</height>
+         <width>20</width>
+         <height>20</height>
         </size>
        </property>
       </widget>
@@ -528,38 +531,6 @@
     <hint type="sourcelabel">
      <x>320</x>
      <y>470</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>imagePathLineEdit</sender>
-   <signal>textChanged(QString)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onTextChanged(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>160</x>
-     <y>572</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>180</x>
-     <y>348</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>addressLineEdit</sender>
-   <signal>textChanged(QString)</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onTextChanged(QString)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>75</x>
-     <y>602</y>
     </hint>
     <hint type="destinationlabel">
      <x>180</x>

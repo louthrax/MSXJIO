@@ -1,194 +1,124 @@
-# MSX JIO
-
----
-
+# MSXJIO: Serve a Hard-Disk Image to Your MSX
 
 <p align="center">
-  <img src="./readme_resources/snapshot.png" alt="Snapshot" width="400"/>
+  <img src="./readme_resources/snapshot.png" alt="Snapshot" width="300"/>
 </p>
-
-# Binary Communication Protocol Specification
-
-This document describes the low-level binary protocol used by the server. Clients must adhere to this format to communicate correctly.
-
----
 
 ## Overview
 
-- Communication is **unidirectional**: the client sends commands, and the server responds.
-- All messages start with a 3-byte signature.
-- Commands can include an optional CRC.
-- Responses depend on the command and are typically data blocks or acknowledgments.
+**MSXJIO** is a project that allows serving a hard-disk or floppy image from a host computer or smartphone to an MSX machine.
+
+**JIO** stands for **J**oystick **I**nput **O**utput, as communication is done through the MSX joystick port.
+
+The system is divided into two parts:
+
+- **JIOServer**: the server application, which runs on **Linux, Windows, macOS, or Android**.
+- **MSX Client**: currently, the only available client is `JIO-MSXDOS2`. However, additional clients could be developed in the future for features like syncing the MSX real-time clock or mirroring directories with the host.
+
+JIOServer can communicate with the MSX through:
+
+- **USB serial port**
+- **Bluetooth adapter**
+
+## Requirements
+
+- An **MSX** computer with at least **128KB RAM**
+- A **JIO cable** to connect the MSX joystick port to a USB or Bluetooth serial adapter
 
 ---
 
-## Packet Structure
+## Features
 
-### Signature
-
-Each packet **must begin** with the following 3-byte signature:
-
-```
-0x4A 0x49 0x4F   // ASCII: 'J' 'I' 'O'
-```
-
-This signature allows the server to synchronize on valid packets.
-
-### Generic Packet Format
-
-| Field     | Size        | Description                                  |
-|-----------|-------------|----------------------------------------------|
-| Signature | 3 bytes     | Always 'JIO' (0x4A 0x49 0x4F)                |
-| Flags     | 1 byte      | Bit 0: enable CRC checking (0x01)           |
-| Command   | 1 byte      | Command identifier                           |
-| Payload   | variable    | Command-specific data                        |
-| CRC       | 2 bytes     | Present **only** if CRC flag is set          |
-
-CRC-16 is computed from the **Flags byte** up to the last byte of the payload.
+*To be listed.*
 
 ---
 
-## Command List
+## Usage Instructions
 
-### `0x01` — INFO
-
-- **Payload**: none
-- **Description**: Request server metadata.
-- **Response**: Variable-length text or binary blob with info.
-
----
-
-### `0x02` — READ
-
-- **Payload (7 bytes)**:
-  ```
-  [0–1] Address (ignored by server)
-  [2–5] Sector number (uint32)
-  [6]   Sector count (number of 512-byte sectors to read)
-  ```
-- **Response**: `count * 512` bytes of raw data
+1. Create an MSX-DOS 2 cartridge (or flash `JIO-MSXDOS2` to a MegaFlashROM or Carnivore2).
+2. Connect your MSX to your PC using a USB serial cable or Bluetooth adapter.
+3. Launch **JIOServer** and select the disk image to serve.
+4. Click the **Connect** button.
+5. Boot your MSX.
+6. You should see `"init"` appear in the server log and the LED blink.
+7. The MSX should now access the image.
 
 ---
 
-### `0x03` — WRITE
+## Releases
 
-- **Payload**:
-  ```
-  [0–6]   Same header as READ
-  [7–...] Raw data to write (count * 512 bytes)
-  ```
-- **Response (if CRC is enabled)**:
-  - `0x22 0x22`: Success
-  - `0x11 0x11`: CRC mismatch
+- **Android**: [APK Download]  
+  → [Instructions for installing APKs manually](#)
 
----
+- **Windows**: [ZIP Package]  
+  → Extract and run `JIOServer.exe`
 
-### `0x10` — REPORT_BAD_RX_CRC
+- **macOS**: [DMG Package]
 
-Client reports it received a packet with incorrect CRC.
-
-- **Payload**: none
-- **Response**: none
+- **Linux**: [Static Binary]  
+  → Compatible with most distributions.  
+     Tested on: *to be listed*
 
 ---
 
-### `0x11` — REPORT_BAD_TX_CRC
+## How to Create the 32KB JIO-MSXDOS2 Cartridge
 
-Client reports the packet it sent was not acknowledged due to CRC failure.
-
-- **Payload**: none
-- **Response**: none
+*Instructions to be added.*
 
 ---
 
-### `0x12` — REPORT_BAD_ACKNOWLEDGE
+## Building the Adapter Cable
 
-Client signals that the acknowledgment from a WRITE was incorrect.
+- Currently using a 3.3V adapter (works, but may be unstable on MSX1).
+- A switchable 3.3V/5V adapter has been ordered for testing.
+- Looking for a 5V model with a crystal for better signal stability.
 
-- **Payload**: none
-- **Response**: none
+⚠️ **Do NOT use standard RS-232 adapters**—they may output +12V/-12V, which can **damage your MSX**.
 
----
+### Wiring:
 
-### `0x13` — REPORT_TIMEOUT
-
-Client signals a timeout occurred while waiting for server response.
-
-- **Payload**: none
-- **Response**: none
-
----
-
-## CRC Details
-
-- CRC-16 used over all bytes starting **after the signature** up to the end of the payload.
-- Not transmitted unless **CRC flag** is set.
-- Polynomial used: _(to be filled in if known)_  
-  (e.g., CRC-16-CCITT, CRC-16-IBM, etc.)
+- MSX Joystick Port 2, Pin 1 → Adapter **TX**  
+- MSX Joystick Port 2, Pin 6 → Adapter **RX**  
+- MSX Joystick Port 2, Pin 9 → Adapter **GND**  
+- MSX Joystick Port 2, Pin 5 → Adapter **VCC**
 
 ---
 
-## Examples
+## Bluetooth Configuration for MSXJIO
 
-### INFO Command (CRC enabled)
-
-**Send:**
-```
-4A 49 4F 01 01 A1 B2
-```
-
-**Receive:**
-```
-56 65 72 73 69 6F 6E 20 31 2E 30   // "Version 1.0"
-```
-
----
-
-### READ Command (read 2 sectors at 0x00000200)
-
-**Send:**
-```
-4A 49 4F
-01          // CRC flag
-02          // Command READ
-00 10       // Address (ignored)
-00 00 02 00 // Sector number
-02          // Sector count
-D3 7C       // CRC (example)
-```
-
-**Receive:**
-```
-<1024 bytes of raw data>
-```
+1. Default password: `1234`
+2. Plug the **HC-05** into the **Bluetooth** socket.
+3. Plug the **FTDI FT232RL** into the **USB Cable** socket.
+4. Hold the **AT** button on the HC-05.
+5. While holding, plug the USB into your PC.
+6. The HC-05 LED should blink **slowly** (~2s).
+7. Launch the **DSD TECH Wireless Tools** utility.
+8. Set UART port to e.g. `COM9`, Baud Rate to `38400`, and click **Open`.
+9. You should now be able to send AT commands.
+10. Configure for this project by sending:  
+    `AT+UART=115200,1,0`
 
 ---
 
-### WRITE Command (write 1 sector at 0x00000300)
-
-**Send:**
-```
-4A 49 4F
-01          // CRC flag
-03          // Command WRITE
-00 20       // Address
-00 00 03 00 // Sector
-01          // Sector count
-<data: 512 bytes>
-C5 E1       // CRC
-```
-
-**Receive (ACK):**
-```
-22 22       // if OK
-```
+## Known Issues
 
 ---
 
-## Notes
+## History
 
-- Always wait for the full response after sending a command.
-- In case of CRC failure, use the relevant REPORT_* command to notify the server.
-- For robustness, the client may re-sync using the signature if desynchronized.
+This project began with **NYYRIKKI**’s brilliant 115200 bps MSX serial communication routine:  
+👉 https://www.msx.org/forum/msx-talk/development/software-rs-232-115200bps-on-msx
+
+Shortly after, he released a working **MSX-DOS 1** version serving disk images with **drive sound emulation**:  
+👉 https://www.youtube.com/watch?v=OHs5a-gZtuc
+
+Around the same time, I discovered **b3rendsh**’s MSX-DOS 2 project:  
+👉 https://github.com/b3rendsh/msxdos2s  
+It was a natural fit to integrate NYYRIKKI’s fast communication routines to support full disk image serving.
+
+NYYRIKKI’s original server code was functional but command-line only. I contacted b3rendsh, and he kindly joined the project. After several months of collaborative coding and debugging, we finally reached a stable and usable version.
 
 ---
+
+## Credits
+

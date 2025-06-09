@@ -10,14 +10,14 @@ typedef enum {
     eLogWrite
 } tdLogType;
 
-#ifdef Q_OS_ANDROID
-    #define APPLICATION_FONT_SIZE       14
+#if defined(Q_OS_ANDROID) || defined(Q_OS_MAC)
+    #define APPLICATION_FONT_SIZE       15
     #define LOG_WIDGET_FONT_SIZE        12
-    #define NAMES_LIST_WIDGET_FONT_SIZE 14
+    #define NAMES_LIST_WIDGET_FONT_SIZE 17
 #else
     #define APPLICATION_FONT_SIZE       11
-    #define LOG_WIDGET_FONT_SIZE        10
-    #define NAMES_LIST_WIDGET_FONT_SIZE 10
+    #define LOG_WIDGET_FONT_SIZE        9
+    #define NAMES_LIST_WIDGET_FONT_SIZE 13
 #endif
 
 #endif

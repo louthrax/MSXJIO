@@ -21,10 +21,12 @@ int main(int argc, char *argv[])
 	QApplication	a(argc, argv);
 	/*~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-	QFontDatabase::addApplicationFont(":/fonts/DejaVuSans.ttf");
-	QFontDatabase::addApplicationFont(":/fonts/DejaVuSansMono.ttf");
+    QCoreApplication::setOrganizationName("louthrax");
+    QCoreApplication::setOrganizationDomain("louthrax.net");
+    QCoreApplication::setApplicationName("JIOServer");
 
-    QApplication::setFont(QFont("DejaVu Sans", APPLICATION_FONT_SIZE));
+    QFontDatabase::addApplicationFont(":/fonts/Ubuntu-R.ttf");
+    QFontDatabase::addApplicationFont(":/fonts/UbuntuMono-R.ttf");
 
 	/*~~~~~~~~~~*/
 	MainWindow	w;
@@ -32,6 +34,7 @@ int main(int argc, char *argv[])
 
 	QApplication::setStyle(QStyleFactory::create("Fusion"));
 	a.setPalette(QApplication::style()->standardPalette());
+    QApplication::setFont(QFont("Ubuntu", APPLICATION_FONT_SIZE));
 
 	if(argc <= 1)
 	{

@@ -13,8 +13,8 @@
 #include "Drive.h"
 
 typedef enum {
+    eInterfaceSerial,
     eInterfaceBluetooth,
-    eInterfaceSerial
 } tdInterface;
 
 typedef enum {
@@ -50,7 +50,8 @@ public slots:
 
     void        onButtonClicked();
     void        onItemActivated(QListWidgetItem *_poItem);
-    void        onTextChanged(QString _oText);
+    void        onImagePathValidated();
+    void        onAddressLineValidated();
 
     void        onRedLightTimer();
     void        onGreenLightTimer();

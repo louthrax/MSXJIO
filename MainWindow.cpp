@@ -420,16 +420,9 @@ MainWindow::MainWindow() :
 	m_poGreenLightOffTimer(new QTimer(this)),
 	m_poUnlockTimer(new QTimer(this))
 {
-#ifdef ANDROID
-	m_poSettings = new QSettings();
-#else
-	m_poSettings = new QSettings
-		(
-			QCoreApplication::applicationDirPath() + "/" + windowTitle() + ".ini",
-			QSettings::IniFormat
-		);
-#endif
-	m_poUI->setupUi(this);
+    m_poSettings = new QSettings();
+
+    m_poUI->setupUi(this);
 	setFixedSize(size());
 	setFocusPolicy(Qt::StrongFocus);
 
@@ -442,9 +435,11 @@ MainWindow::MainWindow() :
 	connect(m_poGreenLightOffTimer, &QTimer::timeout, this, &MainWindow::onGreenLightTimer);
 
 	connect(m_poUnlockTimer, &QTimer::timeout, this, &MainWindow::onUnlockTimer);
+    connect(m_poUI->imagePathLineEdit, &QLineEdit::editingFinished, this,  &MainWindow::onImagePathValidated);
+    connect(m_poUI->addressLineEdit, &QLineEdit::editingFinished, this,  &MainWindow::onAddressLineValidated);
 
-    m_poUI->logWidget->setFont(QFont("DejaVu Sans Mono", LOG_WIDGET_FONT_SIZE));
-    m_poUI->namesListWidget->setFont(QFont("DejaVu Sans", NAMES_LIST_WIDGET_FONT_SIZE));
+    m_poUI->logWidget->setFont(QFont("Ubuntu Mono", LOG_WIDGET_FONT_SIZE));
+    m_poUI->namesListWidget->setFont(QFont("Ubuntu", NAMES_LIST_WIDGET_FONT_SIZE));
 
     vAdjustScrollBars(m_poUI->logWidget);
 	vAdjustScrollBars(m_poUI->namesListWidget);
@@ -461,10 +456,17 @@ MainWindow::MainWindow() :
 
 	m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
 	m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
-	m_poUI->imagePathLineEdit->setText(m_poSettings->value("SelectedImagePath").toString());
-	m_oDrive.bInsertMedia(m_poSettings->value("SelectedImagePath").toString());
+    m_poUI->imagePathLineEdit->setText(m_poSettings->value("LastMediaInserted").toString());
+    onImagePathValidated();
+    m_oDrive.m_oLastPathBrowsed = m_poSettings->value("LastPathBrowsed").toString();
 
+#ifdef Q_OS_ANDROID
+    m_eSelectedInterface = eInterfaceBluetooth;
+    m_poUI->bluetoothButton->hide();
+    m_poUI->USBButton->hide();
+#else
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
+#endif
 
 	poGroup->setExclusive(true);
 	poGroup->addButton(m_poUI->USBButton);
@@ -501,7 +503,9 @@ MainWindow::MainWindow() :
 	m_poUI->TxCRC->setToolTip("Enable CRC for outgoing data to the MSX.\nApplied at MSX startup.");
 	m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.");
 	m_poUI->timeout->setToolTip("If enabled, abort the command after a timeout.\nIf disabled, wait indefinitely for a response.");
-	m_poUI->readOnly->setToolTip("Prevent writes to the disk image.");
+    m_poUI->readOnly->setToolTip("Prevent writes to the disk image.");
+    m_poUI->fileEjectPushButton->setToolTip("Eject disk image.");
+    m_poUI->logWidget->setToolTip("Server log.");
 
 	oParser();
 }
@@ -704,8 +708,9 @@ void MainWindow::vTransmitData(const QByteArray &_roData, int _iDelay)
  */
 void MainWindow::vSaveSettings()
 {
-	m_poSettings->setValue("SelectedImagePath", m_oDrive.oMediaPath());
-	m_poSettings->setValue("SelectedSerialID", m_oSelectedSerialID);
+    m_poSettings->setValue("LastMediaInserted", m_oDrive.m_oLastMediaInserted);
+    m_poSettings->setValue("LastPathBrowsed", m_oDrive.m_oLastPathBrowsed);
+    m_poSettings->setValue("SelectedSerialID", m_oSelectedSerialID);
 	m_poSettings->setValue("SelectedBlueToothID", m_oSelectedBlueToothID);
 	m_poSettings->setValue("RxCRC", m_bRxCRC);
 	m_poSettings->setValue("TxCRC", m_bTxCRC);
@@ -906,13 +911,13 @@ void MainWindow::onButtonClicked()
 	else if(poSender == m_poUI->fileSelectPushButton)
 	{
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-		QString lastFilePath = m_poUI->imagePathLineEdit->text();
+        QString lastFilePath = m_poSettings->value("LastMediaInserted").toString();
 		QString initialDir;
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-		if(!lastFilePath.isEmpty() && QFileInfo::exists(lastFilePath))
+        if(!m_oDrive.m_oLastPathBrowsed.isEmpty() && QFileInfo::exists(m_oDrive.m_oLastPathBrowsed))
 		{
-			initialDir = QFileInfo(lastFilePath).absolutePath();
+            initialDir = QFileInfo(m_oDrive.m_oLastPathBrowsed).absolutePath();
 		}
 		else
 		{
@@ -932,6 +937,7 @@ void MainWindow::onButtonClicked()
 		if(!oImagePath.isEmpty())
 		{
 			m_poUI->imagePathLineEdit->setText(oImagePath);
+            onImagePathValidated();
 		}
 	}
 	else if(poSender == m_poUI->connectPushButton)
@@ -952,9 +958,13 @@ void MainWindow::onButtonClicked()
 	}
 	else if(poSender == m_poUI->fileEjectPushButton)
 	{
-		m_oDrive.vEjectMedia();
-		m_poUI->imagePathLineEdit->setText("");
-		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg"));
+        if (! m_oDrive.oMediaPath().isEmpty())
+        {
+            m_oDrive.vEjectMedia();
+            m_poUI->imagePathLineEdit->setText("");
+            m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg"));
+            vLog(eLogInfo, "Media ejected");
+        }
 	}
 
 	vSaveSettings();
@@ -1041,36 +1051,37 @@ void MainWindow::vLog(tdLogType _eLogType, QString fmt, ...)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::onTextChanged(QString _oText)
+void MainWindow::onImagePathValidated()
 {
-	/*~~~~~~~~~~~~~~*/
-	QObject *poSender;
-	/*~~~~~~~~~~~~~~*/
+    m_bDiskChanged = true;
 
-	poSender = QObject::sender();
+    if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
+    {
+        vLog(eLogInfo, "Media opened successfully");
+        vLog(eLogInfo, szGetServerInfo());
+    }
+    else
+    {
+        if (!m_poUI->imagePathLineEdit->text().isEmpty())
+            vLog(eLogError, "Media not found");
+    }
 
-	if(poSender == m_poUI->imagePathLineEdit)
-	{
-        m_bDiskChanged = true;
+    switch(m_oDrive.eMediaType())
+    {
+    case eMediaEmpty:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg")); break;
+    case eMediaFloppy:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/floppy.svg")); break;
+    case eMediaHardDisk:	m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/hardDisk.svg")); break;
+    }
+}
 
-        if(m_oDrive.bInsertMedia(m_poUI->imagePathLineEdit->text()))
-		{
-			vLog(eLogInfo, "Media opened successfully.");
-			vLog(eLogInfo, szGetServerInfo());
-		}
-
-		switch(m_oDrive.eMediaType())
-		{
-		case eMediaEmpty:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/empty.svg")); break;
-		case eMediaFloppy:		m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/floppy.svg")); break;
-		case eMediaHardDisk:	m_poUI->iconMediaType->setPixmap(QPixmap(":/icons/hardDisk.svg")); break;
-		}
-	}
-	else if(poSender == m_poUI->addressLineEdit)
-	{
-		roSelectedID() = _oText;
-		vSetState(m_eConnectionState);
-	}
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+void MainWindow::onAddressLineValidated()
+{
+    roSelectedID() = m_poUI->addressLineEdit->text();
+    vSetState(m_eConnectionState);
 }
 
 /*

@@ -2,16 +2,25 @@ QT += core gui widgets bluetooth serialport
 
 CONFIG += c++20
 
-FORMS += MainWindow.ui
-
 MAKEFILE = Makefile
 
-linux:!android:!macx {
-    STATIC_LIBS += -lxcb-cursor -lxcb-icccm -lwebpdemux -lwebpmux -lbrotlidec -lbrotlicommon
-    STATIC_LIBS += -lxcb-image -lxcb-util -lxcb-render-util -lwebp -lsharpyuv -lSM -lICE
-    STATIC_LIBS += -ltiff -lz -llzma -ljbig -ldeflate -lLerc
+FORMS += MainWindow.ui
 
-    QMAKE_LINK = $$PWD/mylinker.sh $$join(STATIC_LIBS, " ")
+linux:!android:!macx:static {
+
+    QMAKE_CXXFLAGS_RELEASE += -O3
+    QMAKE_LFLAGS_RELEASE   += -O3
+
+    QMAKE_LIBS += \
+        -lbrotlicommon \
+        -lXau \
+        -lXdmcp \
+        -lxcb-util \
+        -ldbus-1
+
+    QMAKE_LFLAGS += -static
+
+    QMAKE_POST_LINK += strip $$OUT_PWD/$$TARGET && upx $$OUT_PWD/$$TARGET
 }
 
 android {
@@ -51,6 +60,9 @@ android {
     CLEAN_FILES += $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
 }
 
+ICON_NAME = JIOServer
+ICON_SRC = $$PWD/icons/$${ICON_NAME}.svg
+
 win32:CONFIG(release, debug|release) {
     DESTDIR = release
     TARGET_EXE = $$OUT_PWD/$$DESTDIR/$${TARGET}.exe
@@ -62,19 +74,69 @@ win32:CONFIG(release, debug|release) {
     WINDEPLOYQT_WIN = $$shell_path($$WINDEPLOYQT)
     ZIPFILE = $$shell_path($$OUT_PWD/../$$TARGET-win.zip)
 
+    RC_ICONS = $$ICON_OUT
+    RC_FILE = JIOServer.rc
+
+    ICON_OUT = $$shell_quote($$shell_path($${ICON_NAME}.ico))
+
+    QMAKE_EXTRA_TARGETS += make_icon
+    PRE_TARGETDEPS += $$ICON_OUT
+
+    make_icon.target = $$ICON_OUT
+    make_icon.depends = $$ICON_SRC
+    make_icon.commands = \
+        echo Generating icon... && \
+        magick convert -background none -resize 256x256 $$ICON_SRC ico-256.png &&\
+        magick convert -background none -resize 128x128 $$ICON_SRC ico-128.png &&\
+        magick convert -background none -resize   64x64 $$ICON_SRC ico-64.png &&\
+        magick convert -background none -resize   32x32 $$ICON_SRC ico-32.png &&\
+        magick convert -background none -resize   16x16 $$ICON_SRC ico-16.png &&\
+        magick convert ico-256.png ico-128.png ico-64.png ico-32.png ico-16.png $$ICON_OUT && \
+        echo $$ICON_OUT generated.
+
     QMAKE_POST_LINK += \
         "$$WINDEPLOYQT_WIN" "$$OUT_EXE_WIN" --dir "$$DEPLOYDIR_WIN" && \
         copy /Y "$${OUT_EXE_WIN}" "$${DEPLOYDIR_WIN}\\$${TARGET}.exe" && \
-        powershell -Command "Compress-Archive -Path '$$DEPLOYDIR_WIN\\*' -DestinationPath '$$ZIPFILE' -Force" && \
-        echo ZIP created at $$ZIPFILE
+        del "$$ZIPFILE" && \
+        7z a -tzip "$$ZIPFILE" "$$DEPLOYDIR_WIN\*" && \
+        echo ZIP created at $$ZIPFILE;
 }
 
+APP_BUNDLE = $$OUT_PWD/$$DESTDIR/$${TARGET}.app
+
+macx {
+    INFO_PLIST = $$APP_BUNDLE/Contents/Info.plist
+    QMAKE_POST_LINK += /usr/libexec/PlistBuddy -c $$quote('"Set :NSBluetoothAlwaysUsageDescription string Enable Bluetooth communication with MSX"') "$$INFO_PLIST";
+}
+
+
 macx:CONFIG(release, debug|release) {
-    DESTDIR = release
-    APP_BUNDLE = $$OUT_PWD/$$DESTDIR/$${TARGET}.app
     DEPLOYDIR = $$OUT_PWD/deploy
     MACDEPLOYQT = $$[QT_INSTALL_BINS]/macdeployqt
     DMGFILE = $$OUT_PWD/$${TARGET}-mac.dmg
+
+    QMAKE_EXTRA_TARGETS += make_icon
+
+    QMAKE_BUNDLE_DATA += app_icon
+    app_icon.files = $${ICON_NAME}.icns
+    app_icon.path = Contents/Resources
+
+    make_icon.target = $${ICON_NAME}.icns
+    make_icon.depends = $$ICON_SRC
+    make_icon.commands = \
+        echo "==[ Generating $${ICON_NAME}.icns from $$ICON_SRC ]==" && \
+        rm -rf $${ICON_NAME}.iconset $${ICON_NAME}.icns && \
+        mkdir -p $${ICON_NAME}.iconset && \
+        /usr/local/bin/convert -background none -resize 16x16     $$ICON_SRC $${ICON_NAME}.iconset/icon_16x16.png && \
+        /usr/local/bin/convert -background none -resize 32x32     $$ICON_SRC $${ICON_NAME}.iconset/icon_16x16@2x.png && \
+        /usr/local/bin/convert -background none -resize 32x32     $$ICON_SRC $${ICON_NAME}.iconset/icon_32x32.png && \
+        /usr/local/bin/convert -background none -resize 64x64     $$ICON_SRC $${ICON_NAME}.iconset/icon_32x32@2x.png && \
+        /usr/local/bin/convert -background none -resize 128x128   $$ICON_SRC $${ICON_NAME}.iconset/icon_128x128.png && \
+        /usr/local/bin/convert -background none -resize 256x256   $$ICON_SRC $${ICON_NAME}.iconset/icon_256x256.png && \
+        /usr/local/bin/convert -background none -resize 512x512   $$ICON_SRC $${ICON_NAME}.iconset/icon_512x512.png && \
+        /usr/local/bin/convert -background none -resize 1024x1024 $$ICON_SRC $${ICON_NAME}.iconset/icon_512x512@2x.png && \
+        iconutil -c icns $${ICON_NAME}.iconset && \
+        echo "✅ $${ICON_NAME}.icns generated."
 
     QMAKE_POST_LINK += \
         echo "==[ macOS Deployment ]==" && \
@@ -85,7 +147,7 @@ macx:CONFIG(release, debug|release) {
         cp -R "$$APP_BUNDLE" "$$DEPLOYDIR/" && \
         hdiutil create -volname "$${TARGET}" -srcfolder "$$DEPLOYDIR" -ov -format UDZO ~/Tmp/$${TARGET}-mac.dmg && \
         mv ~/Tmp/$${TARGET}-mac.dmg $$OUT_PWD/../$${TARGET}-mac.dmg && \
-        echo "DMG created at $$DMGFILE"
+        echo "DMG created at $$DMGFILE";
 }
 
 SOURCES += \

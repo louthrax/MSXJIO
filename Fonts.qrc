@@ -1,6 +1,6 @@
 <RCC>
     <qresource prefix="/">
-        <file>fonts/DejaVuSans.ttf</file>
-        <file>fonts/DejaVuSansMono.ttf</file>
+        <file>fonts/UbuntuMono-R.ttf</file>
+        <file>fonts/Ubuntu-R.ttf</file>
     </qresource>
 </RCC>

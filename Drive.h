@@ -42,6 +42,8 @@ public:
     tdDriveError    eWriteSectors(unsigned char _uiPartition, unsigned int _uiSector, unsigned int _uiSectorsCount, char * _pcData);
     void            vEjectMedia();
     bool            bIsMediaWriteProtected();
+    QString         m_oLastMediaInserted;
+    QString         m_oLastPathBrowsed;
 
 private:
     QFile       *m_poMediaFile = nullptr;
