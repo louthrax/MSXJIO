@@ -4,16 +4,19 @@
   <img src="./readme_resources/snapshot.png" alt="Snapshot" width="300"/>
 </p>
 
+[![Watch the video]](https://www.youtube.com/watch?v=n8Oy6to-5Io)
+
+
 ## Overview
 
-**MSXJIO** is a project that allows serving a hard-disk or floppy image from a host computer or smartphone to an MSX machine.
+**MSXJIO** is a project that allows serving a hard or floppy disk-image from a host computer or smartphone to your MSX.
 
-**JIO** stands for **J**oystick **I**nput **O**utput, as communication is done through the MSX joystick port.
+**JIO** stands for **J**oystick **I**nput **O**utput, as communication is done through the MSX joystick port 2.
 
 The system is divided into two parts:
 
 - **JIOServer**: the server application, which runs on **Linux, Windows, macOS, or Android**.
-- **MSX Client**: currently, the only available client is `JIO-MSXDOS2`. However, additional clients could be developed in the future for features like syncing the MSX real-time clock or mirroring directories with the host.
+- **MSX Client**: currently, the only available client is `JIO-MSXDOS2`. Additional clients could be developed in the future for features like syncing the MSX real-time clock or mirroring directories with the host.
 
 JIOServer can communicate with the MSX through:
 
@@ -22,7 +25,7 @@ JIOServer can communicate with the MSX through:
 
 ## Requirements
 
-- An **MSX** computer with at least **128KB RAM**
+- On the MSX side, at least **128KB RAM**
 - A **JIO cable** to connect the MSX joystick port to a USB or Bluetooth serial adapter
 
 ---
@@ -102,6 +105,17 @@ JIOServer can communicate with the MSX through:
 
 ## Known Issues
 
+
+## Bug report
+You can submit tickets on GitHub, or post messages on this thread:
+
+
+
+## Links
+
+https://github.com/b3rendsh/msxdos2s
+
+
 ---
 
 ## History
@@ -112,7 +126,7 @@ This project began with **NYYRIKKI**’s brilliant 115200 bps MSX serial communi
 Shortly after, he released a working **MSX-DOS 1** version serving disk images with **drive sound emulation**:  
 👉 https://www.youtube.com/watch?v=OHs5a-gZtuc
 
-Around the same time, I discovered **b3rendsh**’s MSX-DOS 2 project:  
+At the same time, I was aware of **b3rendsh**’s MSX-DOS 2 project:  
 👉 https://github.com/b3rendsh/msxdos2s  
 It was a natural fit to integrate NYYRIKKI’s fast communication routines to support full disk image serving.
 

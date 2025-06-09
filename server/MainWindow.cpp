@@ -11,7 +11,7 @@
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
 
-#include "MSXClient/drv_jio.inc"
+#include "../clients/JIO_MSX-DOS/drv_jio.inc"
 
 #pragma pack(push, 1)
 typedef struct
