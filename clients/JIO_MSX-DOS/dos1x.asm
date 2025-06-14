@@ -20,38 +20,38 @@
 
 
         INCLUDE "disk.inc"	; Assembler directives
-        INCLUDE	"msx.inc"	; MSX constants and definitions
+	INCLUDE	"msx.inc"	; MSX constants and definitions
 
-        SECTION DISK
+	SECTION DISK 
         ORG     04000H
 
         ; Routines which can be used by the disk hardware driver
-        PUBLIC  PROMPT		; Prints a message for two drive emulation on a single drive.
-        PUBLIC  GETSLT		; Get disk driver's slot address.
-        PUBLIC  GETWRK		; Get address of disk driver's work area.
-        PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
-        PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
-        PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
-        PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz0.
-        PUBLIC  PRVINT		; Calls previous timer interrupt routine...
+	PUBLIC  PROMPT		; Prints a message for two drive emulation on a single drive.
+	PUBLIC  GETSLT		; Get disk driver's slot address.
+	PUBLIC  GETWRK		; Get address of disk driver's work area.
+	PUBLIC  DIV16		; BC:=BC/DE, remainder in HL.
+	PUBLIC  ENASLT		; Enables a slot a address specified by A:HL.
+	PUBLIC  XFER		; Eactly emulates an LDIR.. ..used when transferring data to/fro page-1.
+	PUBLIC  SETINT		; Setup routine at (HL) as a timer interrupt routine (50Hz/60Hz0.
+	PUBLIC  PRVINT		; Calls previous timer interrupt routine...
 
         ; Symbols which must be defined by the disk hardware driver
-        EXTERN	INIHRD		; Initialize hardware
-        EXTERN	DRIVES		; Return number of drives in system
-        EXTERN	INIENV		; Initialize work area
-        EXTERN	DSKIO		; Sector read and write
-        EXTERN	DSKCHG		; Get disk change status
-        EXTERN	GETDPB		; Get disk parameter block (DPB)
-        EXTERN	CHOICE		; Return format choice string
-        EXTERN	DSKFMT		; Format a disk
-        EXTERN	MTOFF		; Turn drive motors off
-        EXTERN	OEMSTA		; Used for system expansion (OEMSTATEMENT)
-        EXTERN	MYSIZE		; Size of the page-3 RAM work area required by the driver in bytes.
-        EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
-        EXTERN	DEFDPB		; Base address of a 21 byte "default" DPB for this driver.
+	EXTERN	INIHRD		; Initialize hardware
+	EXTERN	DRIVES		; Return number of drives in system
+	EXTERN	INIENV		; Initialize work area
+	EXTERN	DSKIO		; Sector read and write
+	EXTERN	DSKCHG		; Get disk change status
+	EXTERN	GETDPB		; Get disk parameter block (DPB)
+	EXTERN	CHOICE		; Return format choice string
+	EXTERN	DSKFMT		; Format a disk
+	EXTERN	MTOFF		; Turn drive motors off
+	EXTERN	OEMSTA		; Used for system expansion (OEMSTATEMENT)
+	EXTERN	MYSIZE		; Size of the page-3 RAM work area required by the driver in bytes.
+	EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
+	EXTERN	DEFDPB		; Base address of a 21 byte "default" DPB for this driver.
 
-        ; Additional symbol defined by the ide driver module
-        EXTERN	BOOTMENU
+	; Additional symbol defined by the ide driver module
+	EXTERN	BOOTMENU
 
 ; rem: _RST MACRO replaced with labels
 R_SYNCHR	EQU	08H
@@ -66,7 +66,7 @@ R_CALLF		EQU	30H
 ; ------------------------------------------------------------------------------
 
         defb    "AB"
-        defw    A576F                   ; EXTENSION ROM INIT handler
+	defw    A576F                   ; EXTENSION ROM INIT handler
         defw    A6576			; EXTENSION ROM CALL statement handler
         defw    0
         defw    0
@@ -189,7 +189,7 @@ A409B:  push    ix
         ret
 
 ;       Subroutine      BDOS 00 (system reset)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 
@@ -265,7 +265,7 @@ A410A:  dec     c
         jr      A414E                   ; put clock in running mode
 
 ;       Subroutine      store date
-;       Inputs
+;       Inputs          
 ;       Outputs         -
 
 A4115:  ld      (CURDAT),hl
@@ -283,7 +283,7 @@ A4115:  ld      (CURDAT),hl
         jr      A4142
 
 ;       Subroutine      store time
-;       Inputs
+;       Inputs          
 ;       Outputs         -
 
 A4130:  ld      a,(TIMFLG)
@@ -345,7 +345,7 @@ A4171:  push    af
         jr      A4156
 
 ;       Subroutine      get date and time
-;       Inputs
+;       Inputs          
 ;       Outputs         Cx set if from clockchip,
 
 A4179:  ld      a,(TIMFLG)
@@ -401,7 +401,7 @@ ELSE
 Q41C1:  defb    " MSX-DOS ver. 2.2 Copyright 1984 by Microsoft "
 ENDIF
 ;       Subroutine      BDOS 0C (return version number)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 
@@ -422,10 +422,10 @@ GETFAT: ld      e,(ix+19)
 
 A41FA:
 IFDEF IDEDOS1
-        jp	NewGetFAT
+	jp	NewGetFAT
 OldGetFAT:
 ELSE
-        call    H_UNPA
+	call    H_UNPA
 ENDIF
         push    de			; store pointer to FAT buffer of drive
         ld      e,l
@@ -460,13 +460,13 @@ A421A:  ld      l,a
 ;       Inputs          HL = clusternumber, DE = pointer to FAT buffer, BC = clusterentry content
 ;       Outputs         -
 
-A4221:
+A4221: 
 PutFAT:
 IFDEF FAT16DOS1
-        jp	F16P02
+	jp	F16P02
 OldPutFAT:
 ELSE
-        push    de			; store pointer to FAT buffer
+ 	push    de			; store pointer to FAT buffer
         ld      e,l
         ld      d,h			; store cluster number
 ENDIF
@@ -521,7 +521,7 @@ A4252:  ld      a,(de)
         ret
 
 ;       Subroutine      check if devicename
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A425A:  call    H_DEVN
@@ -566,7 +566,7 @@ A42A3:  scf
         ret
 
 ;       Subroutine      validate FCB, clear S2 and find direntry
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 
@@ -582,7 +582,7 @@ A42B1:  call    A440E                   ; validate FCB drive and filename
         ret     c                       ; invalid, quit
 
 ;       Subroutine      find first directoryentry
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 
@@ -591,7 +591,7 @@ A42B5:  call    A425A                   ; check if devicename
         call    A44D3                   ; reset direntry search and get latest FAT
 
 ;       Subroutine      find next directoryentry
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A42BC:  call    H_CONT
@@ -642,7 +642,7 @@ A4308:  ld      a,(hl)
         ret
 
 ;       Subroutine      get next direntry (at start of search)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A430E:  ld      a,(LASTEN)
@@ -651,7 +651,7 @@ A430E:  ld      a,(LASTEN)
         jr      nc,A4367                ; yep, update directory of disk when needed and quit
 
 ;       Subroutine      get direntry
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4317:  call    H_GETE
@@ -682,7 +682,7 @@ A4342:  push    hl
         ret
 
 ;       Subroutine      get next direntry (while searching)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4348:  call    H_NEXT
@@ -701,7 +701,7 @@ A4348:  call    H_NEXT
         ret
 
 ;       Subroutine      at end of directory
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4367:  call    A4743                   ; flush directory buffer
@@ -709,7 +709,7 @@ A4367:  call    A4743                   ; flush directory buffer
         ret
 
 ;       Subroutine      BDOS 13 (delete file)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	436CH
@@ -734,7 +734,7 @@ A4376:  ld      a,0E5H
         jp      A45CF                   ; write FAT buffer (SHOULD BE: JP A45C4, flush FAT buffer)
 
 ;       Subroutine      BDOS 17 (rename file)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4392H
@@ -799,7 +799,7 @@ A440B:  ld      a,0FFH                  ; error
         ret
 
 ;       Subroutine      validate FCB drive and filename
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A440E:  call    H_MOVN
@@ -831,7 +831,7 @@ A4435:  ld      (THISDR),a              ; set current driveid
         ret
 
 ;       Subroutine      get max record and extent
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4439:  ld      a,(iy+31)
@@ -859,7 +859,7 @@ A445E:  ld      bc,0FF7FH               ; extent 255, record 127
         ret
 
 ;       Subroutine      BDOS 0F (open file)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4462H
@@ -927,7 +927,7 @@ A44AE:  ld      (de),a                  ; devicecode
         ret
 
 ;       Subroutine      handle DSKCHG error
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A44CA:  ld      c,a
@@ -936,7 +936,7 @@ A44CA:  ld      c,a
         jr      A44DB                   ; get latest FAT (try again)
 
 ;       Subroutine      reset direntry search and get latest FAT
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A44D3:  ld      a,0FFH
@@ -944,7 +944,7 @@ A44D3:  ld      a,0FFH
         ld      (ENTFRE),a              ; not found a free direntry
 
 ;       Subroutine      get latest FAT
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A44DB:  call    H_FATR
@@ -978,10 +978,10 @@ A450A:  sub     l                       ; current drive same as datasector buffe
 A4516:  ld      a,0FFH
         ld      (DIRBFD),a              ; invalid dirsector buffer
 IFDEF IDEDOS1
-        jp	NewGetFATbuf
-        ds	0bh,0			; Unused code
+	jp	NewGetFATbuf
+	ds	0bh,0			; Unused code
 ELSE
-        call    GetFATbuf               ; get FAT parameters
+	call    GetFATbuf               ; get FAT parameters
         dec     hl
         ld      (hl),0                  ; FAT buffer clean
         inc     hl
@@ -993,7 +993,7 @@ ENDIF
 
 ; A4529
 DPB_change_entry:
-        ld      b,(hl)                  ; mediabyte of FAT sector
+	ld      b,(hl)                  ; mediabyte of FAT sector
         ld      a,(THISDR)              ; current driveid
         ld      c,(ix+1)                ; mediadescriptor
         push    ix
@@ -1006,7 +1006,7 @@ DPB_change_entry:
 
 ;A4536
 SetDPBAdr:
-        push    hl
+	push    hl
         pop     ix			; pointer to DPB
         ex      de,hl
         call    A4563                   ; get DPBTBL entry of current drive
@@ -1017,7 +1017,7 @@ SetDPBAdr:
 
 IFDEF IDEDOS1
 ; Unused code
-        ds	15h,0
+	ds	15h,0
 ELSE
 ; Following code is replaced by disk-ide routines
 A4541:	ld      a,e
@@ -1037,7 +1037,7 @@ A4547:  pop     af                      ; adjust first FAT sector to the first F
 ENDIF
 
 ;       Subroutine      get pointer to DPB of current drive
-;       Inputs
+;       Inputs          
 ;       Outputs         HL = IX = pointer to DPB
 
 A4555:  call    H_GETI
@@ -1071,7 +1071,7 @@ E456F:
         defs    0056FH-E456F,0
 
 ;       Subroutine      BDOS 10 (close file)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	456FH
@@ -1120,7 +1120,7 @@ A456F:  push    de
         call    A4748                   ; update directory of disk
 
 ;       Subroutine      flush FAT buffer
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A45C4:  ld      l,(ix+19)
@@ -1131,15 +1131,15 @@ A45C4:  ld      l,(ix+19)
         ret     nz                      ; nope, quit (?? return error if FAT buffer invalid)
 
 ;       Subroutine      write FAT buffer
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A45CF:  call    H_FATW
 IFDEF IDEDOS1
-        call	NewUpdateFAT
-        xor	a
-        ret
-        ds	17h,0			; Unused code
+	call	NewUpdateFAT
+	xor	a
+	ret
+	ds	17h,0			; Unused code
 ELSE
         call    GetFATbuf		; get FAT parameters
         dec     hl
@@ -1165,7 +1165,7 @@ A45E9:  pop     af
 ENDIF
 
 ;       Subroutine      make FAT buffer unchanged and quit with error
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A45EE:  ld      l,(ix+19)
@@ -1180,8 +1180,8 @@ A45EE:  ld      l,(ix+19)
 ;       Outputs         A = number of FATs, DE = first FAT sector, B = number sectors per FAT, HL = pointer to FAT buffer
 
 ; A45FA
-GetFATbuf:
-        ld      a,(ix+10)               ; number of FATs
+GetFATbuf:  
+	ld      a,(ix+10)               ; number of FATs
 A45FD:  ld      l,(ix+19)
         ld      h,(ix+20)               ; pointer to FAT buffer of drive
         ld      b,(ix+16)               ; number of sectors per FAT
@@ -1203,7 +1203,7 @@ A4617:  ld      hl,(SDIRBU)             ; dirsector buffer
         ret
 
 ;       Subroutine      BDOS 16 (create file)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	461DH
@@ -1306,7 +1306,7 @@ A46A4:  push    bc
         ret
 
 ;       Subroutine      BDOS 2F (read logical sector)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	46BAH
@@ -1319,11 +1319,11 @@ A46BA:  ld      b,h
         ld      hl,(DMAADD)             ; transferaddress
 
 ;       Subroutine      read sectors with DOS error handling
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 ; A46C5
 DSK_abs_read:
-        call    H_DREA
+	call    H_DREA
         xor     a
         ld      (READOP),a              ; flag read disk operation
         call    A46D7                   ; read sector
@@ -1334,7 +1334,7 @@ DSK_abs_read:
         ret                             ; IGNORE, quit
 
 ;       Subroutine      read sectors
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A46D7:  ld      a,(ix+0)                ; driveid
@@ -1350,7 +1350,7 @@ A46D7:  ld      a,(ix+0)                ; driveid
         ret
 
 ;       Subroutine      adjust parameters to restart at error sector and start diskerror handler
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A46E8:  push    af
@@ -1378,7 +1378,7 @@ A46E8:  push    af
         ld      a,(ix+0)                ; driveid
 
 ;       Subroutine      start diskerror handler
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A470A:  call    H_FATA
@@ -1396,7 +1396,7 @@ A470A:  call    H_FATA
         jp      ENDJMP                  ; Warm boot
 
 ;       Subroutine      BDOS 30 (write logical sector)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4720H
@@ -1410,7 +1410,7 @@ A4720:  ld      b,h
         jr      DSK_abs_write           ; write sectors with DOS error handling
 
 ;       Subroutine      flush datasector buffer
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A472D:  ld      hl,DIRTYB
@@ -1425,7 +1425,7 @@ A472D:  ld      hl,DIRTYB
         jr      DSK_abs_write           ; write sector with DOS error handling
 
 ;       Subroutine      flush directory buffer
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4743:  ld      a,(DIRTYD)
@@ -1433,7 +1433,7 @@ A4743:  ld      a,(DIRTYD)
         ret     z                       ; nope, quit
 
 ;       Subroutine      write dirsector buffer
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4748:  call    H_DIRW
@@ -1443,12 +1443,12 @@ A4748:  call    H_DIRW
         call    A460D                   ; setup dirsector parameters
 
 ;       Subroutine      write sectors with DOS error handling
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ; A4755
 DSK_abs_write:
-        call    H_DWRI
+	call    H_DWRI
         ld      a,1
         ld      (READOP),a              ; flag write disk operation
         ld      a,(ix+0)                ; driveid
@@ -1456,7 +1456,7 @@ DSK_abs_write:
         push    hl
         push    de
         push    bc
-        call	WriteSector_all		; write disksector
+	call	WriteSector_all		; write disksector
         pop     de
         ld      c,d
         pop     de
@@ -1468,7 +1468,7 @@ DSK_abs_write:
         ret                             ; IGNORE, quit
 
 ;       Subroutine      BDOS 14 (read next record)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4775H
@@ -1479,7 +1479,7 @@ A4775:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fie
         jr      A4783                   ; update sequencial fields
 
 ;       Subroutine      BDOS 15 (write next record)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	477DH
@@ -1491,7 +1491,7 @@ A4783:  call    A486A                   ; increase recordnumber if something was
         jr      A479C                   ; update CR,EX and S2 field
 
 ;       Subroutine      BDOS 21 (random access read record)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4788H
@@ -1505,7 +1505,7 @@ A4790:  push    iy
         pop     de
 
 ;       Subroutine      BDOS 22 (random access write record)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4793H
@@ -1527,7 +1527,7 @@ A479C:  ld      a,l
         ret
 
 ;       Subroutine      BDOS 27 (MSXDOS random block read)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	47B2H
@@ -1540,7 +1540,7 @@ A47B2:  xor     a
         jr      A47C8
 
 ;       Subroutine      BDOS 26 (MSXDOS random block write)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	47BEH
@@ -1557,7 +1557,7 @@ A47C8:  call    A486A                   ; increase recordnumber if something was
         ret
 
 ;       Subroutine      BDOS 28 (write random with zero fill)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	47D1H
@@ -1740,14 +1740,14 @@ A490F:  ld      (CLUSNU),bc             ; relative cluster of startbyte
         ret
 
 ;       Subroutine      multiply
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4916:  call    H_MUL1
         ld      hl,0
 
 ;       Subroutine      multiply high word
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A491C:  ld      a,b
@@ -1765,14 +1765,14 @@ A4928:  rra
         ret
 
 ;       Subroutine      divide
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 DIV16:
 A492F:  ld      hl,0
 
 ;       Subroutine      divide
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4932:  call    H_DIV3
@@ -1798,7 +1798,7 @@ A494E:  or      a
         jr      A4947
 
 ;       Subroutine      calculate partial sector transfers
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4953:  ld      h,b
@@ -1830,7 +1830,7 @@ A4972:  ld      (BYTCT1),de             ; bytes to transfer from partial sector
         ret
 
 ;       Subroutine      get absolute cluster
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4989:  call    H_FNDC
@@ -1864,13 +1864,13 @@ A49B1:  call    H_SKPC
         call    GETFAT                   ; get FAT entry content
         pop     de
 IFDEF FAT16DOS1
-        call	F16P01
-        jr	nc,A49CC
-        nop
-        nop
-        nop
-        nop
-        nop
+	call	F16P01
+	jr	nc,A49CC
+	nop
+	nop
+	nop
+	nop
+	nop
 ELSE
         ld      a,h
         cp      00FH
@@ -1894,7 +1894,7 @@ A49CF:  inc     bc                      ; BC<>0 (means not found)
         ret
 
 ;       Subroutine      read datasector
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A49D2:  ld      (PREREA),a
@@ -1903,9 +1903,9 @@ A49D2:  ld      (PREREA),a
         call    A4EDB                   ; get sectornumber of cluster
         ex      de,hl
 IFDEF FAT16DOS1
-        call	F16P06
-        nop
-        nop
+	call	F16P06
+	nop
+	nop
 ELSE
         ld      hl,(BUFSEC)
         sbc     hl,de                   ; is it currently in the datasector buffer ?
@@ -1949,7 +1949,7 @@ A4A1B:  ld      a,1
         ret
 
 ;       Subroutine      do partical sector read if needed
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4A36:  call    H_BUFR
@@ -1962,7 +1962,7 @@ A4A36:  call    H_BUFR
         jp      BLKMOV                  ; transfer to DOS memory
 
 ;       Subroutine      handle partial sector write
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4A46:  call    H_BUFW
@@ -1986,7 +1986,7 @@ A4A46:  call    H_BUFW
         ret
 
 ;       Subroutine      last partial sector ?
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4A6B:  ld      hl,0
@@ -1999,7 +1999,7 @@ A4A6B:  ld      hl,0
         ret     z
 
 ;       Subroutine      to next sector (only when partical read was done)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4A7B:  ld      a,(TRANS)
@@ -2009,11 +2009,11 @@ A4A7B:  ld      a,(TRANS)
         cp      (ix+6)                  ; clustermask
         jr      c,A4AA2                 ; still sectors left in this cluster, increase relative sector in cluster
 IFDEF FAT16DOS1
-        ld	hl,(CLUSNU)
-        call	F16P01
-        ccf
-        ex	de,hl
-        nop
+	ld	hl,(CLUSNU)
+	call	F16P01
+	ccf
+	ex	de,hl
+	nop
 ELSE
         ld      de,(CLUSNU)             ; current cluster of file
         ld      hl,00FF7H
@@ -2062,7 +2062,7 @@ A4ACA:  call    A53A8                   ; console output
         jr      A4AB9
 
 ;       Subroutine      read record for dos devices
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4AD7:  ld      de,(NEXTAD)             ; current transferaddress
@@ -2077,7 +2077,7 @@ A4AE1:  call    A546E                   ; auxiliary input
         ld      (de),a
         inc     de
         cp      01AH
-        jr      z,A4ABC                 ; CTRL-Z,
+        jr      z,A4ABC                 ; CTRL-Z, 
         dec     bc
         ld      a,b
         or      c                       ; all bytes done ?
@@ -2201,10 +2201,10 @@ A4BC1:  pop     de
         ld      c,l
         ld      b,h
 IFDEF FAT16DOS1
-        ex	de,hl
-        call	F16P01
-        ex	de,hl
-        jr	nc,A4BE2
+	ex	de,hl
+	call	F16P01
+	ex	de,hl
+	jr	nc,A4BE2
 ELSE
         ld      hl,00FF7H
         sbc     hl,de                   ; end cluster ?
@@ -2272,7 +2272,7 @@ A4C37:  ld      hl,(RECPOS+0)
         ret
 
 ;       Subroutine      write record for dos devices
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4C47:  ld      hl,(DMAADD)             ; transferaddress
@@ -2433,12 +2433,12 @@ A4D65:  push    bc
         push    af
         ld      b,a
 IFDEF FAT16DOS1
-        call	F16P07
-        nop
-        nop
-        nop
-        nop
-ELSE
+	call	F16P07
+	nop
+	nop
+	nop
+	nop
+ELSE	
         jr      c,A4D73                 ; sectors writen does not include the sector in the datasector buffer
         ld      a,0FFH
         ld      (BUFDRN),a              ; invalid datasector buffer
@@ -2534,9 +2534,9 @@ A4E10:  ld      bc,0
 
 A4E26:
 IFDEF FAT16DOS1
-        ld      bc,0ffffh
+	ld      bc,0ffffh
 ELSE
-        ld      bc,00fffh		; cluster chain end marker
+	ld      bc,00fffh		; cluster chain end marker
 ENDIF
         call    A4F9E                   ; mark end & release rest chain
 A4E2C:  dec     de
@@ -2556,7 +2556,7 @@ A4E32:  ld      l,(iy+26)
         jr      A4E2C                   ; mark FAT buffer changed
 
 ;       Subroutine      calculate sequencial sectors
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4E48:  call    H_OPTI
@@ -2625,10 +2625,10 @@ A4E78:  pop     de
         scf
         jr      nz,A4EC7
 IFDEF FAT16DOS1
-        call	F16P06
-        ld	a,c
-        nop
-        nop
+	call	F16P06
+	ld	a,c
+	nop
+	nop
 ELSE
         ld      hl,(BUFSEC)             ; sectornumber of datasector buffer
         or      a
@@ -2651,14 +2651,14 @@ A4ECA:  add     a,b
         jr      A4E78
 
 ;       Subroutine      get decoded characterpair (not needed, uses for secret message)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4ED2:
 IFDEF IDEDOS1
-        call	OldGetFAT
-ELSE
-        call    A41FA
+	call	OldGetFAT
+ELSE  
+	call    A41FA
 ENDIF
         ld      a,l
         add     hl,hl
@@ -2676,7 +2676,7 @@ A4EDB:  call    H_FIGR
         dec     hl
         dec     hl
 IFDEF FAT16DOS1
-        jp	F16P05
+	jp	F16P05
 ELSE
         dec     b
         jr      z,A4EED
@@ -2693,7 +2693,7 @@ A4EED:  or      l
         ret
 
 ;       Subroutine      get recordnumber from S2,EX and CR fields
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4EF8:  push    de
@@ -2710,53 +2710,53 @@ A4EF8:  push    de
         ret
 
 ;       Subroutine      allocate cluster chain
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4F12:  call    H_ALLO
 IFDEF IDEDOS1
         ld      e,(ix+14)
         ld      d,(ix+15)
-        ld	(0f302h),de
-        push	hl
+	ld	(0f302h),de
+	push	hl
 r171:	push	bc
-        push	hl
-        ld	d,h
-        ld	e,l
+	push	hl
+	ld	d,h
+	ld	e,l
 r170:	push	de
-        ex	de,hl
-        ld	hl,(0f302h)
-        dec	hl
-        or	a
-        sbc	hl,de
-        ex	de,hl
-        pop	de
-        jr	nc,r167
-        ld	a,e
-        or	d
-        jr	nz,r168
-        pop	hl
-        pop	hl
-        pop	hl
+	ex	de,hl
+	ld	hl,(0f302h)
+	dec	hl
+	or	a
+	sbc	hl,de
+	ex	de,hl
+	pop	de
+	jr	nc,r167
+	ld	a,e
+	or	d
+	jr	nz,r168
+	pop	hl
+	pop	hl
+	pop	hl
 IFDEF FAT16DOS1
-        ld	bc,0ffffh
+	ld	bc,0ffffh
 ELSE
-        ld	bc,00fffh
+	ld	bc,00fffh
 ENDIF
-        ld	e,(ix+013h)
-        ld	d,(ix+014h)
-        call	FAT_write
-        scf
-        ret
+	ld	e,(ix+013h)
+	ld	d,(ix+014h)
+	call	FAT_write
+	scf
+	ret
 r167:	inc	hl
-        call	ResvFATentry
-        jp	r170
+	call	ResvFATentry
+	jp	r170
 r168:
-        dec	de
-        ex	de,hl
-        call	ResvFATentry
-        ex	de,hl
-        jr	r170
+	dec	de
+	ex	de,hl
+	call	ResvFATentry
+	ex	de,hl
+	jr	r170
 ELSE
         ld      e,(ix+19)
         ld      d,(ix+20)               ; pointer to FAT buffer of drive
@@ -2788,7 +2788,7 @@ A4F31:  push    de			; store lowest cluster
         or      a
         sbc     hl,de
         ex      de,hl                   ; last cluster on disk ?
-        pop     de			; restore lowest cluster
+	pop     de			; restore lowest cluster
         jr      nc,A4F4E                ; nope, go up
         ld      a,e
         or      d                       ; search below finished ?
@@ -2818,8 +2818,8 @@ ENDIF
 ;       Outputs         ________________________
 
 ;A4F5E
-ResvFATentry:
-        push    hl			; store cluster number
+ResvFATentry:  
+	push    hl			; store cluster number
         push    de			; store
         call    GETFAT                   ; cluster free ?
         pop     de			; restore
@@ -2832,34 +2832,34 @@ ResvFATentry:
         ld      e,(ix+19)
         ld      d,(ix+20)               ; pointer to FAT buffer of drive
 IFDEF IDEDOS1
-        call	FAT_write
+	call	FAT_write
         pop     hl			; restore cluster number
         pop     bc			; restore number of clusters to allocate
         dec     bc			; update number of clusters to allocate
         ld      a,b
         or      c			; finished ?
-        jr      nz,r171
+        jr      nz,r171	
 IFDEF FAT16DOS1
-        ld      bc,0ffffh
+	ld      bc,0ffffh
 ELSE
-        ld      bc,00fffh		; cluster chain end marker
+	ld      bc,00fffh		; cluster chain end marker
 ENDIF
-        call	NewPutFAT
+	call	NewPutFAT
         dec     de
         ld      a,1
         ld      (de),a                  ; FAT changed
         pop     hl			; restore start cluster
         push    hl			; store start cluster
-        call	FAT_read
+	call	FAT_read
         pop     bc			; restore start cluster
         ld      a,c
         or      b			; add chain to existing chain ?
-        ret	nz
+	ret	nz
         ld      (iy+26),l
         ld      (iy+27),h               ; update start cluster of file
-        ret
+	ret
 ; Unused code
-        ds	10h,0
+	ds	10h,0
 
 ELSE
         call    A4221                   ; set FAT entry content
@@ -2893,13 +2893,13 @@ A4F94:	ex      de,hl			; pointer to FAT buffer
 ENDIF
 
 ;       Subroutine      release cluster chain
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4F9B:  ld      bc,0			; FAT entry = free
 
 ;       Subroutine      set cluster entry and release rest of cluster chain
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A4F9E:  call    H_RELB
@@ -2907,7 +2907,7 @@ A4F9E:  call    H_RELB
         call    GETFAT                   ; get FAT entry content
         ex      (sp),hl			; store next cluster number, restore cluster number
 IFDEF IDEDOS1
-        call	NewPutFAT
+	call	NewPutFAT
 ELSE
         call    A4221                   ; set FAT entry content
 ENDIF
@@ -2916,9 +2916,9 @@ ENDIF
         or      l			; free FAT entry ?
         ret     z			; yep, quit
 IFDEF FAT16DOS1
-        call	F16P01
-        jr	c,A4F9B
-        ret
+	call	F16P01
+	jr	c,A4F9B
+	ret
 ELSE
         ld      a,h
         cp      00FH			; cluster chain end marker ?
@@ -2930,7 +2930,7 @@ ENDIF
         ret
 
 ;       Subroutine      BDOS 11 (search for first)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	4FB8H
@@ -2979,7 +2979,7 @@ A5000:  ld      a,0FFH
         ret
 
 ;       Subroutine      BDOS 12 (search for next)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5006H
@@ -2996,7 +2996,7 @@ A5006:  call    A440E                   ; validate FCB drive and filename
         jr      A4FBB                   ; finish
 
 ;       Subroutine      BDOS 23 (compute filesize)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	501EH
@@ -3029,7 +3029,7 @@ A5043:  ld      (ix+33),c
         ret                             ; quit without error
 
 ;       Subroutine      BDOS 18 (return bitmap of logged-in drives)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	504EH
@@ -3044,7 +3044,7 @@ A5053:  scf
         ret
 
 ;       Subroutine      BDOS 1A (set DMA address)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5058H
@@ -3054,7 +3054,7 @@ A5058:  ld      (DMAADD),de             ; set transferaddress
         ret
 
 ;       Subroutine      BDOS 1B (MSXDOS get allocation)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	505DH
@@ -3100,7 +3100,7 @@ A508B:  inc     hl
         ret
 
 ;       Subroutine      BDOS 0D (reset discs)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	509FH
@@ -3114,7 +3114,7 @@ A509F:  ld      hl,00080H
 ;	_DOSCP	50A9H
 
 DOS_WRTFAT:
-        call    A472D                   ; flush datasector buffer
+	call    A472D                   ; flush datasector buffer
         ld      hl,SDPBLI
         ld      a,(SNUMDR)              ; all drives
 A50B2:  ld      e,(hl)
@@ -3133,7 +3133,7 @@ A50B2:  ld      e,(hl)
         ret
 
 ;       Subroutine      BDOS 25 (return current drive)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	50C4H
@@ -3143,7 +3143,7 @@ A50C4:  ld      a,(CURDRV)
         ret
 
 ;       Subroutine      BDOS 34 (update random access pointer)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	50C8H
@@ -3156,7 +3156,7 @@ A50C8:  call    A4EF8                   ; get recordnumber from CR,EX and S2 fie
         ret
 
 ;       Subroutine      BDOS 0E (select disc)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	50D5H
@@ -3171,7 +3171,7 @@ A50D5:  ld      a,(SNUMDR)
         ret
 
 ;       Subroutine      BDOS 0A (buffered console input)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	50E0H
@@ -3431,7 +3431,7 @@ A523E:  ld      (INSERT),a
         jp      A5104
 
 ;       Subroutine      display message of programmer (not needed)
-;       Inputs
+;       Inputs          
 ;       Outputs
 ;       Remark          activated by:
 ;                       input 127 or 255 chars, press CTRL-J, press BS or LEFT
@@ -3456,11 +3456,11 @@ A5251:  push    hl
 
 ; lineinput HOME key (NEWLINE)
 
-A5265:
+A5265:  
 IFDEF IDEDOS1
-        ld	a,08fh
+	ld	a,08fh
 ELSE
-        ld      a,040H
+	ld      a,040H
 ENDIF
         pop     de
         call    A518E
@@ -3671,7 +3671,7 @@ NKEYNT  equ     (TKEYNT-T5374)/3
 
 
 ;       Subroutine      BDOS 02 (console output)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	53A7H
@@ -3709,7 +3709,7 @@ A53D5:  push    bc
 ; call    A408F                   ; output to screen
 ; nop
 ; call    A5412
-        call	A5412
+	call	A5412	
         ld	a,b
         call    A408F
 ; ----------------------------------
@@ -3773,7 +3773,7 @@ A5437:  xor     a
         ret
 
 ;       Subroutine      BDOS 0B (console status)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	543CH
@@ -3786,7 +3786,7 @@ A543C:  call    A5412
         ret
 
 ;       Subroutine      BDOS 01 (console input)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5445H
@@ -3799,7 +3799,7 @@ A5445:  call    A544E                   ; BDOS 8 (direct input)
         ret
 
 ;       Subroutine      BDOS 08 (direct input)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	544EH
@@ -3825,7 +3825,7 @@ A5454:  ld      a,e
         ret
 
 ;       Subroutine      BDOS 07 (MSXDOS direct input)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5462H
@@ -3834,7 +3834,7 @@ DOS_RAWINP:
 A5462:  jp      A4078                   ; get keyboardinput
 
 ;       Subroutine      BDOS 05 (printer output)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5465H
@@ -3847,7 +3847,7 @@ A5466:  push    af
         jp      A409B                   ; output to printer
 
 ;       Subroutine      BDOS 03 (auxiliary input)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	546EH
@@ -3857,7 +3857,7 @@ A546E:  call    A5412
         jp      SAUXIN
 
 ;       Subroutine      BDOS 04 (auxiliary output)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5474H
@@ -3977,7 +3977,7 @@ A5530:  ld      (MONTAB+1),a
 T5534:  defb    200,166,200,165,200,165,200,165
 
 ;       Subroutine      BDOS 2A (MSXDOS get date)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	553CH
@@ -3994,7 +3994,7 @@ A553C:  xor     a
         ret
 
 ;       Subroutine      BDOS 2B (set date)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	5552H
@@ -4081,7 +4081,7 @@ A55D2:  dec     a
         jr      A55D2
 
 ;       Subroutine      BDOS 2C (MSXDOS get time)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	55DBH
@@ -4096,7 +4096,7 @@ A55DB:  xor     a
         ret
 
 ;       Subroutine      BDOS 2D (set time)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	55E6H
@@ -4120,7 +4120,7 @@ A55E6:  ld      b,h
         ret
 
 ;       Subroutine      BDOS 2E (set verify flag)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;	_DOSCP	55FFH
@@ -4247,7 +4247,7 @@ T5696:  defb    080H,09AH,"E" ,'A' ,08EH,'A' ,08FH,080H
         defb    0B8H,0B8H
 
 ;       Subroutine      unsupported CP/M BDOS calls
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A56D0:  xor     a
@@ -4263,7 +4263,7 @@ A56D0:  xor     a
 
 
 ;       Subroutine      BDOS handler (for DiskBASIC)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A56D3:  ei
@@ -4402,26 +4402,26 @@ A580C:
 
 ; -------------------------------------
 IFDEF IDEDOS1
-        ; Check DOS version of the master disk interface, if less than 1.5 then take control.
-        ld      a,(FUTURE)		; FUTURE=DOS_VER in DOS2: 22h+ in DOS1: 0.
+	; Check DOS version of the master disk interface, if less than 1.5 then take control.
+	ld      a,(FUTURE)		; FUTURE=DOS_VER in DOS2: 22h+ in DOS1: 0. 
         cp      15h			; master disk system version 1.5 or higher ?
         jr	nc,r101			; yep
 
-        ; take control as master disk system version 1.5
-        ld	a,15h
+	; take control as master disk system version 1.5
+	ld	a,15h
         ld	(FUTURE),a
 
 ; patch H_RUNC to regain control after MSX BASIC starts
-        ld	hl,T5807
-        ld	de,H_RUNC
-        ld	bc,00005h
-        ldir
-        call	GETSLT
-        ld	(H_RUNC+1),a
+	ld	hl,T5807
+	ld	de,H_RUNC
+	ld	bc,00005h
+	ldir
+	call	GETSLT
+	ld	(H_RUNC+1),a
 r101:
 ENDIF
 ; -------------------------------------
-        ld      hl,DRVTBL               ; DRVTBL
+	ld      hl,DRVTBL               ; DRVTBL
         ld      b,4                     ; 4 disk interfaces
         xor     a                       ; number of drives = 0
 r270:
@@ -4574,19 +4574,19 @@ IFDEF IDEDOS1
 ; Allocate only 1.5K memory space for a 3 sector FAT buffer, for all drives.
 ; If the FAT is bigger than 3 sectors, the needed sector within the FAT will be swapped in from disk.
 ; FAT buffer: part 1 of 2
-        push hl
+	push hl
         call    A5EC8                   ; allocate memory (adjust BASIC areapointers, halt when error)
         ld      (SDIRBU),hl             ; allocate dirsector buffer
-        pop	hl
-        ld	d,h
-        ld	e,l
-        add	hl,hl
-        add	hl,de
-        inc	hl			; (size of biggest sector: 512) * 3 + 1
-        call	A5EC8			; AllocMem
-        ld	(HIMSAV),hl
-        inc 	hl
-        ld	(0ffdbh),hl		; FAT common buffer pointer
+	pop	hl
+	ld	d,h
+	ld	e,l
+	add	hl,hl
+	add	hl,de
+	inc	hl			; (size of biggest sector: 512) * 3 + 1
+	call	A5EC8			; AllocMem
+	ld	(HIMSAV),hl
+	inc 	hl
+	ld	(0ffdbh),hl		; FAT common buffer pointer
 ELSE
         call    A5EC8                   ; allocate memory (adjust BASIC areapointers, halt when error)
         ld      (SDIRBU),hl             ; allocate dirsector buffer
@@ -4615,14 +4615,14 @@ A592C:  ld      e,(hl)
         ld      (ix+0),c                ; set drivenumber in DPB
 IFDEF IDEDOS1
 ; FAT buffer: part 2 of 2
-        ld	hl,(0ffdbh)		; FAT common buffer (?)
+	ld	hl,(0ffdbh)		; FAT common buffer (?)
         ld      (ix+19),l
         ld      (ix+20),h
-        inc	c
-        pop	hl
-        djnz	A592C
-        ld	a,0ffh
-        ld	(0ffd9h),a		; Update current drive FAT status byte (?)
+	inc	c	
+	pop	hl
+	djnz	A592C
+	ld	a,0ffh
+	ld	(0ffd9h),a		; Update current drive FAT status byte (?)
 ELSE
 ; DOS 1 allocates memory for a full copy of the FAT for each drive, is limited
 ; to a FAT size of 3 sectors and runs out of memory with large disks (>16MB).
@@ -4719,11 +4719,11 @@ A59ED:  call    A5C16                   ; initialize diskbasic
 A59F3:  ld      hl,A5B3A
         push    hl                      ; if quit anywhere start diskbasic
 IFDEF BOOTCHOICE
-        call	BOOTMENU		; Sets boot drive
-        ret	c
+	call	BOOTMENU		; Sets boot drive
+	ret	c
 ENDIF
         call    A5AE7                   ; read bootsector (of 1st drive)
-        ret     c                       ; failed, start diskbasic
+	ret     c                       ; failed, start diskbasic
         call    A5ADB                   ; start bootcode with Cx reset (some disk can take control from here)
         ld      hl,(BOTTOM)
         ld      de,08000H
@@ -4739,11 +4739,11 @@ ENDIF
 
 ; MSXDOS requirement are met, try starting it
 
-A5A11:
+A5A11:  
 IFDEF BOOTCHOICE
-        LD	A,(CURDRV)		; Load drive that is set in the boot menu
+	LD	A,(CURDRV)		; Load drive that is set in the boot menu
 ELSE
-        XOR     A			; drive 0
+	XOR     A			; drive 0
 ENDIF
         CALL    A609A                   ; invalidate FAT buffer of the drive
         LD      HL,(HIMSAV)
@@ -4860,15 +4860,15 @@ A5ADB:  LD      HL,DISKVE               ; address diskerror handler pointer
 ;       Outputs         ________________________
 
 ;DiskBootSequence
-A5AE7:
+A5AE7:  
 IFDEF BOOTCHOICE
-        ld	bc,01f8h		; B=Number of sectors (1), C=Media ID (F8)
-        ld	hl,(SDIRBU)		; Begin address in memory
-        push	hl
-        or	a			; Reset carry flag for read
-        ld	de,$0000		; Begin sector (0 is boot sector)
+	ld	bc,01f8h		; B=Number of sectors (1), C=Media ID (F8)
+	ld	hl,(SDIRBU)		; Begin address in memory
+	push	hl
+	or	a			; Reset carry flag for read
+	ld	de,$0000		; Begin sector (0 is boot sector)
 ELSE
-        LD      A,(DEFDPB+1)
+	LD      A,(DEFDPB+1)
         LD      C,A                     ; default mediadescriptor
         LD      B,1                     ; 1 sector
         LD      HL,(SDIRBU)             ; use the dir sectorbuffer
@@ -4890,7 +4890,7 @@ ENDIF
         CP      0EBH
         RET     Z                       ; valid bootloader, quit
         CP      0E9H
-        RET     Z                       ; valid bootloader, quit
+	RET     Z                       ; valid bootloader, quit
 A5B8E:  SCF
         RET
 
@@ -5148,7 +5148,7 @@ IFNDEF IDEDOS1
         nop
         nop
         nop
-        nop                             ; room for expansion
+        nop                             ; room for expansion 
         nop                             ; extra 5 bytes
 ENDIF
         ld      a,(COUNTR)
@@ -5363,7 +5363,7 @@ J5EA7:  INC     HL
 
 ;       Subroutine      allocate MSXDOS memory (halt when error)
 ;       Inputs          HL = number of bytes to allocate
-;       Outputs
+;       Outputs         
 
 A5EAD:  ld      hl,(DOSHIM)
         and     a
@@ -5373,7 +5373,7 @@ A5EAD:  ld      hl,(DOSHIM)
 
 ;       Subroutine      allocate memory (adjust HIMEM, halt when error)
 ;       Inputs          HL = number of bytes to allocate
-;       Outputs
+;       Outputs         
 
 A5EB8:  ld      hl,(HIMEM)
         and     a
@@ -5386,17 +5386,17 @@ A5EC1:  jr      c,A5ECC                 ; new top below zero, halt system
 
 ;       Subroutine      allocate memory (adjust BASIC areapointers, halt when error)
 ;       Inputs          HL = number of bytes to allocate
-;       Outputs
+;       Outputs         
 
 A5EC8:  call    A5EE8                   ; allocate memory (adjust BASIC areapointers)
 A5ECB:  ret     nc
 A5ECC:  call    PrintMsg
         defb    12
-T5ED0:
+T5ED0:  
 IFDEF IDEDOS1
-        defb    "Not enough memory for IDE",0
+	defb    "Not enough memory for IDE",0
 ELSE
-        defb    "No enough memory",0
+	defb    "No enough memory",0
         nop
         nop
         nop
@@ -5513,7 +5513,7 @@ A5F5F:  ld      a,1
 
 ; A5F86
 PrintMsg:
-        ex      (sp),hl
+	ex      (sp),hl
         call    A5F8C                   ; print string
         ex      (sp),hl
         ret
@@ -5566,8 +5566,8 @@ A5FAE:  rrca
 ;       Outputs         A = slotid
 
 ; A5FB3
-GetMySlot:
-        call    A5FE7
+GetMySlot:  
+	call    A5FE7
         or      (hl)
         ret     p                       ; non expanded slot, quit
         ld      c,a
@@ -5586,8 +5586,8 @@ A5FBE:  and     00CH
 ;       Remark          used by the disk hardware driver
 
 GETWRK:
-A5FC2:
-        call    A5FCD                   ; get my SLTWRK entry
+A5FC2:  
+	call    A5FCD                   ; get my SLTWRK entry
         ld      a,(hl)
         inc     hl
         ld      h,(hl)
@@ -5708,9 +5708,9 @@ A603F:  ex      de,hl
 
 ; A6052
 ReadSector_all:
-        and	a
+	and	a
 IFDEF IDEDOS1
-        jr	PhyDiskIO
+	jr	PhyDiskIO
 ELSE
         defb    038H                    ; JR C,xx (skips next instruction)
 ENDIF
@@ -5721,7 +5721,7 @@ ENDIF
 
 ; A6054
 WriteSector_all:
-        scf
+	scf
 
 ;       Subroutine      PHYDIO BIOS call (H_PHYD)
 ;       Inputs          A = driveid, B = number of sectors, C = mediadescriptor, DE = start sector, HL = transferaddress
@@ -5731,19 +5731,19 @@ WriteSector_all:
 PhyDiskIO:
 IFDEF IDEDOS1
 ; Convert BEER 24-bit sector number method to FAT16 / Nextor 23-bit sector number method
-        push    af
-        ld      a,d
-        and     e
-        inc     a
-        jr	nz,r60551		; sector number <> ffff is 16-bit
-        ld	de,(0fd0dh)		; load sector number bit 0..15
-        ld	a,(0fd0fh)		; load sector number bit 16..22
-        and	07fh			; make sure that 16-bit flag is reset
-        ld	c,a
+	push    af
+	ld      a,d
+	and     e
+	inc     a
+	jr	nz,r60551		; sector number <> ffff is 16-bit
+	ld	de,(0fd0dh)		; load sector number bit 0..15
+	ld	a,(0fd0fh)		; load sector number bit 16..22
+	and	07fh			; make sure that 16-bit flag is reset
+	ld	c,a
 r60551: pop     af
 ENDIF
-        push    ix
-        push    iy
+	push    ix
+	push    iy
         push    hl
         push    af
         call    A6086                   ; get diskdriverparameters
@@ -5759,8 +5759,8 @@ A6067:  push    ix
         jr      A6075
 
 ; A606F
-SetDPB_all:
-        push    ix
+SetDPB_all:  
+	push    ix
         ld      ix,T4016
 A6075:  push    iy
         push    hl
@@ -5820,7 +5820,7 @@ A609A:  ld      hl,SDPBLI
         ret
 
 ;       Subroutine      FORMAT BIOS call (H_FORM)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A60B0:  and     a                       ; use free BASIC memory as formatbuffer
@@ -5918,7 +5918,7 @@ A615D:  call    A62C9                   ; print CR/LF
         jp      A62C9                   ; print CR/LF
 
 ;       Subroutine      get fresh keyboardinput
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6166:  xor     a
@@ -6070,7 +6070,7 @@ A62D6:  ld      hl,0FF00H
         ret
 
 ;       Subroutine      first character filespecifier is 000H-039H (H_POSD)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 T62E8:  inc     sp
@@ -6238,66 +6238,66 @@ L63A1   EQU     T63BA-I63A1
 ; ---------------------------------------------------------------------------------------
 ; Dynamic relocated code: update table if code below is modified!
 
-T63BA:
+T63BA:  
 IFDEF IDEDOS1
-        DEFW	C63F4-C63F4	; 0000H
-        DEFW	R0003-C63F4	; 0003H
-        DEFW	J6404-C63F4	; 0010H
-        DEFW	R0013-C63F4	; 0013H
-        DEFW	R0017-C63F4	; 0017H
-        DEFW	R001C-C63F4	; 001CH
-        DEFW	R0022-C63F4	; 0022H
-        DEFW	R0025-C63F4	; 0025H
-        DEFW	J6425-C63F4	; 0031H
-        DEFW	R0034-C63F4	; 0034H
-        DEFW	R0039-C63F4	; 0039H
-        DEFW	R003F-C63F4	; 003FH
-        DEFW	R0069-C63F4	; 0068H + 1 (modified undocumented instruction)
-        DEFW	R006C-C63F4	; 006BH + 1
-        DEFW	R0074-C63F4	; 0073H + 1
-        DEFW	J646C-C63F4	; 0087H	+ 1
-        DEFW	R007B-C63F4	; 008AH + 1
-        DEFW	R007E-C63F4	; 008DH + 1
-        DEFW	R0094-C63F4	; 00A3H + 1
-        DEFW	J649C-C63F4	; 00B7H + 1
-        DEFW	R00AB-C63F4	; 00BAH + 1
-        DEFW	J64A9-C63F4	; 00C4H + 1
-        DEFW	R00B8-C63F4	; 00C7H + 1
-        DEFW	R00BC-C63F4	; 00CBH + 1
-        DEFW	J651E-C63F4	; 0139H	+ 1
-        DEFW	R0131-C63F4	; 0140H + 1
-        DEFW	J652C-C63F4	; 0147H + 1
-        DEFW	R0145-C63F4	; 0154H + 1
-        DEFW	C6541-C63F4	; 015CH + 1
+	DEFW	C63F4-C63F4	; 0000H
+	DEFW	R0003-C63F4	; 0003H
+	DEFW	J6404-C63F4	; 0010H
+	DEFW	R0013-C63F4	; 0013H
+	DEFW	R0017-C63F4	; 0017H
+	DEFW	R001C-C63F4	; 001CH
+	DEFW	R0022-C63F4	; 0022H
+	DEFW	R0025-C63F4	; 0025H
+	DEFW	J6425-C63F4	; 0031H
+	DEFW	R0034-C63F4	; 0034H
+	DEFW	R0039-C63F4	; 0039H
+	DEFW	R003F-C63F4	; 003FH	
+	DEFW	R0069-C63F4	; 0068H + 1 (modified undocumented instruction)
+	DEFW	R006C-C63F4	; 006BH + 1
+	DEFW	R0074-C63F4	; 0073H + 1
+	DEFW	J646C-C63F4	; 0087H	+ 1
+	DEFW	R007B-C63F4	; 008AH + 1
+	DEFW	R007E-C63F4	; 008DH + 1
+	DEFW	R0094-C63F4	; 00A3H + 1
+	DEFW	J649C-C63F4	; 00B7H + 1
+	DEFW	R00AB-C63F4	; 00BAH + 1
+	DEFW	J64A9-C63F4	; 00C4H + 1
+	DEFW	R00B8-C63F4	; 00C7H + 1
+	DEFW	R00BC-C63F4	; 00CBH + 1
+	DEFW	J651E-C63F4	; 0139H	+ 1
+	DEFW	R0131-C63F4	; 0140H + 1
+	DEFW	J652C-C63F4	; 0147H + 1
+	DEFW	R0145-C63F4	; 0154H + 1
+	DEFW	C6541-C63F4	; 015CH + 1
 ELSE
-        DEFW    C63F4-C63F4
-        DEFW    R0003-C63F4
-        DEFW    R0017-C63F4
-        DEFW    R001C-C63F4
-        DEFW    R0022-C63F4
-        DEFW    R0025-C63F4
-        DEFW    R0039-C63F4
-        DEFW    R003F-C63F4
-        DEFW    R0069-C63F4
-        DEFW    R006C-C63F4
-        DEFW    R007E-C63F4
-        DEFW    R0094-C63F4
-        DEFW    J649C-C63F4
-        DEFW    R00AB-C63F4
-        DEFW    R00BC-C63F4
-        DEFW    J6404-C63F4
-        DEFW    R0013-C63F4
-        DEFW    J6425-C63F4
-        DEFW    R0034-C63F4
-        DEFW    J646C-C63F4
-        DEFW    R007B-C63F4
-        DEFW    J64A9-C63F4
-        DEFW    R00B8-C63F4
-        DEFW    J651E-C63F4
-        DEFW    R0131-C63F4
-        DEFW    J652C-C63F4
-        DEFW    R0145-C63F4
-        DEFW    C6541-C63F4
+	DEFW    C63F4-C63F4
+        DEFW    R0003-C63F4 
+        DEFW    R0017-C63F4 
+        DEFW    R001C-C63F4 
+        DEFW    R0022-C63F4 
+        DEFW    R0025-C63F4 
+        DEFW    R0039-C63F4 
+        DEFW    R003F-C63F4 
+        DEFW    R0069-C63F4 
+        DEFW    R006C-C63F4 
+        DEFW    R007E-C63F4 
+        DEFW    R0094-C63F4 
+        DEFW    J649C-C63F4 
+        DEFW    R00AB-C63F4 
+        DEFW    R00BC-C63F4 
+        DEFW    J6404-C63F4 
+        DEFW    R0013-C63F4 
+        DEFW    J6425-C63F4 
+        DEFW    R0034-C63F4 
+        DEFW    J646C-C63F4 
+        DEFW    R007B-C63F4 
+        DEFW    J64A9-C63F4 
+        DEFW    R00B8-C63F4 
+        DEFW    J651E-C63F4 
+        DEFW    R0131-C63F4 
+        DEFW    J652C-C63F4 
+        DEFW    R0145-C63F4 
+        DEFW    C6541-C63F4 
 ENDIF
         DEFW    0FFFFH
 
@@ -6311,7 +6311,7 @@ R0003:  JP      M,J6404                 ; slot is expanded,
         LD      D,A
         AND     C
         OR      B
-        CALL    RDPRIM
+	CALL    RDPRIM
         LD      A,E
         RET
 
@@ -6399,22 +6399,22 @@ IFDEF IDEDOS1
 ;	in another slot, control did not return after inter-slot call.
 ;	Saving secondary slot register seems to fix this and be quite portable.
 ;
-        ld	a,(0FFFFh)
-        cpl
-        push	af
+	ld	a,(0FFFFh)
+	cpl
+	push	af
 R0074:	ld	hl,sscret
-        push	hl
-        in	a,(0A8h)
-        push	af
-        and	c
-        or	b
-        exx
-        jp	0F38Ch
+	push	hl
+	in	a,(0A8h)
+	push	af
+	and	c
+	or	b
+	exx
+	jp	0F38Ch
 sscret:	ex	af,af'
-        pop	af
-        ld	(0FFFFh),a
-        ex	af,af'
-        ret
+	pop	af
+	ld	(0FFFFh),a
+	ex	af,af'	
+	ret
 ELSE
         IN      A,(0A8H)
         PUSH    AF
@@ -6655,7 +6655,7 @@ L63F4   EQU     C655C-C63F4
 ;       Outputs         _______________________
 
 C655C:
-        PHASE	003BH
+	PHASE	003BH
 
 X003B:  OUT     (0A8H),A                ; make secondary slotregister accessable (switch page 3)
         LD      A,(YFFFF)
@@ -6684,15 +6684,15 @@ J656F:  LD      (YFFFF),A
         OUT     (0A8H),A
         RET
 
-        DEPHASE
+	DEPHASE
 
 L655C   EQU     A6576-C655C
 
-A6576:
+A6576:  
 IFDEF IDEDOS1
-        ei
+	ei
 ENDIF
-        ld      a,(H_GETP+0)
+	ld      a,(H_GETP+0)
         cp      0C9H
         scf
         ret     z
@@ -6706,7 +6706,7 @@ A658A:  ld      de,PROCNM
 A658D:  ld      a,(de)
         cp      (hl)
 IFDEF IDEDOS1
-        jr	nz,A65A1
+	jr	nz,A65A1
         inc     de
         inc     hl
 ELSE
@@ -6726,14 +6726,14 @@ ENDIF
         ccf
         ret
 
-A65A1:
+A65A1:	
 IFDEF IDEDOS1
-        ld	a,(hl)
-        and	a
-        inc	hl
+	ld	a,(hl)
+	and	a
+	inc	hl
         jr      nz,A65A1
 ELSE
-        inc     hl
+	inc     hl
         ld      a,(hl)
 A65A3:  and     a
         jr      nz,A65A1
@@ -6916,7 +6916,7 @@ A66A0:  pop     bc
         ret
 
 ;       Subroutine      get pointer to i/o channel (H_GETP)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A66A4:  ld      ix,RETRTN
@@ -6928,7 +6928,7 @@ A66A4:  ld      ix,RETRTN
         ret
 
 ;       Subroutine      OPEN statement expander (H_NOFO)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A66B3:  ei
@@ -7151,7 +7151,7 @@ A6813:  ld      (hl),b
         ret
 
 ;       Subroutine      input from i/o channel (H_INDS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6819:  ld      ix,RETRTN
@@ -7220,7 +7220,7 @@ A6866:  ld      b,a
         ret
 
 ;       Subroutine      putback for diskdevices (H_BAKU)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6875:  ei
@@ -7242,7 +7242,7 @@ A6882:  add     hl,sp
         ret
 
 ;       Subroutine      output to i/o channel (H_FILO)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A688E:  ld      ix,RETRTN
@@ -7290,7 +7290,7 @@ A68CB:  call    A718F                   ; random block write
         ret
 
 ;       Subroutine      close i/o channel for diskdevices (H_NTFL)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A68D0:  ld      ix,RETRTN
@@ -7332,7 +7332,7 @@ A68F4:  push    hl
         ret
 
 ;       Subroutine      Binary Save  (H_BINS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A690E:  call    A7380                   ; take control from caller
@@ -7354,7 +7354,7 @@ A690E:  call    A7380                   ; take control from caller
         jp      A731E                   ; close i/o channel
 
 ;       Subroutine      Binary Load  (H_BINL)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6939:  ld      ix,M739A                ; quit loading & start (headloop/executing)
@@ -7445,7 +7445,7 @@ A69E2:  ld      hl,00001H
         ret
 
 ;       Subroutine      BSAVE for diskdevices
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A69E7:  push    de
@@ -7549,7 +7549,7 @@ A6A9E:  pop     hl
         jr      A6A5D
 
 ;       Subroutine      BLOAD for diskdevices
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6AA7:  push    de
@@ -7660,7 +7660,7 @@ A6B6E:  ld      ix,M6F0B
         jp      A731E                   ; evaluate address operand (BLOAD/SAVE)
 
 ;       Subroutine      DSKIS function (H_DSKI)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6B75:  call    A7380                   ; take control from caller
@@ -7680,7 +7680,7 @@ A6B75:  call    A7380                   ; take control from caller
         jr      A6BA1
 
 ;       Subroutine      DSKO statement (H_DSKO)
-;       Inputs
+;       Inputs          
 ;       Outputs
 
 A6B96:  call    A7380                   ; take control from caller
@@ -7720,7 +7720,7 @@ A6BC5:  ld      ix,GETBYT
         ret
 
 ;       Subroutine      GET/PUT statement (H_DGET)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6BDA:  ld      ix,RETRTN
@@ -7791,7 +7791,7 @@ A6C3F:  push    hl
         jp      A6EF8
 
 ;       Subroutine      FIELD statement (H_FIEL)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6C49:  call    A7380                   ; take control from caller
@@ -7869,13 +7869,13 @@ A6C8B:  ex      de,hl
         jr      A6C8B			; next
 
 ;       Subroutine      RSET statement (H_RSET)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6CD6:  defb    0F6H			; OR xx: trick to skip next instrunction
 
 ;       Subroutine      LSET statement (H_LSET)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6CD7:  scf
@@ -8018,21 +8018,21 @@ A6DA9:  ex      (sp),hl
         jp      A6D2A
 
 ;       Subroutine      MKIS function (H_MKIS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DAF:  ld      a,2
         defb    001H
 
 ;       Subroutine      MKSS function (H_MKSS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DB2:  ld      a,4
         defb    001H
 
 ;       Subroutine      MKDS function (H_MKDS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DB5:  ld      a,8
@@ -8054,21 +8054,21 @@ A6DB5:  ld      a,8
         nop
 
 ;       Subroutine      CVI function (H_CVI)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DD7:  ld      a,2-1
         defb    001H
 
 ;       Subroutine      CVS function (H_CVS)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DDA:  ld      a,4-1
         defb    001H
 
 ;       Subroutine      CVD function (H_CVD)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6DDD:  ld      a,8-1
@@ -8134,7 +8134,7 @@ A6DFB:  ld      ix,GETYPR
 T6E68:  defb    045H,065H,053H,060H,000H,000H,000H,000H
 
 ;       Subroutine       (H_EOF)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6E70:  call    A7380                   ; take control from caller
@@ -8154,7 +8154,7 @@ A6E7D:  push    af
         ret
 
 ;       Subroutine      FILES/LFILES statement (H_FILE)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6E88:  call    A7380                   ; take control from caller
@@ -8218,7 +8218,7 @@ A6EF8:  pop     hl
         jp      A731E                   ; output back to screen and quit
 
 ;       Subroutine      KILL statement (H_KILL)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6F00:  call    A7380                   ; take control from caller
@@ -8237,7 +8237,7 @@ A6F00:  call    A7380                   ; take control from caller
         ret
 
 ;       Subroutine      NAME statement (H_NAME)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A6F20:  call    A7380                   ; take control from caller
@@ -8387,14 +8387,14 @@ A7003:  ld      (hl),'?'
         ret
 
 ;       Subroutine       (H_LOF)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A7009:  ld      bc,00010H
         defb    011H
 
 ;       Subroutine       (H_LOC)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A700D:  ld      bc,00021H
@@ -8438,7 +8438,7 @@ A700D:  ld      bc,00021H
         jp      DECADD                  ; dbl add
 
 ;       Subroutine      DSKF function (H_DSKF)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A7061:  call    A7380                   ; take control from caller
@@ -8453,7 +8453,7 @@ A7074:  ld      e,a
         jp      MAKINT                  ; integer to DAC
 
 ;       Subroutine      COPY statement (H_COPY)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A707B:  call    A7380                   ; take control from caller
@@ -8626,20 +8626,20 @@ A71B7:  ld      e,047H
         jp      A731E
 
 ;       Subroutine      expand errormessages (H_ERRP)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A71D3:
 IFDEF IDEDOS1
-        ei
-        ld	a,e
-        sub	3ch
-        ret	c
-        cp	0ch
-        ret	nc
-        inc	a
+	ei
+	ld	a,e
+	sub	3ch
+	ret	c
+	cp	0ch
+	ret	nc
+	inc	a
 ELSE
-        ld      a,e
+	ld      a,e
         cp      03CH                    ; normal BASIC error ?
         ret     c                       ; yep, quit
         cp      048H                    ; DiskBASIC error ?
@@ -8775,7 +8775,7 @@ A731E:  call    CALBAS
         ret
 
 ;       Subroutine      devicename parser (H_PARD)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A7323:  ei
@@ -8823,7 +8823,7 @@ A7350:  pop     de
         call    A7380                   ; take control from caller
         ld      a,(hl)
         and     0DFH                    ; upcase
-        sub     040H                    ; to drivenumber/deviceid for disk (1...)
+        sub     040H                    ; to drivenumber/deviceid for disk (1...) 
         push    hl
         ld      hl,SNUMDR
         cp      (hl)                    ; valid drive ?
@@ -8840,7 +8840,7 @@ A7374:  inc     hl
         ret
 
 ;       Subroutine      no device specified (H_NODE)
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 A737C:  ei
@@ -8848,7 +8848,7 @@ A737C:  ei
         ret
 
 ;       Subroutine      take control from caller
-;       Inputs
+;       Inputs          
 ;       Outputs         ________________________
 
 ;       This is what the stack looks like at entry:
@@ -8876,7 +8876,7 @@ A738E:  add     hl,sp
         ret
 
 A7397:
-        PHASE	0F1C9H
+	PHASE	0F1C9H
 
 ;       Subroutine      BDOS 09 (output string)
 ;       Inputs          DE = address of string
@@ -8952,8 +8952,8 @@ DEVDIR: defb    "           "
         defw    0,0
 
 MONTAB: defb    31,28,31,30,31,30,31,31,30,31,30,31
-
-        DEPHASE
+	
+	DEPHASE
 
 E7397:
 L7397	EQU	E7397-A7397
@@ -8961,7 +8961,7 @@ L7397	EQU	E7397-A7397
 IFDEF IDEDOS1
 
 ; ------------------------------------------------------------------------------
-; Multi-FAT swapper
+; Multi-FAT swapper                                          
 ; ------------------------------------------------------------------------------
 ; uses system variables:
 ; 0FD09 FAT pointer
@@ -8971,247 +8971,247 @@ IFDEF IDEDOS1
 ; 0FFDA FAT block# in buffer
 ; 0FFDB	Common buffer indicator
 
-FAT_read:
-        ld 	a,h
-        or 	l
-        jp 	nz,GETFAT
-        ld 	hl,(0fd09h)	; see FAT_write
-        ret
+FAT_read: 
+	ld 	a,h
+  	or 	l
+  	jp 	nz,GETFAT
+  	ld 	hl,(0fd09h)	; see FAT_write
+  	ret
 
 NewGetFAT:
-        call	H_UNPA
+	call	H_UNPA
 IFDEF FAT16DOS1
-        call	FAT_Swapper
-        ld	a,(ix+00fh)
-        cp	010h
-        jp	nc,F16P03
-        jp	OldGetFAT
+	call	FAT_Swapper
+	ld	a,(ix+00fh)
+	cp	010h
+	jp	nc,F16P03
+	jp	OldGetFAT
 ELSE
-        jp	FAT_Swapper
+	jp	FAT_Swapper
 ENDIF
 
 
 FAT_write:
-        ld	a,h
-        or	l
-        jr 	nz,NewPutFAT
-        ld 	(0fd09h),bc	; see FAT_read
-        ret
+	ld	a,h
+	or	l
+	jr 	nz,NewPutFAT
+	ld 	(0fd09h),bc	; see FAT_read
+	ret
 
 NewPutFAT:
-        call	FAT_Swapper
-        dec	de
-        ld	a,001h
-        ld	(de),a
-        inc	de
-        jp	PutFAT
+	call	FAT_Swapper
+	dec	de
+	ld	a,001h
+	ld	(de),a
+	inc	de
+	jp	PutFAT
 
 FAT_Swapper:
-        push	hl
-        ld	hl,(0ffdbh)	;Is this FAT in common buffer
-        ld	e,(ix+013h)
-        ld	d,(ix+014h)
-        or	a
-        sbc	hl,de
-        pop	hl
-        ret	nz		;No -> do no swapping
-        ld	a,(0ffd9h)	;Is current's drive FAT buffered?
-        cp 	(ix+00h)
-        jr	z,r569
-        call	SWAFAT		;if no -> swap immediately
-        jr	r570
+	push	hl
+	ld	hl,(0ffdbh)	;Is this FAT in common buffer
+	ld	e,(ix+013h)
+	ld	d,(ix+014h)
+	or	a
+	sbc	hl,de
+	pop	hl
+	ret	nz		;No -> do no swapping
+	ld	a,(0ffd9h)	;Is current's drive FAT buffered?
+	cp 	(ix+00h)
+	jr	z,r569
+	call	SWAFAT		;if no -> swap immediately
+	jr	r570
 
-r569:
+r569:	
 IFDEF FAT16DOS1
-        call	F16P04
+	call	F16P04
 ELSE
-        ld	a,h
-        rra
-        rra
-        and	003h
+	ld	a,h
+	rra
+	rra
+	and	003h
 ENDIF
-        push	hl
-        ld	hl,0ffdah
-        cp 	(hl)
-        pop	hl		;compare to block # in buffer
-        call	nz,SWAFAT 	;If no match -> swap FATS
+	push	hl
+	ld	hl,0ffdah
+	cp 	(hl)
+	pop	hl		;compare to block # in buffer
+	call	nz,SWAFAT 	;If no match -> swap FATS
 r570:	ld	a,(ix+00fh)
-        cp	010h
-        ld	a,h
-        jr	nc,A746F
-        and 	003h
-        ld	h,a		;mask FAT entry addres to block size
-        ret
+	cp	010h
+	ld	a,h
+	jr	nc,A746F
+	and 	003h
+	ld	h,a		;mask FAT entry addres to block size
+	ret
 
 A746F:	sub	003h
-        jr	nc,A746F
-        add	a,003h
-        ld	h,a
-        ret
+	jr	nc,A746F
+	add	a,003h
+	ld	h,a
+	ret
 
 ; ------------------------------------------
 ; Swapping FAT buffers
 ; ------------------------------------------
 SWAFAT:	push	hl
-        call	SaveFATbuf
-        pop	hl
+	call	SaveFATbuf
+	pop	hl
 ReadFATbuf:
-        ld	a,(ix+00h)
-        ld	(0ffd9h),a	;FAT's drive
+	ld	a,(ix+00h)
+	ld	(0ffd9h),a	;FAT's drive
 IFDEF FAT16DOS1
-        call	F16P04
+	call	F16P04
 ELSE
-        ld	a,h
-        rra
-        rra
-        and	003h
+	ld	a,h
+	rra
+	rra
+	and	003h
 ENDIF
-        ld	(0ffdah),a	;FAT's block no
-        push	hl
-        push	de
-        push	bc
-        call	GetFATbuf
-        ld	b,a
-        ld	a,(0FFDAh)
-        ld	c,a
-        add	a,a
-        add	a,c
-        add	a,e
-        ld	e,a
-        jr	nc,r571
-        inc	d
+	ld	(0ffdah),a	;FAT's block no
+	push	hl
+	push	de
+	push	bc
+	call	GetFATbuf
+	ld	b,a
+	ld	a,(0FFDAh)
+	ld	c,a
+	add	a,a
+	add	a,c
+	add	a,e
+	ld	e,a
+	jr	nc,r571
+	inc	d
 r571:	push	hl
-        push	de
-        push	bc
-        ld	b,3
-        call	DiskReadSect
-        pop	bc
-        pop	de
-        pop	hl
-        jr	nc,r572
-        ld	a,(ix+10h)
-        add	a,e
-        ld	e,a
-        jr	nc,r573
-        inc	d
+	push	de
+	push	bc
+	ld	b,3
+	call	DiskReadSect
+	pop	bc
+	pop	de
+	pop	hl
+	jr	nc,r572
+	ld	a,(ix+10h)
+	add	a,e
+	ld	e,a
+	jr	nc,r573
+	inc	d
 r573:	djnz	r571
-        call	GetFATbuf
-        ld	b,3
-        call	DSK_abs_read
+	call	GetFATbuf
+	ld	b,3
+	call	DSK_abs_read
 r572:	pop	bc
-        pop	de
-        pop	hl
-        ret
+	pop	de
+	pop	hl
+	ret
 
 DiskReadSect:
-        call	0F270h
-        ld	a,(ix+00h)
-        ld	c,(ix+01h)
-        jp	ReadSector_all
+	call	0F270h
+	ld	a,(ix+00h)
+	ld	c,(ix+01h)
+	jp	ReadSector_all
 
 NewUpdateFAT:
-        push	de
-        ld	e,(ix+13h)
-        ld	d,(ix+14h)
-        ld	hl,(0FFDBh)
-        or	a
-        sbc	hl,de
-        pop	de
-        jp	nz,r574
+	push	de
+	ld	e,(ix+13h)
+	ld	d,(ix+14h)
+	ld	hl,(0FFDBh)
+	or	a
+	sbc	hl,de
+	pop	de
+	jp	nz,r574
 SaveFATbuf:
-        push	bc
-        push	de
-        push	ix
-        ld	a,(0FFD9h)
-        call	GetDPBptr
-        ld	c,(hl)
-        inc	hl
-        ld	b,(hl)
-        push	bc
-        pop	ix
-        call	GetFATbuf
-        ld	b,a
-        dec	hl
-        ld	a,(hl)
-        ld	(hl),0
-        inc	hl
-        cp	1
-        jp	nz,r575
-        ld	a,(0FFDAh)
-        ld	c,a
-        add	a,a
-        add	a,c
-        add	a,e
-        ld	e,a
-        jr	nc,r576
-        inc	d
+	push	bc
+	push	de
+	push	ix
+	ld	a,(0FFD9h)
+	call	GetDPBptr
+	ld	c,(hl)
+	inc	hl
+	ld	b,(hl)
+	push	bc
+	pop	ix
+	call	GetFATbuf
+	ld	b,a
+	dec	hl
+	ld	a,(hl)
+	ld	(hl),0
+	inc	hl
+	cp	1
+	jp	nz,r575
+	ld	a,(0FFDAh)
+	ld	c,a
+	add	a,a
+	add	a,c
+	add	a,e
+	ld	e,a
+	jr	nc,r576
+	inc	d
 r576:	push	de
-        push	bc
-        push	hl
-        ld	a,(0FFDAh)
-        ld	b,a
-        add	a,a
-        add	a,b
-        ld	b,a
-        ld	a,(ix+10h)
-        sub	b
-        jr	z,r575
-        cp	3
-        ld	b,a
-        jr	c,r577
-        ld	b,3
+	push	bc
+	push	hl
+	ld	a,(0FFDAh)
+	ld	b,a
+	add	a,a
+	add	a,b
+	ld	b,a
+	ld	a,(ix+10h)
+	sub	b
+	jr	z,r575
+	cp	3
+	ld	b,a
+	jr	c,r577
+	ld	b,3
 r577:	ld	a,(ix+00h)
-        call	DSK_abs_write
-        pop	hl
-        pop	bc
-        pop	de
-        ld	a,e
-        add	a,(ix+10h)
-        ld	e,a
-        jr	nc,r578
-        inc	d
+	call	DSK_abs_write
+	pop	hl
+	pop	bc
+	pop	de
+	ld	a,e
+	add	a,(ix+10h)
+	ld	e,a
+	jr	nc,r578
+	inc	d
 r578:	djnz	r576
 r575:	pop	ix
-        pop	de
-        pop	bc
-        ret
+	pop	de
+	pop	bc
+	ret
 
 r574:	call	GetFATbuf
 r579:	push	af
-        push	ix
-        push	hl
-        push	de
-        push	bc
-        ld	a,(ix+00h)
-        ld	c,(ix+01h)
-        call	DSK_abs_write
-        pop	bc
-        pop	de
-        ld	a,e
-        add	a,b
-        ld	e,a
-        ld	a,0
-        adc	a,d
-        ld	d,a
-        pop	hl
-        pop	ix
-        pop	af
-        dec	a
-        jr	nz,r579
-        ret
+	push	ix
+	push	hl
+	push	de
+	push	bc
+	ld	a,(ix+00h)
+	ld	c,(ix+01h)
+	call	DSK_abs_write
+	pop	bc
+	pop	de
+	ld	a,e
+	add	a,b
+	ld	e,a
+	ld	a,0
+	adc	a,d
+	ld	d,a
+	pop	hl
+	pop	ix
+	pop	af
+	dec	a
+	jr	nz,r579
+	ret
 
 ; ------------------------------------------
 NewGetFATbuf:
 A752B:	ld	a,(0FFD9h)		; Drive of FAT buffer
-        cp	(ix)			; Is current drive?
-        call	nz,SaveFATbuf
-        ld	a,(THISDR)		; Current driveid
-        call	ReadFATbuf
-        ld	l,(ix+13h)
-        ld	h,(ix+14h)		; pointer to FAT buffer of drive
-        dec	hl
-        ld	(hl),0			; FAT buffer clean
-        jp	DPB_change_entry
+	cp	(ix)			; Is current drive?
+	call	nz,SaveFATbuf
+	ld	a,(THISDR)		; Current driveid
+	call	ReadFATbuf
+	ld	l,(ix+13h)
+	ld	h,(ix+14h)		; pointer to FAT buffer of drive
+	dec	hl
+	ld	(hl),0			; FAT buffer clean
+	jp	DPB_change_entry
 
 ; ------------------------------------------
 ; FAT16 routines
@@ -9222,112 +9222,112 @@ A752B:	ld	a,(0FFD9h)		; Drive of FAT buffer
 IFDEF FAT16DOS1
 ; ------------------------------------------
 F16P01:	ld	a,(ix+00fh)		; max clusters high byte
-        cp	010h			; > 12-bit?
-        jr	nc,r1602
-        ld	a,h
-        cp	00fh			; end cluster chain (FAT12)?
+	cp	010h			; > 12-bit?
+	jr	nc,r1602
+	ld	a,h
+	cp	00fh			; end cluster chain (FAT12)?
 r1601:	ret	c
-        ld	a,l
-        cp	0f7h			; end of chain: nc >= fff7 or >=0ff7
-        ret
+	ld	a,l
+	cp	0f7h			; end of chain: nc >= fff7 or >=0ff7
+	ret     
 r1602:	ld	a,h
-        cp	0ffh			; end cluster chain (FAT16)?
-        jr	r1601
+	cp	0ffh			; end cluster chain (FAT16)?
+	jr	r1601
 
 ; ------------------------------------------
 F16P02:	push	de
-        ld	e,l
-        ld	d,h
-        ld	a,(ix+00fh)		; max clusters high byte
-        cp	010h			; > 12-bit?
-        jp	c,r1603			; c=no
-        add	hl,de
-        pop	de
-        add	hl,de
-        ld	(hl),c
-        inc	hl
-        ld	(hl),b
-        ret
+	ld	e,l
+	ld	d,h
+	ld	a,(ix+00fh)		; max clusters high byte
+	cp	010h			; > 12-bit?
+	jp	c,r1603			; c=no
+	add	hl,de
+	pop	de
+	add	hl,de
+	ld	(hl),c
+	inc	hl
+	ld	(hl),b
+	ret
 
 r1603:	ld	a,b
-        and	00fh
-        ld	b,a
-        jp	OldPutFAT
+	and	00fh
+	ld	b,a
+	jp	OldPutFAT
 
 ; ------------------------------------------
 F16P03:	add	hl,hl
-        add	hl,de
-        ld	a,(hl)
-        inc	hl
-        ld	h,(hl)
-        ld	l,a
-        or	h
-        ret
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	or	h
+	ret
 
 ; ------------------------------------------
 F16P04:	ld	a,(ix+00fh)		; max clusters high byte
-        cp	010h			; > 12-bit?
-        jr	nc,A75B2		; nc=yes
-        ld	a,h
-        rra
-        rra
-        and	003h
-        ret
+	cp	010h			; > 12-bit?
+	jr	nc,A75B2		; nc=yes
+	ld	a,h
+	rra
+	rra
+	and	003h
+	ret
 A75B2:	ld	a,h
-        push	bc
-        ld	c,0ffh
+	push	bc
+	ld	c,0ffh
 A75B6:	inc	c
-        sub	003h
-        jr	nc,A75B6
-        ld	a,c
-        pop	bc
-        ret
+	sub	003h
+	jr	nc,A75B6
+	ld	a,c
+	pop	bc
+	ret
 
 ; ------------------------------------------
 F16P05:	ld	c,000h
-        dec	b
-        jr	z,r1605
+	dec	b
+	jr	z,r1605
 r1604:	add	hl,hl
-        rl	c
-        djnz	r1604
+	rl	c
+	djnz	r1604
 r1605:	or	l
-        ld	l,a
-        ld	a,c
-        ld	c,(ix+00ch)
-        ld	b,(ix+00dh)
-        add	hl,bc
-        adc	a,000h
-        pop	bc
-        ret	z
-        ld	(0fd0dh),hl	; store 24-bit sector number bit 0..15
-        ld	l,a
-        ld	h,000h
-        ld	(0fd0fh),hl	; store 24-bit sector number bit 16..23
-        ld	hl,0ffffh	; indicator to use 24-bit sector number in DSKIO routine
-        ret
+	ld	l,a
+	ld	a,c
+	ld	c,(ix+00ch)
+	ld	b,(ix+00dh)
+	add	hl,bc
+	adc	a,000h
+	pop	bc
+	ret	z
+	ld	(0fd0dh),hl	; store 24-bit sector number bit 0..15
+	ld	l,a
+	ld	h,000h
+	ld	(0fd0fh),hl	; store 24-bit sector number bit 16..23
+	ld	hl,0ffffh	; indicator to use 24-bit sector number in DSKIO routine
+	ret
 
 ; ------------------------------------------
 F16P06:	ld	a,e
-        and	d
-        inc	a
-        jr	z,r1606
-        ld	hl,(BUFSEC)	; sectornumber in data buffer
-        or	a
-        sbc	hl,de
-        ret
+	and	d
+	inc	a
+	jr	z,r1606
+	ld	hl,(BUFSEC)	; sectornumber in data buffer
+	or	a
+	sbc	hl,de
+	ret
 r1606:	inc	a
-        scf
-        ret
+	scf
+	ret
 
 ; ------------------------------------------
 F16P07:	jr	nc,r1607
-        ld	a,d
-        and	e
-        inc	a
-        ret	nz
+	ld	a,d
+	and	e
+	inc	a
+	ret	nz
 r1607:	ld	a,0ffh
-        ld	(BUFDRN),a	; driveid of sector in directory buffer
-        ret
+	ld	(BUFDRN),a	; driveid of sector in directory buffer
+	ret
 
 ENDIF ; FAT16DOS1
 
