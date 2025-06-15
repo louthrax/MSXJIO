@@ -12,54 +12,52 @@ TBASE	EQU	00100H			; start of MSX-DOS
 ; ------------------------------------------------------------------------------
 ; P0: BIOS or BDOS 2 kernel
 
-WBOOT  	EQU     0000H
+WBOOT  	EQU     0000H   	; --SLI
 KBDOS   EQU     0005H
 RDSLT   EQU     000CH
 WRSLT	EQU	0014H
 CALSLT  EQU     001CH
 ENASLT  EQU     0024H
-IDBYT0  EQU     002BH
-IDBYT2  EQU     002DH
+IDBYT0  EQU     002BH   	; ---L-
+IDBYT2  EQU     002DH		; ---L-
 CALLF	EQU	0030H
-CHAR_16 EQU     0034H
+CHAR_16 EQU     0034H		; ----I
 KEYINT	EQU	0038H
-SSLOT   EQU     003BH
-SSLOTE  EQU     004BH
+SSLOT   EQU     003BH  		; ----I
+SSLOTE  EQU     004BH  		; -C---	
 SSLOTL	EQU	0046H
-LDIRMV  EQU     0059H
-LDIRVM  EQU     005CH
+LDIRMV  EQU     0059H  		; -C---
+LDIRVM  EQU     005CH  		; -C---
 ALL_SEG	EQU	005CH		; BDOS
 FRE_SEG	EQU	005FH		; BDOS
-DBUF    EQU     0080H
+DBUF    EQU     0080H  		; --S-I
 A0080	EQU	0080H		; BDOS
 A0083	EQU	0083H		; BDOS
 A0086	EQU	0086H		; BODS
 CHSNS   EQU     009CH
-CHGET   EQU     009FH
-CHPUT   EQU     00A2H
+CHGET   EQU     009FH  		; -C--I
+CHPUT   EQU     00A2H   	; -C--I
 LPTOUT  EQU     00A5H
 LPTSTT  EQU     00A8H
 BREAKX  EQU     00B7H
-CKCNTC  EQU     00BDH
-ERAFNK  EQU     00CCH
-TOTEXT  EQU     00D2H
-SNSMAT  EQU     0141H
+CKCNTC  EQU     00BDH   	; -C---
+ERAFNK  EQU     00CCH   	; -C---
+TOTEXT  EQU     00D2H   	; -C---
+SNSMAT  EQU     0141H   	; -C---
 PHYDIO	EQU	0144H
-KILBUF  EQU     0156H
-CALBAS  EQU     0159H
-CHGCPU	EQU	0180H		; TURBO R
-GETCPU	EQU	0183H		; TURBO R
-DECSUB  EQU     268CH
-DECADD  EQU     269AH
-DECDIV  EQU     289FH
-VMOVE   EQU     2EF3H
-VMOVFM  EQU     2F08H
-VMOVMF  EQU     2F10H
-MAKINT  EQU     2F99H
-CONDS   EQU     3042H
+KILBUF  EQU     0156H   	; ----I
+CALBAS  EQU     0159H   	; JC---
+DECSUB  EQU     268CH   	; -C---
+DECADD  EQU     269AH   	; J----
+DECDIV  EQU     289FH   	; -C---
+VMOVE   EQU     2EF3H   	; -C---
+VMOVFM  EQU     2F08H   	; J----
+VMOVMF  EQU     2F10H   	; -C---
+MAKINT  EQU     2F99H   	; JC---
+CONDS   EQU     3042H   	; -C---
 INT     EQU     30D1H		; integer part of float
-SGNMUL  EQU     325CH
-NULSTR  EQU     3FD6H
+SGNMUL  EQU     325CH   	; -C---
+NULSTR  EQU     3FD6H   	; ----I
 
 ; ------------------------------------------------------------------------------
 ; P1: disk rom or basic rom
