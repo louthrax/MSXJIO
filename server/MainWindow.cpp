@@ -195,7 +195,7 @@ Task MainWindow::oParser()
 
         case COMMAND_DRIVE_INFO:
 			{
-                m_bDiskChanged = true;
+                m_bDiskChanged = false;
 				bCRCOK = true;
 				if(ucFlags & FLAG_TX_CRC)
 				{
