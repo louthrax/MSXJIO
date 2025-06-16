@@ -185,7 +185,7 @@ Task MainWindow::oParser()
             {
                 quint16 uiAnswer;
 
-                vLog(eLogInfo, "Disk changed ➜ %s", m_bDiskChanged ? "Yes" : "No");
+                vLog(eLogInfo, "Disk changed: %s", m_bDiskChanged ? "Yes" : "No");
                 uiAnswer = m_bDiskChanged ? DRIVE_ANSWER_DISK_CHANGED : DRIVE_ANSWER_DISK_UNCHANGED;
 
                 uiTransmit(&uiAnswer, sizeof(uiAnswer), 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
