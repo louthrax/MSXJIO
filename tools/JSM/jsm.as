@@ -194,7 +194,8 @@ l4a74h:	out (0xA1),a
 GetInitialCPUMode:              ld                              a,(MSXVER)
                                 cp                              3
                                 ret                             c
-
+                                
+                                call                            GETCPU
                                 ld                              (InitialCPUMode),a
                                 ret
 
