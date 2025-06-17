@@ -21,6 +21,7 @@ InterfaceBluetoothSocket::~InterfaceBluetoothSocket()
 {
 	vDisconnectDevice2();
 	delete m_poDiscoveryAgent;
+    m_poDiscoveryAgent = nullptr;
 }
 
 /*
@@ -42,6 +43,10 @@ void InterfaceBluetoothSocket::vWrite(QByteArray &_racData)
 	{
 		m_poBluetoothSocket->write(_racData);
 	}
+    else
+    {
+        emit log(eLogError, "No Bluetooth socket for write operation");
+    }
 }
 
 /*
@@ -54,15 +59,23 @@ void InterfaceBluetoothSocket::vConnectDevice(const QString &_roID)
 	delete m_poBluetoothSocket;
 
 	m_poBluetoothSocket = new QBluetoothSocket(QBluetoothServiceInfo::RfcommProtocol);
-	connect(m_poBluetoothSocket, &QBluetoothSocket::connected, this, &InterfaceBluetoothSocket::onConnected);
-	connect(m_poBluetoothSocket, &QBluetoothSocket::readyRead, this, &InterfaceBluetoothSocket::onReadyRead);
-	connect(m_poBluetoothSocket, &QBluetoothSocket::disconnected, this, &InterfaceBluetoothSocket::onDisconnected);
-	connect(m_poBluetoothSocket, &QBluetoothSocket::errorOccurred, this, &InterfaceBluetoothSocket::onError);
-	m_poBluetoothSocket->connectToService
-		(
-			QBluetoothAddress(_roID),
-			QBluetoothUuid(QStringLiteral("00001101-0000-1000-8000-00805F9B34FB"))
-		);
+
+    if (m_poBluetoothSocket)
+    {
+        connect(m_poBluetoothSocket, &QBluetoothSocket::connected, this, &InterfaceBluetoothSocket::onConnected);
+        connect(m_poBluetoothSocket, &QBluetoothSocket::readyRead, this, &InterfaceBluetoothSocket::onReadyRead);
+        connect(m_poBluetoothSocket, &QBluetoothSocket::disconnected, this, &InterfaceBluetoothSocket::onDisconnected);
+        connect(m_poBluetoothSocket, &QBluetoothSocket::errorOccurred, this, &InterfaceBluetoothSocket::onError);
+        m_poBluetoothSocket->connectToService
+            (
+                QBluetoothAddress(_roID),
+                QBluetoothUuid(QStringLiteral("00001101-0000-1000-8000-00805F9B34FB"))
+            );
+    }
+    else
+    {
+        emit log(eLogError, "Unable to create Bluetooth socket");
+    }
 }
 
 /*
@@ -90,15 +103,6 @@ void InterfaceBluetoothSocket::vDisconnectDevice2()
 			m_poBluetoothSocket = nullptr;
 		}
 	}
-
-#ifdef ANDROID
-	if(m_bConnected)
-	{
-		m_bConnected = false;
-
-        emit deviceDisconnected();
-	}
-#endif
 }
 
 /*
@@ -125,10 +129,6 @@ void InterfaceBluetoothSocket::onReadyRead()
  */
 void InterfaceBluetoothSocket::onConnected()
 {
-#ifdef Q_OS_ANDROID
-	m_bConnected = true;
-#endif
-
     emit deviceConnected();
 }
 
@@ -171,11 +171,6 @@ void InterfaceBluetoothSocket::onError(QBluetoothSocket::SocketError _eError)
 	if(m_poBluetoothSocket) oError += m_poBluetoothSocket->errorString();
 
     emit log(eLogError, oError);
-
-#ifdef Q_OS_ANDROID
-	if(_eError == QBluetoothSocket::SocketError::ServiceNotFoundError)
-        emit deviceDisconnected();
-#endif
 }
 
 /*
@@ -190,29 +185,39 @@ void InterfaceBluetoothSocket::vScanDevices()
 		m_poDiscoveryAgent = nullptr;
 
         emit log(eLogInfo, "Bluetooth discovery canceled");
-	} m_poDiscoveryAgent = new QBluetoothDeviceDiscoveryAgent(this);
-	connect
-	(
-		m_poDiscoveryAgent,
-		&QBluetoothDeviceDiscoveryAgent::deviceDiscovered,
-		this,
-		&InterfaceBluetoothSocket::onDeviceDiscovered
-	);
-	connect
-	(
-		m_poDiscoveryAgent,
-		&QBluetoothDeviceDiscoveryAgent::finished,
-		this,
-		&InterfaceBluetoothSocket::onDiscoveryFinished
-	);
+    }
 
-#ifdef Q_OS_ANDROID
-	vRequestAndroidPermissionsAndStartDiscovery();
-#else
-	m_poDiscoveryAgent->start();
-#endif
+    m_poDiscoveryAgent = new QBluetoothDeviceDiscoveryAgent(this);
 
-    emit log(eLogInfo, "Bluetooth discovery started...");
+    if (m_poDiscoveryAgent)
+    {
+        connect
+        (
+            m_poDiscoveryAgent,
+            &QBluetoothDeviceDiscoveryAgent::deviceDiscovered,
+            this,
+            &InterfaceBluetoothSocket::onDeviceDiscovered
+        );
+        connect
+        (
+            m_poDiscoveryAgent,
+            &QBluetoothDeviceDiscoveryAgent::finished,
+            this,
+            &InterfaceBluetoothSocket::onDiscoveryFinished
+        );
+
+        #ifdef Q_OS_ANDROID
+            vRequestAndroidPermissionsAndStartDiscovery();
+        #else
+            m_poDiscoveryAgent->start();
+        #endif
+
+        emit log(eLogInfo, "Bluetooth discovery started...");
+    }
+    else
+    {
+        emit log(eLogError, "Unable to start Bluetooth discovery agent");
+    }
 }
 
 /*
@@ -261,8 +266,13 @@ QString InterfaceBluetoothSocket::oGetName()
  */
 qint64 InterfaceBluetoothSocket::uiBytesAvailable()
 {
-	return m_poBluetoothSocket->bytesAvailable();
+    return m_poBluetoothSocket ? m_poBluetoothSocket->bytesAvailable() : 0;
 }
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 
 #ifdef Q_OS_ANDROID
 
@@ -293,7 +303,15 @@ void InterfaceBluetoothSocket::vRequestAndroidPermissionsAndStartDiscovery()
 						{
 							qCritical() << "❌ Location permission denied!"; QCoreApplication::exit(1); return;
 						}
-						m_poDiscoveryAgent->start();
+
+                        if (m_poDiscoveryAgent)
+                        {
+                            m_poDiscoveryAgent->start();
+                        }
+                        else
+                        {
+                            emit log(eLogInfo, "Bluetooth discovery agent not created");
+                        }
 					}
 					);
 		}
