@@ -72,7 +72,7 @@ private:
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
     void		vUpdateLights();
 #ifdef Q_OS_ANDROID
-    void		vRequestAndroidPermissions();
+    void        vRequestAndroidPermissionsAndSetInterface(QObject *parent);
 #endif
 
     Task        oParser();

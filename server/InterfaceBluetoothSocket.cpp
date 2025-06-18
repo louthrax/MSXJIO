@@ -1,5 +1,4 @@
 #include <QSerialPortInfo>
-#include <QBluetoothPermission>
 #include <QCoreApplication>
 
 #include "InterfaceBluetoothSocket.h"
@@ -206,11 +205,7 @@ void InterfaceBluetoothSocket::vScanDevices()
             &InterfaceBluetoothSocket::onDiscoveryFinished
         );
 
-        #ifdef Q_OS_ANDROID
-            vRequestAndroidPermissionsAndStartDiscovery();
-        #else
-            m_poDiscoveryAgent->start();
-        #endif
+        m_poDiscoveryAgent->start();
 
         emit log(eLogInfo, "Bluetooth discovery started...");
     }
@@ -268,54 +263,3 @@ qint64 InterfaceBluetoothSocket::uiBytesAvailable()
 {
     return m_poBluetoothSocket ? m_poBluetoothSocket->bytesAvailable() : 0;
 }
-
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-
-#ifdef Q_OS_ANDROID
-
-/*$off*/
-void InterfaceBluetoothSocket::vRequestAndroidPermissionsAndStartDiscovery()
-{
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-	QBluetoothPermission	oBluetoohPermission;
-	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-	qApp->requestPermission(
-		oBluetoohPermission,
-		this,
-		[this] (const QPermission &perm)
-		{
-			if(perm.status() != Qt::PermissionStatus::Granted)
-			{
-				qCritical() << "❌ Bluetooth permission denied!"; QCoreApplication::exit(1); return;
-			}
-
-			QLocationPermission locPerm; qApp->requestPermission
-				(
-					locPerm,
-					this,
-					[this] (const QPermission &locPermResult)
-					{
-						if(locPermResult.status() != Qt::PermissionStatus::Granted)
-						{
-							qCritical() << "❌ Location permission denied!"; QCoreApplication::exit(1); return;
-						}
-
-                        if (m_poDiscoveryAgent)
-                        {
-                            m_poDiscoveryAgent->start();
-                        }
-                        else
-                        {
-                            emit log(eLogInfo, "Bluetooth discovery agent not created");
-                        }
-					}
-					);
-		}
-		);
-}
-/*$on*/
-#endif

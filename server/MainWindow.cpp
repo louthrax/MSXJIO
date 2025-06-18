@@ -5,6 +5,7 @@
 #include <QButtonGroup>
 #include <QThread>
 #include <QPixmap>
+#include <QBluetoothPermission>
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -414,6 +415,36 @@ Task MainWindow::oParser()
  =======================================================================================================================
  =======================================================================================================================
  */
+
+#ifdef Q_OS_ANDROID
+
+void MainWindow::vRequestAndroidPermissionsAndSetInterface(QObject *parent)
+{
+    QBluetoothPermission oBluetoothPermission;
+
+    qApp->requestPermission(
+        oBluetoothPermission,
+        parent,
+        [this](const QPermission &perm)
+        {
+            if (perm.status() != Qt::PermissionStatus::Granted)
+            {
+                vLog(eLogError, "Bluetooth permission denied");
+            }
+            else
+            {
+                vLog(eLogInfo, "Bluetooth permission granted");
+                vSetInterface(m_eSelectedInterface);
+            }
+        });
+}
+
+#endif
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 MainWindow::MainWindow() :
 	m_poUI(new Ui::MainWindow),
 	m_poRedLightOffTimer(new QTimer(this)),
@@ -481,11 +512,7 @@ MainWindow::MainWindow() :
 	m_poUI->timeout->setChecked(m_bTimeout);
 	m_poUI->readOnly->setChecked(m_bReadOnly);
 
-	vSetInterface(m_eSelectedInterface);
-
-	m_poUI->addressLineEdit->setText(roSelectedID());
-
-	vSetState(m_eConnectionState);
+    m_poUI->addressLineEdit->setText(roSelectedID());
 
 	m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
 	m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
@@ -507,7 +534,15 @@ MainWindow::MainWindow() :
     m_poUI->fileEjectPushButton->setToolTip("Eject disk image.");
     m_poUI->logWidget->setToolTip("Server log.");
 
-	oParser();
+    vSetState(m_eConnectionState);
+
+#ifdef Q_OS_ANDROID
+    vRequestAndroidPermissionsAndSetInterface(this);
+#else
+    vSetInterface(m_eSelectedInterface);
+#endif
+
+    oParser();
 }
 
 /*
