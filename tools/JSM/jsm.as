@@ -67,10 +67,16 @@ SearchEnd:                      inc                             hl
 
                                 call                            SendString
 
-                                ld                              hl,g_acReceivedMessage
+CtrlNotPressed:                 ld                              hl,g_acReceivedMessage
                                 call                            ReceiveString
+                                ld                              (hl),0
+                                jr                              z,NoInterrupted
 
-                                ei
+                                in                              a,(c)
+                                bit                             1,a
+                                jr                              nz,CtrlNotPressed
+
+NoInterrupted:                  ei
 
                                 call                            RestoreCPUMode
 ;______________________________________________________________________________
@@ -106,23 +112,41 @@ ReceiveString:                  ld a,15
                                 ld a,14
                                 out (0xa0),a
 
-                                ld e,0
+                                in a,(0xAA)
+                                and 0xF0
+                                add a,6
+                                out (0xAA),a
 
-ReceiveCharacterLoop:	ld c,0
+                                ld c,0xA9
 
-WaitTransmissionStart:	in a,(0xA2)
+ReceiveCharacterLoop:	in f,(c)
+                                ret po
+                                in a,(0xA2)
 	rrca
-	jr c,WaitTransmissionStart
+	jr c,ReceiveCharacterLoop
 
-	ld a,5
-StartDelay:	dec a
-	jr nz,StartDelay
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
+                                nop
 
+                                ld d,0
 	ld b,8
 
 ReceiveBitLoop:	in a,(0xA2)
 	rrca
-	rr c
+	rr d
 
 	ld a,2
 ReceiveBitDelay:	dec a
@@ -131,22 +155,18 @@ ReceiveBitDelay:	dec a
 
 	djnz ReceiveBitLoop
 
-	ld a,c
+	ld a,d
 	cp 0x0D
-	jr z,ReceiveEnd
+                                ret z
 
 WaitTransmissionEnd:	in a,(0xA2)
 	rrca
 	jr nc,WaitTransmissionEnd
 
-	ld (hl),c
+	ld (hl),d
 	inc hl
 
-	dec e
-	jr nz,ReceiveCharacterLoop
-
-ReceiveEnd:                     ld (hl),0
-                                ret
+	jp ReceiveCharacterLoop
 
 ;##############################################################################
 
@@ -229,13 +249,13 @@ WELCOME_MESSAGE:                defb                            12
                                 defm                            "38400 bauds routines by Tiny Yarou",13,10
                                 defm                            13,10
                                 defm                            "Enter your commands and validate with [RETURN]",13,10
+                                defm                            "Press [CTRL] to unlock reception",13,10
                                 defm                            "Press [CTRL] + [C] to exit",13,10
                                 defm                            13,10
                                 defm                            "Useful commands:",13,10
                                 defm                            "  Display current UART mode: AT+UART?",13,10
                                 defm                            "  Set UART mode for JIO:     AT+UART=115200,0,0",13,10
-                                defm                            "  Display current password:  AT+PSWD?",13,10
-                                defm                            "  Set password:              AT+PWSD=xxxx",13,10
+                                defm                            "  Set device name:           AT+NAME=xxxxx",13,10
                                 defm                            "-----------------------------------------",13,10,0
 
 ;##############################################################################
