@@ -38,9 +38,11 @@ The system is divided into two parts:
     - **JRTC** (not released yet)  
     An MSX-DOS 2 tool to synchronize MSX RTC time and date with host.
 
+Details about b3rendsh's MSX-DOS clients can be found here: https://github.com/b3rendsh/msxdos2s
+
 There's also a **JSM** (JIO Serial Monitor) helper tool that you can use to configure your Bluetooth communication chip.
 
-## Download
+## Downloads
 All server (Android, Linux, Windows and macOS) and client software can be downloaded [here](https://github.com/louthrax/MSXJIO/releases).
 
 ## Supported MSX models
@@ -52,15 +54,14 @@ close as possible from the "standard" one (3 579 545 Hz):
     | Model           | Frequency     |
     |----------------|----------------| 
     | VG-8235        | 3 554 367 Hz   |
-    | NMS 8255       | Not measured   |
-    | VG-8010        | Not measured   |
-    | VG-8020        | 3 579 200 Hz   |
     | HB-G900AP      | 3 578 959 Hz   |
-    | HB-F700F       | 3 579 599 Hz   |
+    | VG-8020        | 3 579 200 Hz   |
     | Toshiba HX-10  | 3 579 367 Hz   |
     | Palcom PX-V60  | 3 579 431 Hz   |
+    | VG-8010        | 3 579 545 Hz   |
+    | HB-F700F       | 3 579 599 Hz   |
+    | NMS 8255       | 3 579 617 Hz   |
     | turboR         | 3 579 617 Hz   |
-
 
 - Models tested as non-working:
 
@@ -76,7 +77,7 @@ Weirdly, the frequency of these models is close from the standard one, but there
 
 JIOServer can communicate with the MSX through:
 
-- **USB**, using a **USB to TTL UART Converter**
+- **USB**, using a **USB to TTL UART adapter**
 
   <p align="center">
     <img src="./readme_resources/USB_to_TTL-UART_Converter.jpg" width="200"/>
@@ -86,9 +87,7 @@ JIOServer can communicate with the MSX through:
   
     - FTDI USB UART IC FT232RL
 
----
-
-- **Bluetooth**, using a **Bluetooth Serial Transceiver Module**  
+- **Bluetooth**, using a **Bluetooth Serial Transceiver module**  
     <p align="center">
       <img src="./readme_resources/Bluetooth_Serial_Transceiver_Module.jpg" width="200"/>
     </p>  
@@ -96,8 +95,6 @@ JIOServer can communicate with the MSX through:
 
     - HC-05
     - HC-06
-
----
 
 ⚠️ **Do NOT use standard RS-232 adapters**—they may output +12V/-12V, which can **damage your MSX**.
 
@@ -151,32 +148,55 @@ For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on t
     <img src="./readme_resources/Configure_BT_with_JSM.jpg" width="500"/>
 </p>  
 
-## Known Issues
+
+## Fun things to try with JIOMSX
+- JIOMSX can serve openMSX hard disk images : code some stuff on openMSX, and immediately test them on a real MSX machine by just serving
+the same disk image. No need to swap any SD card !
+- Buy several Bluetooth adapters, and name them according to the MSX machine they are plugged in (JIO_VG_8238, JIO_turboR). To debug something on a specific
+MSX machine, power it on, select the matching Bluetooth adapter on the server, and connect to test.
+- A same disk image can be served to several MSX machines : start playing SD Snatcher on one MSX machine, and continue playing it on another one.
+
+
+## History
+
+All started with **NYYRIKKI**’s breakthrough **115200 bps** MSX serial communication routine, posted on January 3rd 2025 on msx.org:  
+👉 https://www.msx.org/forum/msx-talk/development/software-rs-232-115200bps-on-msx
+
+Shortly after, he released a working **MSX-DOS 1** version serving disk images with **drive sound emulation**!  
+👉 https://www.youtube.com/watch?v=OHs5a-gZtuc  
+Thats was crazy !
+
+At the same time, I was aware of **b3rendsh**’s MSX-DOS 2 project:  
+👉 https://github.com/b3rendsh/msxdos2s  
+... which was compact (32KB only, and no need for mapper), and designed to easily integrate any hardware.
+
+I told myself that combining NYYRIKKI’s 115200 bauds routine together with b3rendsh modular MSX-DOS could lead
+to a very cheap, versatile and not so slow MSX-DOS 2 hard-disk server !
+
+I quickly contacted b3rendsh, and we started working together on that project.
+
+After several months of collaborative coding and debugging, we hopefuly reached a stable and usable first version !
 
 ## Server details
+macOS, Windows and Linux versions of the server have tooltips for each UI componenents, which should be self-explanatory.
+
+For Android (that provides not tooltip), here's a quick explanation view:
 <p align="center">
     <img src="./readme_resources/JIO_Server_with_tooltips.png" width="900"/>
 </p>  
 
+## Known Issues
+Casio PV-7 and National CF3000 are showing these kind of corruptions on reception:
+<p align="center">
+    <img src="./readme_resources/RxIssues.png" width="900"/>
+</p>
+It works a bit better if adding a pull down resistor between MSX RX and GND, but there are still errors.
+
 ## Bug report
 You can submit tickets on GitHub, or post messages on this thread:
-
-## Links
-
-https://github.com/b3rendsh/msxdos2s
-
-## History
-
-This project began with **NYYRIKKI**’s brilliant 115200 bps MSX serial communication routine:  
-👉 https://www.msx.org/forum/msx-talk/development/software-rs-232-115200bps-on-msx
-
-Shortly after, he released a working **MSX-DOS 1** version serving disk images with **drive sound emulation**:  
-👉 https://www.youtube.com/watch?v=OHs5a-gZtuc
-
-At the same time, I was aware of **b3rendsh**’s MSX-DOS 2 project:  
-👉 https://github.com/b3rendsh/msxdos2s  
-It was a natural fit to integrate NYYRIKKI’s fast communication routines to support full disk image serving.
-
-NYYRIKKI’s original server code was functional but command-line only. I contacted b3rendsh, and he kindly joined the project. After several months of collaborative coding and debugging, we finally reached a stable and usable version.
+https://www.msx.org/forum/msx-talk/development/msx-jio
 
 ## Credits
+- Enhanced MSX DOS 2 and MSX DOS 1 versions, ideas, debugging, testing, help on JIOServer: **b3rendsh** (https://github.com/b3rendsh/msxdos2s)
+- 115200 bauds MSX communication routine and originial Python server: **NYYRIKKI** (https://msx.fi/nyyrikki/software.html)
+- Original 38400 bauds communication routine used by JIO Serial Monitor tool: **Tiny Yarou** (https://www.tiny-yarou.com/)
