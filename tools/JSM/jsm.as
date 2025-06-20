@@ -1,4 +1,5 @@
 
+; Original 38400 bauds communication routine used by JIO Serial Monitor tool by Tiny Yarou
 
 MSXVER                          equ                             0x002D
 INLIN                           equ                             0x00B1
