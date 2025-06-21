@@ -7,16 +7,12 @@
 
 **JIO** stands for **J**oystick **I**nput **O**utput.
 
-<table  align="center">
-  <tr>
-    <td align="center">
-      <img src="./readme_resources/JIO_Server.png" width="300"/>
-    </td>
-    <td align="center">
-      <img src="./readme_resources/JIO_MSX-DOS_2.jpg" width="500"/>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=NH9YH9l05ng">
+    <img src="./readme_resources/JIOServerAndMSXDOSClient.png" width="600"/>
+  </a><br>
+  Click on image to start video on YouTube
+</p>
 
 The system is divided into two parts:
 
@@ -84,7 +80,7 @@ JIOServer can communicate with the MSX through:
 
   Models confirmed to be working are:
   
-    - **FTDI USB UART IC FT232RL**
+  - **FTDI USB UART IC FT232RL**
 
 - **Bluetooth**, using a **Bluetooth Serial Transceiver module**  
     <p align="center">
@@ -122,16 +118,12 @@ For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on t
 1. You should see an <span style="color:green">Info✓ </span> appear in the server log and the LED blink.
 1. The MSX should now access the image.
 
-## How to create the 32KB JIO-MSXDOS2 cartridge
-
-*Instructions to be added.*
-
 ## Bluetooth configuration for MSXJIO
 
 It is very likely that the Bluetooth Serial Transceiver module you just bought is not configured to match the required MSXJIO settings:
 
-|          |               |
-|----------|---------------|
+|Setting   | Value             |
+|----------|-------------------|
 |Baud rate | **115200 bits/s** |
 |Stop bit  | **1 bit**         |
 |Parity    | **None**          |
@@ -139,7 +131,7 @@ It is very likely that the Bluetooth Serial Transceiver module you just bought i
 For the **HC-05** chip, you can download the [JSM tool](https://github.com/louthrax/MSXJIO/releases/download/v1.0/JIO_38400_bauds_serial_monitor_1_0.zip) provided by JIOMSX.
 
 - Plug your HC-05 module in MSX joystick port 2
-- Power on your MSX while keeping the AT switch pressed. The HC-05 led should be blinking in a stable and slowly (2s) way.
+- Power on your MSX **while keeping the HC-05 AT switch pressed**. The HC-05 led should be blinking in a stable and slowly (2s) way.
 - Run JSM.BAS from MSX-BASIC
 - Enter this command:  
   **AT+UART=115200,0,0**
@@ -169,7 +161,7 @@ https://www.msx.org/downloads/bootable-hdd-image-of-cpm-31-for-beer-ide-interfac
 - Load an experimental romless DOS from tape on your MSX1/64K RAM and you're gone in sixty seconds:
 https://github.com/b3rendsh/cxdos
 
-Post your "fun things to try" experiences and suggestions on this [MRC thread](https://www.msx.org/forum/msx-talk/development/msx-jio)
+Post your "fun things to try" experiences and suggestions on this [MRC thread](https://www.msx.org/forum/msx-talk/development/msxjio)
 
 ## History
 
@@ -210,18 +202,23 @@ It works a bit better if adding a pull down resistor between MSX RX and GND, but
 
 ## Bug report
 
-You can submit tickets on GitHub directly [here](https://github.com/louthrax/MSXJIO/issues), or post messages on this [MRC thread](https://www.msx.org/forum/msx-talk/development/msx-jio)
+You can submit tickets on GitHub directly [here](https://github.com/louthrax/MSXJIO/issues), or post messages on this [MRC thread](https://www.msx.org/forum/msx-talk/development/msxjio)
 
 ## Credits
 
-- Enhanced MSX DOS 2 and MSX DOS 1 versions, ideas, debugging, testing, help on JIOServer: **b3rendsh**  
+- Enhanced MSX-DOS 2 and MSX-DOS 1 versions, ideas, debugging, testing, help on JIOServer: **b3rendsh**  
 (https://github.com/b3rendsh/msxdos2s)
 
-- 115200 bauds MSX communication routine and originial Python server: **NYYRIKKI**  
+- 115200 bauds MSX communication routine, originial Python server, support and ideas: **NYYRIKKI**  
 (https://msx.fi/nyyrikki/software.html)
 
 - Original 38400 bauds communication routine used by JIO Serial Monitor tool: **Tiny Yarou**  
 (https://www.tiny-yarou.com/)
+
+
+## Thanks to...
+
+- Jipe for fixing my NMS 8220 used at Nijmegen's 2025 demo.
 
 ## License
 

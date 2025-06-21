@@ -15,8 +15,11 @@ z88dk.z88dk-appmake +rom  -b obj/jio_dos2__.bin -o ./jio_dos2.rom -s 32768 --org
 z88dk.z88dk-appmake +rom  -b obj/jio_dos2__.bin -o ./jio_dos2_64k.rom -s 65536 --org 16384 --fill 0xFF
 
 dd if=/dev/zero bs=1 count=65536 | tr '\0' '\377' > jio_dos2_64k_NMS_8220.rom
-dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 count=16384 seek=0 conv=notrunc
-dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 skip=16384 count=16384 seek=32768 conv=notrunc
+
+dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 count=16384 skip=0     seek=16384 conv=notrunc
+dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 count=16384 skip=0     seek=49152 conv=notrunc
+dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 count=16384 skip=16384 seek=0     conv=notrunc
+dd if=jio_dos2.rom of=jio_dos2_64k_NMS_8220.rom bs=1 count=16384 skip=16384 seek=32768 conv=notrunc
 
 cp ./jio_dos2.rom /media/laurent/DataBackupNAS/msxftp/RSDISK
 rm -r -f ./obj rdate.inc
