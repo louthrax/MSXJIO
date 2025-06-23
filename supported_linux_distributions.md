@@ -1,4 +1,3 @@
-# Technical notes
 
 ## Supported Linux distributions
 

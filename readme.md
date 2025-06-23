@@ -70,6 +70,8 @@ close as possible from the "standard" one (3 579 545 Hz):
 
 ## Hardware
 
+⚠️ **Do NOT use standard RS-232 adapters**—they may output +12V/-12V, which can **damage your MSX**.
+
 JIOServer can communicate with the MSX through:
 
 - **USB**, using a **USB to TTL UART adapter**
@@ -79,19 +81,16 @@ JIOServer can communicate with the MSX through:
   </p>
 
   Models confirmed to be working are:
-  
-  - **FTDI USB UART IC FT232RL**
+  - **FTDI USB UART IC FT232RL**: https://fr.aliexpress.com/item/4000641000474.html
 
 - **Bluetooth**, using a **Bluetooth Serial Transceiver module**  
     <p align="center">
       <img src="./readme_resources/Bluetooth_Serial_Transceiver_Module.jpg" width="200"/>
     </p>  
-    Models confirmed to be working are:
 
-  - **HC-05**: Easy configuration for MSXJIO with JSM.BAS tool.
-  - **HC-06**: Works but not recommended (requires an extra USB to TTL UART adapter for configuration).
+  Models confirmed to be working are:
+  - **DSD TECH BT-05 Module**: https://www.amazon.fr/DSD-TECH-BT-05-classique-Bluetooth/dp/B09NKYV3D7
 
-⚠️ **Do NOT use standard RS-232 adapters**—they may output +12V/-12V, which can **damage your MSX**.
 
 For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on the MSX joystick port is 5V. Some models have jumpers to switch between different voltages (5V or 3.3V).
 
@@ -116,20 +115,6 @@ Of course, you can also build yourself something more handy like that:
 <p align="center">
     <img src="./readme_resources/Bluetooth_WithPlug.jpg" width="700"/>
 </p>  
-
-
-
-## Usage instructions for the MSX-DOS clients
-
-1. Create an MSX-DOS 2 cartridge (or flash `JIO-MSXDOS2` to a MegaFlashROM or Carnivore2).
-1. Connect your MSX to your PC using a USB serial cable or Bluetooth adapter.
-1. Launch **JIOServer** and select the disk image to serve.
-1. Select USB or Bluetooth mode using the <img src="./server/icons/Bluetooth.svg" width="20"/> or  <img src="./server/icons/USB.svg" width="20"/> button
-1. Select the communication device to use (ttyUSB0 or DSD TECH HC-05 for example)
-1. Click the <img src="./server/icons/disconnected.svg" width="20"/> button.
-1. Boot your MSX.
-1. You should see an <span style="color:green">Info✓ </span> appear in the server log and the LED blink.
-1. The MSX should now access the image.
 
 ## Bluetooth configuration for MSXJIO
 
@@ -158,6 +143,17 @@ For the **HC-05** chip, you can download the [JSM tool](https://github.com/louth
 Configuration of the **HC-06** is trickier and requires an extra USB to TTL UART adapter.  
 Procedure is described [here](https://github.com/b3rendsh/msxdos2s/tree/main/jio/bluetooth).
 
+## Usage instructions for the MSX-DOS clients
+
+1. Create an MSX-DOS 2 cartridge (or flash `JIO-MSXDOS2` to a MegaFlashROM or Carnivore2).
+1. Connect your MSX to your PC using a USB serial cable or Bluetooth adapter.
+1. Launch **JIOServer** and select the disk image to serve.
+1. Select USB or Bluetooth mode using the <img src="./server/icons/Bluetooth.svg" width="20"/> or  <img src="./server/icons/USB.svg" width="20"/> button
+1. Select the communication device to use (ttyUSB0 or DSD TECH HC-05 for example)
+1. Click the <img src="./server/icons/disconnected.svg" width="20"/> button.
+1. Boot your MSX.
+1. You should see an <span style="color:green">Info✓ </span> appear in the server log and the LED blink.
+1. The MSX should now access the image.
 
 ## Fun things to try with JIOMSX
 
@@ -219,7 +215,7 @@ You can submit tickets on GitHub directly [here](https://github.com/louthrax/MSX
 
 ## Credits
 
-- Enhanced MSX-DOS 2 and MSX-DOS 1 versions, ideas, debugging, testing, help on JIOServer: **b3rendsh**  
+- Enhanced MSX-DOS 2 and MSX-DOS 1 versions, ideas, debugging, testing, documentation, help on JIOServer: **b3rendsh**  
 (https://github.com/b3rendsh/msxdos2s)
 
 - 115200 bauds MSX communication routine, originial Python server, support and ideas: **NYYRIKKI**  
@@ -232,6 +228,11 @@ You can submit tickets on GitHub directly [here](https://github.com/louthrax/MSX
 ## Thanks to...
 
 - Jipe for fixing my NMS 8220 used at Nijmegen's 2025 demo.
+
+## Technical details
+
+- [MSXJIO protocol specification](./msxjio_protocol_specification.md)
+- [Supported Linux distributions](./supported_linux_distributions.md)
 
 ## License
 
