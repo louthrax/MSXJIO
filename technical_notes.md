@@ -1,4 +1,6 @@
-** Supported Linux distributions
+# Technical notes
+
+## Supported Linux distributions
 
 The Linux MSXJIO server has been tested to work without any external package installation on the
 following distributions:

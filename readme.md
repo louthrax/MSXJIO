@@ -95,7 +95,7 @@ JIOServer can communicate with the MSX through:
 
 For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on the MSX joystick port is 5V. Some models have jumpers to switch between different voltages (5V or 3.3V).
 
-## Building the adapter cable
+## Connecting the adapter to joystick port 2
 
 - MSX Joystick Port 2, Pin **1** → Adapter **TX**  
 - MSX Joystick Port 2, Pin **6** → Adapter **RX**  
@@ -105,6 +105,19 @@ For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on t
 <p align="center">
     <img src="./readme_resources/MSX_joystick_port.png" width="500"/>
 </p>  
+
+For those who are nervous about using a soldering iron, you can directly wire the adapter to the joystick port using Dupont cables (which are often sold with the adapter):
+
+<p align="center">
+    <img src="./readme_resources/Bluetooth_NoSoldering.png" width="600"/>
+</p>  
+
+Of course, you can also build yourself something more handy like that:
+<p align="center">
+    <img src="./readme_resources/Bluetooth_WithPlug.jpg" width="700"/>
+</p>  
+
+
 
 ## Usage instructions for the MSX-DOS clients
 
