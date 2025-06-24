@@ -173,21 +173,15 @@ RESOURCES += \
     Fonts.qrc
 
 DISTFILES += \
-    MSXClient/0_Make.sh \
-    mylinker.sh \
-    MSXClient/bootcode.inc \
-    MSXClient/crt.asm \
-    MSXClient/disk.inc \
-    MSXClient/dos1x.asm \
-    MSXClient/driver.asm \
-    MSXClient/drv_jio.asm \
-    MSXClient/drv_jio.c \
-    MSXClient/drv_jio.inc \
-    MSXClient/drv_jio_c.asm \
-    MSXClient/msx.inc \
-    MSXClient/p0_kernel.asm \
-    MSXClient/p1_main.asm \
-    MSXClient/p3_paging.asm \
+    ../clients/JIO_MSX-DOS/crt.asm \
+    ../clients/JIO_MSX-DOS/disk.inc \
+    ../clients/JIO_MSX-DOS/dos1x.asm \
+    ../clients/JIO_MSX-DOS/drv_jio.c \
+    ../clients/JIO_MSX-DOS/drv_jio.asm \
+    ../clients/JIO_MSX-DOS/drv_jio.inc \
+    ../clients/JIO_MSX-DOS/msx.inc \
+    ../clients/JIO_MSX-DOS/p0_kernel.asm \
+    ../clients/JIO_MSX-DOS/p1_main.asm \
+    ../clients/JIO_MSX-DOS/p3_paging.asm \
     android/AndroidManifest.xml \
-    docs/Notes.odt \
     readme.md

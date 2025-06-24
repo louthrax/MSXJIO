@@ -71,7 +71,8 @@ unsigned int uiTransmit
 
 		uiBytesToWrite = (_uiLength > 40) ? 40 : _uiLength;
 
-        vWaitForSmallBufferModules();
+        if(_ucFlags & FLAG_SLOW_TX)
+            vWaitForSmallBufferModules();
         vJIOTransmit(pcAddress, uiBytesToWrite);
 
 		_uiLength -= uiBytesToWrite;
@@ -80,7 +81,8 @@ unsigned int uiTransmit
 
 	if(_bLast && (_ucFlags & FLAG_TX_CRC))
 	{
-        vWaitForSmallBufferModules();
+        if(_ucFlags & FLAG_SLOW_TX)
+            vWaitForSmallBufferModules();
         vJIOTransmit(&_uiCRC, sizeof(_uiCRC));
 	}
 
