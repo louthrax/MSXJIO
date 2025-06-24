@@ -42,12 +42,29 @@ unsigned int uiTransmit
 	bool			_bLast
 )
 {
+    char * pcAddress = _pvAddress;
+
     if(_ucFlags & FLAG_TX_CRC)
     {
         _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
     }
 
-    vJIOTransmit(_pvAddress, _uiLength);
+    while (_uiLength)
+    {
+        unsigned int uiBytesToWrite;
+
+        uiBytesToWrite = (_uiLength > 40) ? 40 : _uiLength;
+        vJIOTransmit(pcAddress, uiBytesToWrite);
+        _uiLength -= uiBytesToWrite;
+        pcAddress += uiBytesToWrite;
+
+        if (_uiLength)
+        {
+            unsigned int uiWait;
+
+            for(uiWait = 1024; uiWait; uiWait--);
+        }
+    }
 
 	if(_bLast && (_ucFlags & FLAG_TX_CRC))
 	{
