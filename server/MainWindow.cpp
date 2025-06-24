@@ -312,10 +312,6 @@ Task MainWindow::oParser()
             vLog(eLogWrite, "Write ");
 
             vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
-
-            acData = (char *) malloc(oHeader.m_ucLength * 512);
-
-            vReceive(acData, oHeader.m_ucLength * 512, ucFlags, uiCRC);
             ucPartition = oHeader.m_uiSector >> 24;
             uiSector = oHeader.m_uiSector & 0xFFFFFF;
 
@@ -328,6 +324,10 @@ Task MainWindow::oParser()
                     uiSector,
                     oHeader.m_uiAddress
                     );
+
+            acData = (char *) malloc(oHeader.m_ucLength * 512);
+
+            vReceive(acData, oHeader.m_ucLength * 512, ucFlags, uiCRC);
 
             bCRCOK = true;
             if(ucFlags & FLAG_TX_CRC)

@@ -32,7 +32,19 @@ void				vJIOTransmit(void *_pvSource, unsigned int _uiSize);
  =======================================================================================================================
  =======================================================================================================================
  */
+void vWaitForSmallBufferModules()
+{
+	/*~~~~~~~~~~~~~~~~~~~*/
+	unsigned int	uiWait;
+	/*~~~~~~~~~~~~~~~~~~~*/
 
+    for(uiWait = 1024; uiWait; uiWait--);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 unsigned int uiTransmit
 (
 	void			*_pvAddress,
@@ -42,33 +54,34 @@ unsigned int uiTransmit
 	bool			_bLast
 )
 {
-    char * pcAddress = _pvAddress;
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+	char	*pcAddress = (char *) _pvAddress;
+	/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    if(_ucFlags & FLAG_TX_CRC)
-    {
-        _uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
-    }
+	if(_ucFlags & FLAG_TX_CRC)
+	{
+		_uiCRC = uiXModemCRC16(_pvAddress, _uiLength, _uiCRC);
+	}
 
-    while (_uiLength)
-    {
-        unsigned int uiBytesToWrite;
+	while(_uiLength)
+	{
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+		unsigned int	uiBytesToWrite;
+		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-        uiBytesToWrite = (_uiLength > 40) ? 40 : _uiLength;
+		uiBytesToWrite = (_uiLength > 40) ? 40 : _uiLength;
+
+        vWaitForSmallBufferModules();
         vJIOTransmit(pcAddress, uiBytesToWrite);
-        _uiLength -= uiBytesToWrite;
-        pcAddress += uiBytesToWrite;
 
-        if (_uiLength)
-        {
-            unsigned int uiWait;
-
-            for(uiWait = 1024; uiWait; uiWait--);
-        }
-    }
+		_uiLength -= uiBytesToWrite;
+		pcAddress += uiBytesToWrite;
+	}
 
 	if(_bLast && (_ucFlags & FLAG_TX_CRC))
 	{
-		vJIOTransmit(&_uiCRC, sizeof(_uiCRC));
+        vWaitForSmallBufferModules();
+        vJIOTransmit(&_uiCRC, sizeof(_uiCRC));
 	}
 
 	return _uiCRC;
@@ -136,7 +149,14 @@ unsigned char ucDoCommand
 		ucCommandOrResult = COMMAND_DRIVE_REPORT_OK;
 		oCommonHeader.m_ucCommand = ucCommand;
 
-        uiTransmitCRC = uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, (ucCommand == COMMAND_DRIVE_INFO) ||  (ucCommand == COMMAND_DRIVE_DISK_CHANGED));
+		uiTransmitCRC = uiTransmit
+			(
+				&oCommonHeader,
+				sizeof(oCommonHeader),
+				ucFlags,
+				0,
+				(ucCommand == COMMAND_DRIVE_INFO) || (ucCommand == COMMAND_DRIVE_DISK_CHANGED)
+			);
 
 		if(ucCommand == COMMAND_DRIVE_DISK_CHANGED)
 		{
@@ -147,13 +167,13 @@ unsigned char ucDoCommand
 			ucCommandOrResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
 			if(ucCommandOrResult == COMMAND_DRIVE_REPORT_OK)
 			{
-                if(uiAcknowledge == DRIVE_ANSWER_DISK_CHANGED)
+				if(uiAcknowledge == DRIVE_ANSWER_DISK_CHANGED)
 				{
-                    ucCommandOrResult = RESULT_DRIVE_DISK_CHANGED;
+					ucCommandOrResult = RESULT_DRIVE_DISK_CHANGED;
 				}
-                else if(uiAcknowledge == DRIVE_ANSWER_DISK_UNCHANGED)
+				else if(uiAcknowledge == DRIVE_ANSWER_DISK_UNCHANGED)
 				{
-                    ucCommandOrResult = RESULT_DRIVE_DISK_UNCHANGED;
+					ucCommandOrResult = RESULT_DRIVE_DISK_UNCHANGED;
 				}
 				else
 				{
@@ -173,13 +193,13 @@ unsigned char ucDoCommand
 			ucCommandOrResult = ucReceive(&uiAcknowledge, sizeof(uiAcknowledge), ucFlags);
 			if(ucCommandOrResult == COMMAND_DRIVE_REPORT_OK)
 			{
-                if(uiAcknowledge == DRIVE_ANSWER_WRITE_FAILED)
+				if(uiAcknowledge == DRIVE_ANSWER_WRITE_FAILED)
 				{
 					ucCommandOrResult =
-                        (uiAcknowledge == DRIVE_ANSWER_WRITE_PROTECTED)
+						(uiAcknowledge == DRIVE_ANSWER_WRITE_PROTECTED)
 							? COMMAND_DRIVE_REPORT_WRITE_PROTECTED : COMMAND_DRIVE_REPORT_WRITE_FAULT;
 				}
-                else if(uiAcknowledge != DRIVE_ANSWER_WRITE_OK)
+				else if(uiAcknowledge != DRIVE_ANSWER_WRITE_OK)
 				{
 					ucCommandOrResult = COMMAND_DRIVE_REPORT_CRC_ERROR;
 				}
@@ -209,7 +229,12 @@ unsigned char ucDoCommand
 			}
 		}
 
-        if((ucCommandOrResult != COMMAND_DRIVE_REPORT_OK) && (ucCommandOrResult != RESULT_DRIVE_DISK_CHANGED) && (ucCommandOrResult != RESULT_DRIVE_DISK_UNCHANGED))
+		if
+		(
+			(ucCommandOrResult != COMMAND_DRIVE_REPORT_OK)
+		&&	(ucCommandOrResult != RESULT_DRIVE_DISK_CHANGED)
+		&&	(ucCommandOrResult != RESULT_DRIVE_DISK_UNCHANGED)
+		)
 		{
 			oCommonHeader.m_ucCommand = ucCommandOrResult;
 			uiTransmit(&oCommonHeader, sizeof(oCommonHeader), ucFlags, 0, true);
@@ -217,8 +242,8 @@ unsigned char ucDoCommand
 	} while
 	(
 		(ucCommandOrResult != COMMAND_DRIVE_REPORT_OK)
-    &&	(ucCommandOrResult != RESULT_DRIVE_DISK_CHANGED)
-    &&	(ucCommandOrResult != RESULT_DRIVE_DISK_UNCHANGED)
+	&&	(ucCommandOrResult != RESULT_DRIVE_DISK_CHANGED)
+	&&	(ucCommandOrResult != RESULT_DRIVE_DISK_UNCHANGED)
 	&&	(ucFlags & FLAG_AUTO_RETRY)
 	);
 
