@@ -91,8 +91,18 @@ JIOServer can communicate with the MSX through:
   Models confirmed to be working are:
   - **DSD TECH BT-05 Module**: https://www.amazon.fr/DSD-TECH-BT-05-classique-Bluetooth/dp/B09NKYV3D7
 
+  Note: Avoid the BC41C-based models (small chip on the antenna side):
+    <p align="center">
+      <img src="./readme_resources/BC41C.png" width="400"/>
+    </p>
+    and favor the BC417-based ones (bigger chip):
+    <p align="center">
+      <img src="./readme_resources/BC417.png" width="400"/>
+    </p>
 
-For both USB and Bluetooth, prefer the 5V versions, as the standard voltage on the MSX joystick port is 5V. Some models have jumpers to switch between different voltages (5V or 3.3V).
+
+
+For both USB and Bluetooth, prefer the 5V versions when possible, as the standard voltage on the MSX joystick port is 5V. Some models have jumpers to switch between different voltages (5V or 3.3V).
 
 ## Connecting the adapter to joystick port 2
 
