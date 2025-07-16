@@ -31,33 +31,33 @@ android {
     SVG_ICON = $$PWD/icons/JIOServer.svg
     ANDROID_RES_DIR = $$PWD/android/res
 
-    # Define PNG output files for each resolution
-    HDPI_PNG    = $$ANDROID_RES_DIR/drawable-hdpi/icon.png
-    LDPI_PNG    = $$ANDROID_RES_DIR/drawable-ldpi/icon.png
-    MDPI_PNG    = $$ANDROID_RES_DIR/drawable-mdpi/icon.png
-    XHDPI_PNG   = $$ANDROID_RES_DIR/drawable-xhdpi/icon.png
-    XXHDPI_PNG  = $$ANDROID_RES_DIR/drawable-xxhdpi/icon.png
-    XXXHDPI_PNG = $$ANDROID_RES_DIR/drawable-xxxhdpi/icon.png
+    RESOLUTIONS_W = \
+        ldpi:36 \
+        mdpi:48 \
+        hdpi:72 \
+        xhdpi:96 \
+        xxhdpi:144 \
+        xxxhdpi:192
 
-    # Generate PNGs for each resolution explicitly
-    $${LDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-ldpi    && inkscape $$SVG_ICON --export-type=png --export-width=36  --export-height=36  --export-filename=$$LDPI_PNG
-    $${MDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-mdpi    && inkscape $$SVG_ICON --export-type=png --export-width=48  --export-height=48  --export-filename=$$MDPI_PNG
-    $${HDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-hdpi    && inkscape $$SVG_ICON --export-type=png --export-width=72  --export-height=72  --export-filename=$$HDPI_PNG
-    $${XHDPI_PNG}.commands   = mkdir -p $$ANDROID_RES_DIR/drawable-xhdpi   && inkscape $$SVG_ICON --export-type=png --export-width=96  --export-height=96  --export-filename=$$XHDPI_PNG
-    $${XXHDPI_PNG}.commands  = mkdir -p $$ANDROID_RES_DIR/drawable-xxhdpi  && inkscape $$SVG_ICON --export-type=png --export-width=144 --export-height=144 --export-filename=$$XXHDPI_PNG
-    $${XXXHDPI_PNG}.commands = mkdir -p $$ANDROID_RES_DIR/drawable-xxxhdpi && inkscape $$SVG_ICON --export-type=png --export-width=192 --export-height=192 --export-filename=$$XXXHDPI_PNG
+    for (ENTRY, RESOLUTIONS_W) {
+        RES = $$section(ENTRY, :, 0, 0)
+        WIDTH = $$section(ENTRY, :, 1, 1)
 
-    $${LDPI_PNG}.depends     = $$SVG_ICON
-    $${MDPI_PNG}.depends     = $$SVG_ICON
-    $${HDPI_PNG}.depends     = $$SVG_ICON
-    $${XHDPI_PNG}.depends    = $$SVG_ICON
-    $${XXHDPI_PNG}.depends   = $$SVG_ICON
-    $${XXXHDPI_PNG}.depends  = $$SVG_ICON
+        DIR = $$ANDROID_RES_DIR/drawable-$$RES
+        PNG_FILE = $$DIR/icon.png
+        MYTARGET = icon_$${RES}_png
 
-    DEPS = $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
-    QMAKE_EXTRA_TARGETS += $$DEPS
-    PRE_TARGETDEPS += $$DEPS
-    CLEAN_FILES += $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
+        $${MYTARGET}.commands = \
+            mkdir -p $$DIR && \
+            rsvg-convert -w $${WIDTH} -h $${WIDTH} $$SVG_ICON -o $$PNG_FILE
+
+
+        $${MYTARGET}.depends = $$SVG_ICON
+
+        QMAKE_EXTRA_TARGETS += $$MYTARGET
+        PRE_TARGETDEPS += $$MYTARGET
+        QMAKE_CLEAN += $$PNG_FILE
+    }
 }
 
 ICON_NAME = JIOServer
