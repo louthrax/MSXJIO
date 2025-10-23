@@ -152,16 +152,19 @@ macx:CONFIG(release, debug|release) {
 
 SOURCES += \
     Drive.cpp \
+    Find.cpp \
     InterfaceBluetoothSocket.cpp \
     InterfaceSerialPort.cpp \
     Main.cpp \
     MainWindow.cpp \
+    MainWindow_BDOS.cpp \
     PartitionExtractor.cpp
 
 HEADERS += \
     ByteReader.h \
     Common.h \
     Drive.h \
+    Find.h \
     Interface.h \
     InterfaceBluetoothSocket.h \
     InterfaceSerialPort.h \

@@ -7,7 +7,9 @@ typedef enum {
     eLogError,
     eLogConnected,
     eLogRead,
-    eLogWrite
+    eLogWrite,
+    eLogBDOS,
+    eLogBDOSDetails
 } tdLogType;
 
 #if defined(Q_OS_ANDROID) || defined(Q_OS_MAC)

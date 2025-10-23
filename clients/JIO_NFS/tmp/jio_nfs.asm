@@ -1,0 +1,383 @@
+vTransmitString:
+	CALL	_ENT_PARM_DIRECT_L09
+	EX	DE,HL
+	CALL	_STRLEN_L11
+	LD	C,L
+	LD	B,H
+	INC	BC
+	LD	E,(IX+2)
+	LD	D,(IX+3)
+	CALL	vJIOTransmit
+	JP	_LEAVE_DIRECT_L09
+vReceive:
+	CALL	_ENT_PARM_DIRECT_L09
+_0025:
+_0001:
+	LD	C,(IX+4)
+	LD	B,(IX+5)
+	LD	E,(IX+2)
+	LD	D,(IX+3)
+	CALL	bJIOReceive
+	OR	A
+	JR	Z,_0025
+_0002:
+_0000:
+	JP	_LEAVE_DIRECT_L09
+vDOS_FIND_FIRST_ENTRY:
+	CALL	_0036
+	LD	HL,(g_aoRegisters+6)
+	LD	B,(HL)
+	INC	B
+	JR	NZ,_0004
+_0003:
+	CALL	_0039
+	LD	DE,(g_aoRegisters+4)
+	JR	_0026
+_0004:
+	EX	DE,HL
+_0026:
+	CALL	vTransmitString
+_0005:
+_0027:
+	LD	BC,48
+	LD	DE,(g_aoRegisters+8)
+	CALL	vReceive
+	LD	HL,(g_aoRegisters+8)
+	LD	BC,47
+	ADD	HL,BC
+	LD	A,(HL)
+	LD	(g_aoRegisters+3),A
+	RET
+_0036:
+	LD	BC,1
+	LD	DE,g_aoRegisters+1
+	JP	vJIOTransmit
+_0039:
+	LD	C,48
+	EX	DE,HL
+	JP	vJIOTransmit
+vDOS_FIND_NEXT_ENTRY:
+	LD	BC,48
+	LD	DE,(g_aoRegisters+8)
+	CALL	vJIOTransmit
+	JP	_0027
+vDOS_GET_ALLOCATION_INFO:
+	LD	A,2
+	LD	(g_aoRegisters+3),A
+	LD	HL,512
+	LD	(g_aoRegisters),HL
+	LD	HL,60000
+	LD	(g_aoRegisters+6),HL
+	LD	HL,30000
+	LD	(g_aoRegisters+4),HL
+	RET
+vDOS_CHANGE_CURRENT_DIRECTORY:
+	LD	DE,(g_aoRegisters+6)
+	CALL	vTransmitString
+_0028:
+	LD	BC,1
+_0029:
+	CALL	_0041
+	RET
+_0042:
+	LD	BC,3
+_0041:
+	LD	DE,g_aoRegisters+3
+	JP	vReceive
+vDOS_OPEN_FILE_HANDLE:
+	CALL	_0037
+	LD	HL,(g_aoRegisters+6)
+	LD	B,(HL)
+	INC	B
+	JR	NZ,_0007
+_0006:
+	CALL	_0039
+	JR	_0008
+_0007:
+	EX	DE,HL
+	CALL	vTransmitString
+_0008:
+	LD	BC,2
+	LD	DE,g_aoRegisters
+	CALL	vReceive
+	LD	A,(g_aoRegisters)
+	LD	(g_aoRegisters+3),A
+	RET
+_0037:
+	LD	BC,1
+_0038:
+	LD	DE,g_aoRegisters+3
+	JP	vJIOTransmit
+vDOS_CLOSE_FILE_HANDLE:
+	CALL	_0036
+	JP	_0028
+vDOS_READ_FILE_HANDLE:
+	CALL	_0035
+	CALL	vJIOTransmit
+	CALL	_0042
+	LD	HL,(g_aoRegisters+4)
+	LD	A,L
+	OR	H
+	JR	Z,_0010
+_0009:
+	LD	C,L
+	LD	B,H
+	LD	DE,(g_aoRegisters+6)
+	CALL	vReceive
+_0010:
+	RET
+_0035:
+	LD	BC,1
+	LD	DE,g_aoRegisters+1
+	CALL	vJIOTransmit
+	LD	BC,2
+	LD	DE,g_aoRegisters+4
+	RET
+vDOS_WRITE_FILE_HANDLE:
+	CALL	_0035
+	CALL	vJIOTransmit
+	LD	HL,(g_aoRegisters+4)
+	LD	A,L
+	OR	H
+	JR	Z,_0012
+_0011:
+	LD	C,L
+	LD	B,H
+	LD	DE,(g_aoRegisters+6)
+	CALL	vJIOTransmit
+_0012:
+	LD	BC,3
+	JP	_0029
+vDOS_MOVE_FILE_POINTER:
+	CALL	_0036
+	CALL	_0037
+	LD	BC,4
+	LD	DE,g_aoRegisters+4
+	CALL	vJIOTransmit
+	LD	BC,5
+	JP	_0029
+vDOS_GET_CURRENT_DIRECTORY:
+	CALL	_0036
+	LD	BC,1
+	LD	DE,g_aoRegisters+4
+	CALL	_0040
+	LD	DE,(g_aoRegisters+6)
+	CALL	vReceive
+	XOR	A
+	LD	(g_aoRegisters+3),A
+	RET
+_0040:
+	CALL	vReceive
+	LD	BC,(g_aoRegisters+4)
+	LD	B,0
+	RET
+vDOS_CREATE_FILE_HANDLE:
+	LD	DE,(g_aoRegisters+6)
+	CALL	vTransmitString
+	CALL	_0037
+	CALL	_0036
+	JP	_0008
+vDOS_ENSURE_FILE_HANDLE:
+	XOR	A
+	LD	(g_aoRegisters+3),A
+	RET
+vDOS_GET_WHOLE_PATH:
+	LD	HL,(g_aoRegisters+6)
+	LD	B,(HL)
+	INC	B
+	JR	NZ,_0014
+_0013:
+	CALL	_0039
+	JR	_0015
+_0014:
+	EX	DE,HL
+	CALL	vTransmitString
+_0015:
+	CALL	_0042
+	LD	BC,(g_aoRegisters+5)
+	LD	B,0
+	LD	DE,(g_aoRegisters+6)
+	CALL	_0040
+	LD	HL,(g_aoRegisters+6)
+	ADD	HL,BC
+	LD	(g_aoRegisters+4),HL
+	RET
+vDOS_DELETE_FILE_SUBDIR:
+	LD	HL,(g_aoRegisters+6)
+	LD	B,(HL)
+	INC	B
+	JR	NZ,_0017
+_0016:
+	CALL	_0039
+	JR	_0018
+_0017:
+	EX	DE,HL
+	CALL	vTransmitString
+_0018:
+	LD	BC,1
+	JP	_0029
+vDOS_GET_SET_FILE_ATTRBIUTES:
+	LD	HL,(g_aoRegisters+6)
+	LD	B,(HL)
+	INC	B
+	JR	NZ,_0020
+_0019:
+	CALL	_0039
+	JR	_0021
+_0020:
+	EX	DE,HL
+	CALL	vTransmitString
+_0021:
+	LD	BC,2
+	CALL	_0038
+	LD	BC,2
+	JP	_0029
+vDOS_FILE_DATE_TIME:
+	LD	BC,7
+	CALL	_0038
+	LD	BC,5
+	JP	_0029
+bDoCommand:
+	LD	HL,(g_aoRegisters)
+	LD	H,0
+	ADD	HL,HL
+	LD	BC,g_aDosHandlers
+	ADD	HL,BC
+	LD	A,(HL)
+	INC	HL
+	OR	(HL)
+	JR	Z,_0023
+_0022:
+	LD	A,(g_aoRegisters)
+	LD	(g_oCommonHeader+5),A
+	LD	BC,6
+	LD	DE,g_oCommonHeader
+	CALL	vJIOTransmit
+	LD	HL,(g_aoRegisters)
+	LD	H,0
+	ADD	HL,HL
+	LD	BC,g_aDosHandlers
+	ADD	HL,BC
+	LD	B,(HL)
+	INC	HL
+	LD	H,(HL)
+	LD	L,B
+	CALL	_CALL_IND_L09
+	LD	A,1
+_0023:
+_0024:
+	RET
+g_aDosHandlers:
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_GET_ALLOCATION_INFO
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_FIND_FIRST_ENTRY
+	DEFW	vDOS_FIND_NEXT_ENTRY
+	DEFW	vDOS_FIND_FIRST_ENTRY
+	DEFW	vDOS_OPEN_FILE_HANDLE
+	DEFW	vDOS_CREATE_FILE_HANDLE
+	DEFW	vDOS_CLOSE_FILE_HANDLE
+	DEFW	vDOS_ENSURE_FILE_HANDLE
+	DEFW	0
+	DEFW	vDOS_READ_FILE_HANDLE
+	DEFW	vDOS_WRITE_FILE_HANDLE
+	DEFW	vDOS_MOVE_FILE_POINTER
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_DELETE_FILE_SUBDIR
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_GET_SET_FILE_ATTRBIUTES
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_FILE_DATE_TIME
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_GET_CURRENT_DIRECTORY
+	DEFW	vDOS_CHANGE_CURRENT_DIRECTORY
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	vDOS_GET_WHOLE_PATH
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
+	DEFW	0
