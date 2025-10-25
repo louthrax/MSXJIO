@@ -1,4 +1,7 @@
 vJIOTransmit:
+                                ld                              b,d
+                                ld                              c,e
+
                                 exx
                                 push                            bc
                                 push                            de
@@ -13,7 +16,6 @@ vJIOTransmit:
                                 ret
 
 vJIOTransmit2:
-                                ex                              de,hl
                                 inc	bc
                                 exx
                                 ld	a,15

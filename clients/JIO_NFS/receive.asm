@@ -1,10 +1,5 @@
 bJIOReceive:
-                                ld                              h,d
-                                ld                              l,e
-
-                                ld                              d,b
-                                ld                              e,c
-
+                                out                             (0x2D),a
                                 push	ix
                                 push	de
 

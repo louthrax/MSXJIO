@@ -89,7 +89,7 @@ typedef union
 
 unsigned int SPSave = {0};
 tdRegisters g_aoRegisters = { { 0,0,0,0,0 } };
-tdCommonHeader	g_oCommonHeader = {0};
+tdCommonHeader	g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 
 
 /*
@@ -561,11 +561,11 @@ static bool bDoCommand()
 {
     if (g_aDosHandlers[C])
     {
-//        g_oCommonHeader.m_ucFunction = C;
-//        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
-//        g_aDosHandlers[C]();
+        g_oCommonHeader.m_ucFunction = C;
+        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        g_aDosHandlers[C]();
 
-        return false;
+        return true;
     }
     else
     {
@@ -574,6 +574,6 @@ static bool bDoCommand()
         vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
         vJIOTransmit(&C, sizeof(C));
 */
-      return false;
+        return false;
    }
 }
