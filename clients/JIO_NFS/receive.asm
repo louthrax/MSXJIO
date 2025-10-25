@@ -1,5 +1,4 @@
 bJIOReceive:
-                                out                             (0x2D),a
                                 push	ix
                                 push	de
 

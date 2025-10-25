@@ -48,11 +48,12 @@ __endasm;
  */
 void vMemCopy(void *dest, const void *src, unsigned int n)
 {
-    unsigned char *d = (unsigned char *)dest;
-    const unsigned char *s = (const unsigned char *)src;
-
-    while (n--)
-        *d++ = *s++;
+__asm
+    ex      de,hl
+	ld	    c,(ix+4)
+	ld	    b,(ix+5)
+    ldir
+__endasm;
 }
 /*
  =======================================================================================================================
@@ -72,8 +73,7 @@ void vRelocate(char * _pcCodeStart, unsigned int * _puiRelocationStart, unsigned
  =======================================================================================================================
  =======================================================================================================================
  */
-
- void main(char * driver_target)
+void main(char * driver_target)
 {
     char * jumper_target;
 
