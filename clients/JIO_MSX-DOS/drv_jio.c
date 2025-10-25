@@ -1,6 +1,6 @@
 
 
-#include "drv_jio.inc"
+#include "../../common/drv_jio.inc"
 
 typedef unsigned char bool;
 

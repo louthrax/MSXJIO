@@ -2,7 +2,7 @@
 
 #include "MainWindow.h"
 #include "Find.h"
-#include "../clients/JIO_MSX-DOS/drv_jio.inc"
+#include "../common/drv_jio.inc"
 
 #define PACKED __attribute__((packed))
 

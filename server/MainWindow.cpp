@@ -12,7 +12,7 @@
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
 
-#include "../clients/JIO_MSX-DOS/drv_jio.inc"
+#include "../common/drv_jio.inc"
 
 static_assert(sizeof(tdReadWriteHeader) == 7, "tdReadWriteHeader must be 7 bytes");
 std::coroutine_handle<> ByteReader::	m_soHandle = nullptr;

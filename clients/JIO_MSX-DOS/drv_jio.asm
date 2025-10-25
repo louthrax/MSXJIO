@@ -33,7 +33,7 @@ PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
 
 
 ; ----------------------------------------
-INCLUDE "drv_jio.inc"
+INCLUDE "../../common/drv_jio.inc"
 ; ----------------------------------------
 
 IFDEF DRV_IPL

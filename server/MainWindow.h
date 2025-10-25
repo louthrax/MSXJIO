@@ -12,7 +12,7 @@
 #include "Interface.h"
 #include "Common.h"
 #include "Drive.h"
-#include "../clients/JIO_NFS/jio_nfs.h"
+#include "../common/msxdos2.h"
 
 typedef struct __attribute__((packed))
 {

@@ -4,5 +4,4 @@ set -ex
 
 cd "$(dirname "$0")"
 
-rm -rf tmp
-rm -rf result
+rm -f ./Tmp/* driver.c.asm main.c.asm

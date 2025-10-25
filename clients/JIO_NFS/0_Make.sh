@@ -2,16 +2,13 @@
 
 set -ex
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/Tmp"
 
-mkdir -p tmp
-mkdir -p result
-rm -f tmp/*
+rm -f *
 
-wine iccZ80.exe jio_nfs.c -z9 -uu -K -o tmp/jio_nfs.r01 -a tmp/jio_nfs.as
-./clean_iar_asm.py tmp/jio_nfs.as tmp/jio_nfs.asm
+zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-reloc-info -odriver ../driver.c 2>&1 | grep -v ": warning 283:"
 
-z88dk-z80asm installer.asm -b -d -l -m -Otmp -o=../result/jio_nfs.com
+z88dk-z80asm -b -mz80 -reloc-info -o./jumper ../jumper.asm
+rm ../jumper.o
 
-mtools -c mcopy -i DOS2_tester/disk.dsk -D o -s result/jio_nfs.com ::
-cp -f result/jio_nfs.com DOS2_tester/disk
+zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     -omain   ../main.c  2>&1 | grep -v ": warning 283:"
