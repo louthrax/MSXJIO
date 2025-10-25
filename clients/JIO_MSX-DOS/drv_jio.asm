@@ -11,7 +11,7 @@
 
 IF !(CXDOS1 || CXDOS2)
         INCLUDE	"disk.inc"	; Assembler directives
-        INCLUDE	"msx.inc"	; MSX constants and definitions
+        INCLUDE	"../../common/msx.inc"	; MSX constants and definitions
 	DEFINE	DRV_IPL		; Include driver ipl routines
 	DEFINE	DRV_SYS		; Include driver system routines
 	SECTION	DRV_JIO

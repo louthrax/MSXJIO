@@ -87,6 +87,11 @@ typedef union
     tdRegisters;
 
 
+unsigned int SPSave = {0};
+tdRegisters g_aoRegisters = { { 0,0,0,0,0 } };
+tdCommonHeader	g_oCommonHeader = {0};
+
+
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -105,17 +110,6 @@ __asm
     ret
 __endasm;
 }
-
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-
- /* All globals need to be initialized in order to be linked at the end of the binary */
-
-unsigned int SPSave = {0};
-tdRegisters g_aoRegisters = { { 0,0,0,0,0 } };
-tdCommonHeader	g_oCommonHeader = {0};
 
 /*
  =======================================================================================================================
@@ -172,7 +166,7 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-size_t my_strlen(const char *str)
+static size_t my_strlen(const char *str)
 {
     const char *s = str;
 
@@ -186,191 +180,10 @@ size_t my_strlen(const char *str)
  =======================================================================================================================
  =======================================================================================================================
  */
-bool bJIOReceive(void *_pvDestination, unsigned int _uiSize) __naked
+static bool bJIOReceive(void *_pvDestination, unsigned int _uiSize) __naked
 {
 __asm
-
-bJIOReceive:
-                                ld                              h,d
-                                ld                              l,e
-
-                                ld                              d,b
-                                ld                              e,c
-
-                                push	ix
-                                push	de
-
-                                ld                              de,0
-
-                                dec	hl
-                                ld	b,(hl)	; What if HL=0 ?
-                                ld	c,0xa2
-                                ld	ix,0
-                                add	ix,sp
-                                ld	a,15
-                                out	(0xa0),a
-                                in	a,(0xa2)
-                                or	64
-                                out	(0xa1),a
-                                ld	a,14
-                                out	(0xa0),a
-                                in	a,(0xa2)
-                                or	1
-                                jp	pe,HeaderPE
-;________________________________________________________________________________________________________________________________
-
-HeaderPO:
-                                dec	de	;  7
-                                ld	a,d	;  5
-                                or	e	;  5
-                                jr	z,ReceiveTimeOut                ;  8
-
-                                in	f,(c)	; 14
-                                jp	po,HeaderPO	; 11   LOOP=50 (2-CLOCKS)
-                                rlc	a
-                                in	f,(c)	; 14
-                                jp	po,HeaderPO	; 11   At least 2 clocks needed to be down
-
-WU_PO:
-                                in	f,(c)	; 14
-                                jp	pe,WU_PO	; 11   LOOP=25
-                                pop	de
-                                push	de
-
-RX_PO:
-                                in	f,(c)	; 14
-                                jp	po,RX_PO	; 11   LOOP=25
-                                ld	(hl),b	;  8  = 33 CYCLES
-
-                                in	a,(c)	; 14   Bit 0
-                                nop
-                                rrca		;  5
-                                dec	de	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 1
-                                xor	b	;  5
-                                rrca		;  5
-                                inc	hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 2
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 3
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 4
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 5
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 6
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 7
-                                xor	b	;  5
-                                rrca		;  5
-
-                                ld	b,a	;  5
-                                ld	a,d	;  5
-                                or	e	;  5
-                                jp	nz,RX_PO	; 11
-;________________________________________________________________________________________________________________________________
-
-ReceiveOK:
-                                ld	(hl),b
-                                ld	sp,ix
-
-                                pop	de
-                                pop	ix
-                                ld                              a,1
-                                ret
-
-ReceiveTimeOut:
-                                pop	de
-                                pop	ix
-                                xor                             a
-                                ret
-;________________________________________________________________________________________________________________________________
-
-HeaderPE:
-                                dec	de	;  7
-                                ld	a,d	;  5
-                                or	e	;  5
-                                jr	z,ReceiveTimeOut	;  8
-
-                                in	f,(c)	; 14
-                                jp	pe,HeaderPE	; 11   LOOP= 50 (2-CLOCKS)
-                                rlc	a	; 10
-                                in	f,(c)	; 14
-                                jp	pe,HeaderPE	; 11   At least 2 clocks needed to be down
-
-WU_PE:	
-                                in	f,(c)	; 14
-                                jp	po,WU_PE	; 11   LOOP=25
-                                pop	de
-                                push	de
-
-RX_PE:	
-                                in	f,(c)	; 14
-                                jp	pe,RX_PE	; 11   LOOP=25
-                                ld	(hl),b	;  8 = 33 CYCLES
-
-                                in	a,(c)	; 14   Bit 0
-                                cpl		;  5
-                                rrca		;  5
-                                dec	de	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 1
-                                xor	b	;  5
-                                rrca		;  5
-                                inc	hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 2
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 3
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 4
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 5
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 6
-                                xor	b	;  5
-                                rrca		;  5
-                                ld	sp,hl	;  7 = 31 CYCLES
-
-                                in	b,(c)	; 14   Bit 7
-                                xor	b	;  5
-                                rrca		;  5
-
-                                ld	b,a	;  5
-                                ld	a,d	;  5
-                                or	e	;  5
-                                jp	nz,RX_PE	; 11
-
-                                jr	ReceiveOK
+#include "receive.asm"
 __endasm;
 }
 
@@ -378,133 +191,10 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-void vJIOTransmit(void *_pvSource, unsigned int _uiSize) __naked
+static void vJIOTransmit(void *_pvSource, unsigned int _uiSize) __naked
 {
 __asm
-vJIOTransmit:
-                                exx
-                                push                            bc
-                                push                            de
-                                exx
-
-                                call                            vJIOTransmit2
-
-                                exx
-                                pop                             de
-                                pop                             bc
-                                exx
-                                ret
-
-vJIOTransmit2:
-                                ex                              de,hl
-                                inc	bc
-                                exx
-                                ld	a,15
-                                out	(0xa0),a
-                                in	a,(0xa2)
-                                or	4
-                                ld	e,a
-                                xor	4
-                                ld	d,a
-                                ld	c,0xa1
-
-                                defb	0x3e
-JIOTransmitLoop:
-                                ret	nz
-                                out	(c),e
-                                exx
-                                ld	a,(hl)
-                                cpi
-                                ret	po
-                                exx
-                                rrca
-                                out	(c),d	; =0
-                                ret	nz
-                                jp	c,TRANSMIT10
-                                out	(c),d	; -0
-                                rrca
-                                jp	c,TRANSMIT11
-;________________________________________________________________________________________________________________________________
-
-TRANSMIT01:	
-                                out	(c),d	; -1
-                                rrca
-                                jr	c,TRANSMIT12
-                                nop
-
-TRANSMIT02:	
-                                out	(c),d	; -0
-                                rrca
-                                jp	c,TRANSMIT13
-
-TRANSMIT03:	
-                                out	(c),d	; -1
-                                rrca
-                                jr	c,TRANSMIT14
-                                nop
-
-TRANSMIT04:	
-                                out	(c),d	; -0
-                                rrca
-                                jp	c,TRANSMIT15
-
-TRANSMIT05:	
-                                out	(c),d	; -1
-                                rrca
-                                jr	c,TRANSMIT16
-                                nop
-
-TRANSMIT06:	
-                                out	(c),d	; -0
-                                rrca
-                                jp	c,TRANSMIT17
-
-TRANSMIT07:	
-                                out	(c),d	; -1
-                                jp	JIOTransmitLoop
-;________________________________________________________________________________________________________________________________
-
-TRANSMIT10:
-	out	(c),e	; -0
-                                rrca
-                                jp	nc,TRANSMIT01
-
-TRANSMIT11:
-	out	(c),e	; -1
-                                rrca
-                                jr	nc,TRANSMIT02
-                                nop
-
-TRANSMIT12:	
-                                out	(c),e	; -0
-                                rrca
-                                jp	nc,TRANSMIT03
-
-TRANSMIT13:	
-                                out	(c),e	; -1
-                                rrca
-                                jr	nc,TRANSMIT04
-                                nop
-
-TRANSMIT14:	
-                                out	(c),e	; -0
-                                rrca
-                                jp	nc,TRANSMIT05
-
-TRANSMIT15:	
-                                out	(c),e	; -1
-                                rrca
-                                jr	nc,TRANSMIT06
-                                nop
-
-TRANSMIT16:	
-                                out	(c),e	; -0
-                                rrca
-                                jp	nc,TRANSMIT07
-
-TRANSMIT17:	
-                                out	(c),e	; -1
-                                jp	JIOTransmitLoop
+#include "transmit.asm"
 __endasm;
 }
 
@@ -512,7 +202,7 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-void vTransmitString(char *_pcString)
+static void vTransmitString(char *_pcString)
 {
     vJIOTransmit(_pcString, my_strlen(_pcString) + 1);
 }
@@ -521,7 +211,7 @@ void vTransmitString(char *_pcString)
  =======================================================================================================================
  =======================================================================================================================
  */
-void vReceive(void *_pvAddress, unsigned int _uiLength)
+static void vReceive(void *_pvAddress, unsigned int _uiLength)
 {
 	while(!bJIOReceive(_pvAddress, _uiLength));
 }
@@ -550,7 +240,7 @@ static void vDOS_FIND_FIRST_ENTRY()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_FIND_NEXT_ENTRY()
+static void vDOS_FIND_NEXT_ENTRY()
 {
     vJIOTransmit(FIB, sizeof(*FIB));
 
@@ -562,7 +252,7 @@ void vDOS_FIND_NEXT_ENTRY()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_GET_ALLOCATION_INFO()
+static void vDOS_GET_ALLOCATION_INFO()
 {
     A = 2;
     BCi = 512;
@@ -574,7 +264,7 @@ void vDOS_GET_ALLOCATION_INFO()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_CHANGE_CURRENT_DIRECTORY()
+static void vDOS_CHANGE_CURRENT_DIRECTORY()
 {
     vTransmitString(DE);
 
@@ -585,7 +275,7 @@ void vDOS_CHANGE_CURRENT_DIRECTORY()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_OPEN_FILE_HANDLE()
+static void vDOS_OPEN_FILE_HANDLE()
 {
     vJIOTransmit(&A, sizeof(A));
 
@@ -602,7 +292,7 @@ void vDOS_OPEN_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_CLOSE_FILE_HANDLE()
+static void vDOS_CLOSE_FILE_HANDLE()
 {
     vJIOTransmit(&B, sizeof(B));
 
@@ -613,7 +303,7 @@ void vDOS_CLOSE_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_READ_FILE_HANDLE()
+static void vDOS_READ_FILE_HANDLE()
 {
     vJIOTransmit(&B, sizeof(B));
     vJIOTransmit(&HL, sizeof(HL));
@@ -627,7 +317,7 @@ void vDOS_READ_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_WRITE_FILE_HANDLE()
+static void vDOS_WRITE_FILE_HANDLE()
 {
     vJIOTransmit(&B, sizeof(B));
     vJIOTransmit(&HL, sizeof(HL));
@@ -641,7 +331,7 @@ void vDOS_WRITE_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_MOVE_FILE_POINTER()
+static void vDOS_MOVE_FILE_POINTER()
 {
     vJIOTransmit(&B, sizeof(B));
     vJIOTransmit(&A, sizeof(A));
@@ -654,7 +344,7 @@ void vDOS_MOVE_FILE_POINTER()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_GET_CURRENT_DIRECTORY()
+static void vDOS_GET_CURRENT_DIRECTORY()
 {
     vJIOTransmit(&B, sizeof(B));
 
@@ -667,7 +357,7 @@ void vDOS_GET_CURRENT_DIRECTORY()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_CREATE_FILE_HANDLE()
+static void vDOS_CREATE_FILE_HANDLE()
 {
     vTransmitString(DE);
     vJIOTransmit(&A, sizeof(A));
@@ -681,7 +371,7 @@ void vDOS_CREATE_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_ENSURE_FILE_HANDLE()
+static void vDOS_ENSURE_FILE_HANDLE()
 {
     A = 0;
 }
@@ -690,7 +380,7 @@ void vDOS_ENSURE_FILE_HANDLE()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_GET_WHOLE_PATH()
+static void vDOS_GET_WHOLE_PATH()
 {
     if (DE[0] == 0xFF)
         vJIOTransmit(DE, sizeof(tdFileInfoBlock));
@@ -706,7 +396,7 @@ void vDOS_GET_WHOLE_PATH()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_DELETE_FILE_SUBDIR()
+static void vDOS_DELETE_FILE_SUBDIR()
 {
     if (DE[0] == 0xFF)
         vJIOTransmit(DE, sizeof(tdFileInfoBlock));
@@ -720,7 +410,7 @@ void vDOS_DELETE_FILE_SUBDIR()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_GET_SET_FILE_ATTRBIUTES()
+static void vDOS_GET_SET_FILE_ATTRBIUTES()
 {
     if (DE[0] == 0xFF)
         vJIOTransmit(DE, sizeof(tdFileInfoBlock));
@@ -736,7 +426,7 @@ void vDOS_GET_SET_FILE_ATTRBIUTES()
  =======================================================================================================================
  =======================================================================================================================
  */
-void vDOS_FILE_DATE_TIME()
+static void vDOS_FILE_DATE_TIME()
 {
     vJIOTransmit(&A, sizeof(A) + sizeof(HL) + sizeof(DE) + sizeof(IX));
     vReceive(&A, sizeof(A) + sizeof(HL) + sizeof(DE));
@@ -867,7 +557,7 @@ static const tdDosHandler g_aDosHandlers[] =
  =======================================================================================================================
  =======================================================================================================================
  */
-bool bDoCommand()
+static bool bDoCommand()
 {
     if (g_aDosHandlers[C])
     {

@@ -1,4 +1,4 @@
-#include "../JIO_MSX-DOS/msx.inc"
+#include "../../common/msx.inc"
 
                                 di
 
