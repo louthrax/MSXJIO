@@ -328,24 +328,24 @@ Task MainWindow::oParser()
         {
         case COMMAND_BDOS:
         {
-            unsigned char ucFunction;
-            unsigned char ucFileHandle;
-            unsigned char ucSearchAttributes;
-            unsigned char ucAttributes;
-            unsigned char ucOpenMode;
-            unsigned char ucDriveNumber;
-            unsigned char ucMethodCode;
-            unsigned char ucGetOrSet;
-            unsigned char ucNewAttributes;
+            unsigned char         ucFunction;
+            unsigned char         ucFileHandle;
+            unsigned char         ucSearchAttributes;
+            unsigned char         ucAttributes;
+            unsigned char         ucOpenMode;
+            unsigned char         ucDriveNumber;
+            unsigned char         ucMethodCode;
+            unsigned char         ucGetOrSet;
+            unsigned char         ucNewAttributes;
+            int                   iSignedOffset;
+            unsigned short int    uiSize;
+            unsigned short int    uiNewTime;
+            unsigned short int    uiNewDate;
+            char*                 pcData;
 
-            int           iSignedOffset;
-            unsigned short int uiSize;
-            unsigned short int uiNewTime;
-            unsigned short int uiNewDate;
             tdFileInfoBlockServer oFIB;
-
-            QString szPath;
-            QString szWildcard;
+            QString               szPath;
+            QString               szWildcard;
 
             vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
             vLog(eLogBDOS, "%s\n", tdFunctionToString((tdFunction)ucFunction));
@@ -360,7 +360,6 @@ Task MainWindow::oParser()
                vLog(eLogBDOSDetails, "ucSearchAttributes %d\n", ucSearchAttributes);
                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
                vDOS_FIND_FIRST_ENTRY(ucSearchAttributes, szPath, oFIB, szWildcard);
                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
                break;
@@ -406,18 +405,15 @@ Task MainWindow::oParser()
                 break;
 
             case DOS_WRITE_TO_FILE_HANDLE:
-            {
-                char * acData;
                 vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
                 vReceive(&uiSize, sizeof(uiSize), 0, uiCRC);
                 vLog(eLogBDOSDetails, "ucFileHandle %s\n", szGetFileHandleDescription(ucFileHandle).toLocal8Bit().constData());
                 vLog(eLogBDOSDetails, "uiSize %d\n", uiSize);
-                acData = uiSize ? (char *) malloc(uiSize) : NULL;
-                vReceive(acData, uiSize, ucFlags, uiCRC);
-                vDOS_WRITE_TO_FILE_HANDLE(ucFileHandle, uiSize, acData);
-                if (acData)
-                    free(acData);
-            }
+                pcData = uiSize ? (char *) malloc(uiSize) : NULL;
+                vReceive(pcData, uiSize, ucFlags, uiCRC);
+                vDOS_WRITE_TO_FILE_HANDLE(ucFileHandle, uiSize, pcData);
+                if (pcData)
+                    free(pcData);
                 break;
 
             case DOS_CLOSE_FILE_HANDLE:
@@ -483,7 +479,6 @@ Task MainWindow::oParser()
                 vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(szPath, oFIB, ucGetOrSet, uiNewDate, uiNewTime);
                 break;
 
-
             case 0xFF:
                 vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
                 vLog(eLogBDOSDetails, "ucFunction %s\n", tdFunctionToString((tdFunction)ucFunction));
@@ -534,9 +529,9 @@ Task MainWindow::oParser()
                 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
                 QByteArray	oInfoData;
                 quint8		W_FLAGS =
-                    (m_bRxCRC ? FLAG_RX_CRC : 0) |
-                    (m_bTxCRC ? FLAG_TX_CRC : 0) |
-                    (m_bTimeout ? FLAG_TIMEOUT : 0) |
+                    (m_bRxCRC ? FLAG_RX_CRC : 0)         |
+                    (m_bTxCRC ? FLAG_TX_CRC : 0)         |
+                    (m_bTimeout ? FLAG_TIMEOUT : 0)      |
                     (m_bAutoRetry ? FLAG_AUTO_RETRY : 0) |
                     (m_bSlowTx ? FLAG_SLOW_TX : 0);
                 quint8		W_DRIVES = m_oDrive.uiPartitionCount();
