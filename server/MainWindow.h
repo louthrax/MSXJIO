@@ -12,23 +12,9 @@
 #include "Interface.h"
 #include "Common.h"
 #include "Drive.h"
-#include "../common/msxdos2.h"
 
-typedef struct __attribute__((packed))
-{
-    unsigned char m_ucFF;					        /*      0 - Always 0FFh */
-    char m_acFileName[13]; 					        /*  1..13 - Filename as an ASCIIZ string */
-    unsigned char m_cAttributes;			        /*     14 - File attributes byte */
-    unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
-    unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
-    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
-    unsigned int  m_ulFileSize; 			        /* 21..24 - File size */
-    unsigned char m_ucDrive; 				        /*     25 - Logical drive */
-    QFile * m_poFile;
-    char m_acRegExp[13]; 					        /* 26..63 - Internal information, must not be modified */
-    unsigned char m_ucResult;
-}
-tdFileInfoBlockServer;
+#define JIO_SERVER
+#include "../common/msxdos2.h"
 
 typedef enum {
     eInterfaceSerial,
@@ -104,28 +90,28 @@ private:
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
     void		vUpdateLights();
 
-    void vUpdateFIB(tdFileInfoBlockServer *_poFIB);
+    void vUpdateFIB(tdFileInfoBlock *_poFIB);
 
 
-    QString         szGetFIBDescription(tdFileInfoBlockServer &_roFIB);
+    QString         szGetFIBDescription(tdFileInfoBlock &_roFIB);
     QString         szGetFileHandleDescription(unsigned char _ucFileHandle);
 
     unsigned char   ucAddFile(QFile * _poFile);
     void            vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle);
     void            vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize);
     void            vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize, char * _pcData);
-    void            vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlockServer &_roFIB, QString _szWildcard);
-    void            vDOS_FIND_NEW_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlockServer &_roFIB, QString _szWildcard);
-    void            vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory, tdFileInfoBlockServer &_oFIB);
+    void            vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlock &_roFIB, QString _szWildcard);
+    void            vDOS_FIND_NEW_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlock &_roFIB, QString _szWildcard);
+    void            vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory, tdFileInfoBlock &_oFIB);
     void            vDOS_CHANGE_CURRENT_DIRECTORY(QString _szDirectory);
-    void            vDOS_FIND_NEXT_ENTRY(tdFileInfoBlockServer &_roFIB);
+    void            vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB);
     void            vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, int _iOffset);
     void            vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber);
     void            vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenMode, unsigned char _ucAttributes);
-    void            vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlockServer &_roFIB);
-    void            vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlockServer &_roFIB);
-    void            vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlockServer &_roFIB, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes);
-    void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileInfoBlockServer &_roFIB, unsigned char ucGetOrSet, unsigned short int uiNewDate, unsigned short int uiNewTime);
+    void            vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlock &_roFIB);
+    void            vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlock &_roFIB);
+    void            vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes);
+    void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char ucGetOrSet, unsigned short int uiNewDate, unsigned short int uiNewTime);
 
     void            BDOSToQt(QString & _roString);
     void            QtToBDOS(QString & _roString);

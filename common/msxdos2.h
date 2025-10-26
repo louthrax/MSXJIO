@@ -199,3 +199,39 @@ enum {
 	ATTRIBUTE_DEVICE_BIT  = 128
 };
 
+#ifdef QT_VERSION
+typedef struct __attribute__((packed))
+{
+    unsigned char      m_ucFF;					    /*      0 - Always 0FFh */
+    char               m_acFileName[13]; 			/*  1..13 - Filename as an ASCIIZ string */
+    unsigned char      m_cAttributes;			    /*     14 - File attributes byte */
+    unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
+    unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
+    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
+    unsigned int       m_ulFileSize; 			    /* 21..24 - File size */
+    unsigned char      m_ucDrive; 				    /*     25 - Logical drive */
+    QFile *            m_poFile;
+    char               m_acRegExp[13]; 				/* 26..63 - Internal information, must not be modified */
+    unsigned char      m_ucResult;
+}
+tdFileInfoBlock;
+
+static_assert(sizeof(tdFileInfoBlock) == 48);
+
+#else
+typedef struct
+{
+    unsigned char      m_ucFF;					    /*      0 - Always 0FFh */
+    char               m_acFileName[13]; 			/*  1..13 - Filename as an ASCIIZ string */
+    unsigned char      m_cAttributes;			    /*     14 - File attributes byte */
+    unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
+    unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
+    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
+    unsigned long      m_ulFileSize; 			    /* 21..24 - File size */
+    unsigned char      m_ucDrive; 				    /*     25 - Logical drive */
+    unsigned char      m_acQtFile[8];
+    char               m_acRegExp[13];
+    unsigned char      m_ucResult;
+}
+tdFileInfoBlock;
+#endif

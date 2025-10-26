@@ -36,23 +36,6 @@ typedef struct
     unsigned char   m_ucFunction;
 } tdCommonHeader;
 
-
-typedef struct
-{
-    unsigned char m_ucFF;					        /*      0 - Always 0FFh */
-    char m_acFileName[13]; 					        /*  1..13 - Filename as an ASCIIZ string */
-    unsigned char m_cAttributes;			        /*     14 - File attributes byte */
-    unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
-    unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
-    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
-    unsigned long  m_ulFileSize; 			        /* 21..24 - File size */
-    unsigned char m_ucDrive; 				        /*     25 - Logical drive */
-    unsigned char m_acQtFile[8];
-    char m_acRegExp[13];
-    unsigned char m_ucResult;
-}
-    tdFileInfoBlock;
-
 typedef union
 {
     struct {
@@ -532,25 +515,25 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x5B DOS_PARSE_PATHNAME                    */ 0,
     /* 0x5C DOS_PARSE_FILENAME                    */ 0,
     /* 0x5D DOS_CHECK_CHARACTER                   */ 0,
-    /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING,
-    /* 0x5F DOS_FLUSH_DISK_BUFFERS                */ 0,
-    /* 0x60 DOS_FORK_A_CHILD_PROCESS              */ 0,
-    /* 0x61 DOS_REJOIN_PARENT_PROCESS             */ 0,
-    /* 0x62 DOS_TERMINATE_WITH_ERROR_CODE         */ 0,
-    /* 0x63 DOS_DEFINE_ABORT_ROUTINE              */ 0,
-    /* 0x64 DOS_DEFINE_DISK_ERROR_HANDLER_ROUTINE */ 0,
-    /* 0x65 DOS_GET_PREVIOUS_ERROR_CODE           */ 0,
-    /* 0x66 DOS_EXPLAIN_ERROR_CODE                */ 0,
-    /* 0x67 DOS_FORMAT_A_DISK                     */ 0,
-    /* 0x68 DOS_CREATE_OR_DESTROY_RAMDISK         */ 0,
-    /* 0x69 DOS_ALLOCATE_SECTOR_BUFFERS           */ 0,
-    /* 0x6A DOS_LOGICAL_DRIVE_ASSIGNMENT          */ 0,
-    /* 0x6B DOS_GET_ENVIRONMENT_ITEM              */ 0,
-    /* 0x6C DOS_SET_ENVIRONMENT_ITEM              */ 0,
-    /* 0x6D DOS_FIND_ENVIRONMENT_ITEM             */ 0,
-    /* 0x6E DOS_GET_SET_DISK_CHECK_STATUS         */ 0,
-    /* 0x6F DOS_GET_MSX_DOS_VERSION_NUMBER        */ 0,
-    /* 0x70 DOS_GET_SET_REDIRECTION_STATUS        */ 0
+    /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING
+    /* 0x5F DOS_FLUSH_DISK_BUFFERS                */ 
+    /* 0x60 DOS_FORK_A_CHILD_PROCESS              */ 
+    /* 0x61 DOS_REJOIN_PARENT_PROCESS             */ 
+    /* 0x62 DOS_TERMINATE_WITH_ERROR_CODE         */ 
+    /* 0x63 DOS_DEFINE_ABORT_ROUTINE              */ 
+    /* 0x64 DOS_DEFINE_DISK_ERROR_HANDLER_ROUTINE */ 
+    /* 0x65 DOS_GET_PREVIOUS_ERROR_CODE           */ 
+    /* 0x66 DOS_EXPLAIN_ERROR_CODE                */ 
+    /* 0x67 DOS_FORMAT_A_DISK                     */ 
+    /* 0x68 DOS_CREATE_OR_DESTROY_RAMDISK         */ 
+    /* 0x69 DOS_ALLOCATE_SECTOR_BUFFERS           */ 
+    /* 0x6A DOS_LOGICAL_DRIVE_ASSIGNMENT          */ 
+    /* 0x6B DOS_GET_ENVIRONMENT_ITEM              */ 
+    /* 0x6C DOS_SET_ENVIRONMENT_ITEM              */ 
+    /* 0x6D DOS_FIND_ENVIRONMENT_ITEM             */ 
+    /* 0x6E DOS_GET_SET_DISK_CHECK_STATUS         */ 
+    /* 0x6F DOS_GET_MSX_DOS_VERSION_NUMBER        */ 
+    /* 0x70 DOS_GET_SET_REDIRECTION_STATUS        */ 
 };
 
 /*
@@ -559,7 +542,7 @@ static const tdDosHandler g_aDosHandlers[] =
  */
 static bool bDoCommand()
 {
-    if (g_aDosHandlers[C])
+    if ((C <= DOS_GET_WHOLE_PATH_STRING) && g_aDosHandlers[C])
     {
         g_oCommonHeader.m_ucFunction = C;
         vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
@@ -572,7 +555,7 @@ static bool bDoCommand()
         g_oCommonHeader.m_ucFunction = 0xFF;
         vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
         vJIOTransmit(&C, sizeof(C));
-        
+
         return false;
    }
 }

@@ -76,7 +76,7 @@ void MainWindow::QtToBDOS(QString & _roString)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vUpdateFIB(tdFileInfoBlockServer *_poFIB)
+void MainWindow::vUpdateFIB(tdFileInfoBlock *_poFIB)
 {
     _poFIB->m_ucFF = 0xFF;
 
@@ -170,7 +170,7 @@ void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString szDirectory, tdFileInfoBlockServer &_roFIB, QString _szWildcard)
+void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString szDirectory, tdFileInfoBlock &_roFIB, QString _szWildcard)
 {
     if (ucSearchAttributes & ATTRIBUTE_VOLUME_NAME)
     {
@@ -208,7 +208,7 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _szPath, tdFileInfoBlockServer &_roFIB, QString _szWildcard)
+void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _szPath, tdFileInfoBlock &_roFIB, QString _szWildcard)
 {
     if (_roFIB.m_ucFF == 0xFF)
     {
@@ -284,7 +284,7 @@ QString findFileCaseInsensitive(const QString& path)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory, tdFileInfoBlockServer &_roFIB)
+void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory, tdFileInfoBlock &_roFIB)
 {
     struct PACKED
     {
@@ -339,7 +339,7 @@ void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(QString _szDirectory)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlockServer &_roFIB)
+void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
 {
     _roFIB.m_poFile = poGetNextEntry(_roFIB.m_poFile, _roFIB.m_acRegExp, m_szBDOSRootDir, _roFIB.m_cAttributes & ATTRIBUTE_DIRECTORY);
 
@@ -467,7 +467,7 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenM
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlockServer &_roFIB)
+void MainWindow::vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlock &_roFIB)
 {
     struct PACKED
     {
@@ -499,7 +499,7 @@ void MainWindow::vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlock
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlockServer &_roFIB)
+void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlock &_roFIB)
 {
     unsigned char ucError;
 
@@ -524,7 +524,7 @@ void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlo
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlockServer &_roFIB, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes)
+void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes)
 {
     struct PACKED
     {
@@ -553,7 +553,7 @@ void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlockSe
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileInfoBlockServer &_roFIB, unsigned char ucSet, unsigned short int uiNewDate, unsigned short int uiNewTime)
+void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char ucSet, unsigned short int uiNewDate, unsigned short int uiNewTime)
 {
     struct PACKED
     {

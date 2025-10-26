@@ -150,7 +150,7 @@ QString MainWindow::szGetServerInfo()
  =======================================================================================================================
  */
 
-QString MainWindow::szGetFIBDescription(tdFileInfoBlockServer &_roFIB)
+QString MainWindow::szGetFIBDescription(tdFileInfoBlock &_roFIB)
 {
     if (_roFIB.m_ucFF == 0xFF)
         return QString(_roFIB.m_acFileName) + " | " + QString(_roFIB.m_poFile ? _roFIB.m_poFile->fileName(): "**NULL**");
@@ -343,7 +343,7 @@ Task MainWindow::oParser()
             unsigned short int    uiNewDate;
             char*                 pcData;
 
-            tdFileInfoBlockServer oFIB;
+            tdFileInfoBlock oFIB;
             QString               szPath;
             QString               szWildcard;
 
