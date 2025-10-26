@@ -211,10 +211,41 @@ typedef struct __attribute__((packed))
     unsigned int       m_ulFileSize; 			    /* 21..24 - File size */
     unsigned char      m_ucDrive; 				    /*     25 - Logical drive */
     QFile *            m_poFile;
-    char               m_acRegExp[13]; 				/* 26..63 - Internal information, must not be modified */
+    char               m_acRegExp[13];
     unsigned char      m_ucResult;
 }
 tdFileInfoBlock;
+
+
+typedef struct
+{
+    unsigned char m_ucDriverNumber;
+    char          m_acFileName[8];
+    char          m_acFileNameExtension[3];
+    unsigned char m_ucExtentNumber;
+    unsigned char m_ucFileAttributes;
+
+    union
+    {
+        struct
+        {
+            unsigned char m_ucExtentHigh;
+            unsigned char m_ucRecordCount;
+        } cpm;
+
+        struct
+        {
+            unsigned int m_uiRecordSize;
+        } dos;
+    } u;
+
+    unsigned int  m_ulFileSize;
+    unsigned int  m_ulVolumeID;
+    unsigned char m_ucResult;
+    unsigned char m_ucCurrentRecordWithinExtent;
+    unsigned int  m_ulRandomRecordNumber;
+}
+tdFileControlBlock;
 
 static_assert(sizeof(tdFileInfoBlock) == 48);
 
@@ -234,4 +265,129 @@ typedef struct
     unsigned char      m_ucResult;
 }
 tdFileInfoBlock;
+
+typedef struct
+{
+    unsigned char m_ucDriverNumber;
+    char          m_acFileName[8];
+    char          m_acFileNameExtension[3];
+    unsigned char m_ucExtentNumber;
+    unsigned char m_ucFileAttributes;
+
+    union
+    {
+        struct
+        {
+            unsigned char m_ucExtentHigh;
+            unsigned char m_ucRecordCount;
+        } cpm;
+
+        struct
+        {
+            unsigned int m_uiRecordSize;
+        } dos;
+    } u;
+
+    unsigned long m_ulFileSize;
+    unsigned long m_ulVolumeID;
+    unsigned char m_ucResult;
+    unsigned char m_ucCurrentRecordWithinExtent;
+    unsigned long m_ulRandomRecordNumber;
+}
+tdFileControlBlock;
+
 #endif
+
+
+
+/*
+
+3.6 FILE CONTROL BLOCKS
+
+It is not anticipated that specially written MSX-DOS 2
+transient programs or MSX-DOS 1 or CP/M programs which are modified for MSX-DOS
+2 will use the CP/M-compatible FCB functions, but the format of the FCBs used
+for these functions is given here for reference. This format is, of course, very
+similar to the FCBs used by CP/M and MSX-DOS 1 but the use of some of the fields
+within the FCB are different (though generally compatible).
+
+A basic FCB is 33 bytes long. This type of FCB can be used for file management
+operations (delete, rename etc.) and also for sequential reading and writing.
+The random read and write functions use an extra 3 bytes on the end of the FCB
+to store a random record number. The MSX-DOS 1 compatible block read and write
+functions also use this additional three (or in some cases four) bytes - see the
+Function Specification for details.
+
+The layout of an FCB is given below. A general description of each of the fields
+is included here. The individual function description given in the Function
+Specification details of how the fields are used for each function where this is
+not obvious.
+
+00h Drive number 1...8. 0 => default drive. Must be set up in all FCBs used,
+never modified by MSX-DOS function calls (except "Open File" if APPEND was
+used).
+
+01h...08h Filename, left justified with trailing blanks. Can contain "?"
+characters if ambiguous filename is allowed (see Function Specification). When
+doing comparisons case will be ignored. When creating new files, name will be
+uppercased.
+
+09h...0Bh Filename extension. Identical to filename. Note that bit-7 of the
+filename extension characters are NOT interpreted as flags as they are in CP/M.
+
+0Ch Extent number (low byte). Must be set (usually to zero) by the transient
+program before open or create. It is used and updated by sequential read and
+write, and also set by random read and write. This is compatible with CP/M and
+MSX-DOS 1.
+
+0Dh File attributes. Set by "open", "create" or "find".
+
+0Eh Extent number (high byte) for CP/M functions. Zeroed by open and create. For
+sequential read and write it is used and updated as an extension to the extent
+number to allow larger files to be accessed. Although this is different from
+CP/M it does not interfere with CP/Ms use of FCBs and is the same as MSX-DOS 1.
+
+Record size (low byte) for MSX-DOS 1 compatible block functions. Must be set to
+the required record size before using the block read or write functions.
+
+0Fh Record count for CP/M functions. Set up by open and create and modified when
+necessary by sequential and random reads and writes. This is the same as CP/M
+and MSX-DOS 1.
+
+Record size (high byte) for MSX-DOS 1 compatible block functions. Must be set to
+the required record size before using the block read and write functions.
+
+10h...13h File size in bytes, lowest byte first. File size is exact, not rounded
+up to 128 bytes. This field is set up by open and create and updated when the
+file is extended by write operations. Should not be modified by the transient
+program as it is written back to disk by a close function call. This is the same
+as MSX-DOS 1 but different from CP/M which stores allocation information here.
+
+14h...17h Volume-id. This is a four byte number identifying the particular disk
+which this FCB is accessing. It is set up by open and create and is checked on
+read, write and close calls. Should not be modified by the program. Note that
+this is different from MSX-DOS 1 which stores the date and time of last update
+here, and from CP/M which stores allocation information.
+
+18h...1Fh Internal information. These bytes contain information to enable the
+file to be located on the disk. Should not be modified at all by the transient
+program. The internal information kept here is similar but not identical to that
+kept by MSX-DOS 1 and totally different from CP/M.
+
+20h Current record within extent (0...127). Must be set (normally to zero) by
+the transient program before first sequential read or write. Used and modified
+by sequential read and write. Also set up by random read and write. This is
+compatible with CP/M and MSX-DOS 1.
+
+21h...24h Random record number, low byte first. This field is optional, it is
+only required if random or block reads or writes are used. It must be set up
+before doing these operations and is updated by block read and write but not by
+random read or write. Also set up by the "set random record" function.
+
+For the block operations, which are in MSX-DOS 1 but not in CP/M, all four bytes
+are used if the record size is less than 64 bytes, and only the first three
+bytes are used if the record size is 64 bytes or more. For random read and write
+only the first three bytes are used (implied record size is 128 bytes). This is
+compatible with CP/M and with MSX-DOS 1.
+
+*/
