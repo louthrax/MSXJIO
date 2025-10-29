@@ -376,7 +376,7 @@ Task MainWindow::oParser()
                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
 
-               vDOS_FIND_FIRST_ENTRY(ucSearchAttributes, szPath, oFIB);
+               vDOS_FIND_FIRST_ENTRY(ucSearchAttributes, ucPhysicalDrive, szPath, oFIB);
 
                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
                break;
@@ -396,7 +396,7 @@ Task MainWindow::oParser()
                 vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
                 vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
 
-                vDOS_FIND_NEW_ENTRY(ucSearchAttributes, szPath, oFIB);
+                vDOS_FIND_NEW_ENTRY(ucSearchAttributes, ucPhysicalDrive, szPath, oFIB);
 
                 vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
                 break;

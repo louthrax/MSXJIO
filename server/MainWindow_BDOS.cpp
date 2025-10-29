@@ -66,13 +66,13 @@ unsigned char MainWindow::BDOSToQt(QString & _roString)
         {
             QString szResult;
 
-            szResult = m_szBDOSRootDir[ucDrive];
+            szResult = m_szBDOSRootDir[ucDrive] + "/";
 
-            if(m_szBDOSCurrentDir[ucDrive].length())
-                szResult += "/" + m_szBDOSCurrentDir[ucDrive];
+            if (m_szBDOSCurrentDir[ucDrive].length() > 0)
+                szResult += m_szBDOSCurrentDir[ucDrive] + "/";
 
             if(_roString.length())
-                szResult += "/" + _roString;
+                szResult += _roString;
 
             _roString = szResult;
         }
@@ -129,7 +129,6 @@ void MainWindow::vUpdateFIB(tdFileInfoBlock *_poFIB)
         _poFIB->m_cAttributes = QFileInfo(*_poFIB->m_poFile).isDir() ? ATTRIBUTE_DIRECTORY : 0;
         _poFIB->m_ucResult = 0;
         _poFIB->m_uiStartCluster = 0;
-        _poFIB->m_ucDrive = 1;
     }
     else
     {
@@ -197,33 +196,46 @@ void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString szDirectory, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, unsigned _ucPhysicalDrive, QString szPath, tdFileInfoBlock &_roFIB)
 {
-    if (ucSearchAttributes & ATTRIBUTE_VOLUME_NAME)
+    if (_ucSearchAttributes & ATTRIBUTE_VOLUME_NAME)
     {
         strcpy(_roFIB.m_acFileName, "JIONFS");
-        _roFIB.m_ucDrive = 1;
+        _roFIB.m_ucDrive = _ucPhysicalDrive;
     }
     else
     {
-        struct MsxPathParts result;
+        QString szDirectory;
+        QString szMask;
 
-        if (QFileInfo(szDirectory).isDir())
-            szDirectory  += "/*";
+        if (szPath.endsWith('/'))
+        {
+            szDirectory = szPath;
+            szDirectory.chop(1);
+            szMask = "*";
+        }
+        else
+        {
+            int lastSlash = szPath.lastIndexOf('/');
+            if (lastSlash < 0)
+            {
+                szDirectory = szPath;
+                szMask = "*";
+            }
+            else
+            {
+                szDirectory = szPath.left(lastSlash);
+                szMask = szPath.mid(lastSlash + 1);
+            }
+        }
 
-        result = splitMsxPath(szDirectory);
+        strncpy(_roFIB.m_acRegExp, szMask.toLocal8Bit().constData(), sizeof(_roFIB.m_acFileName) - 1);
 
-        if (result.path == "")
-            result.path = ".";
-        if ((result.filename == "") || (result.filename == "*.*") || (result.filename == "."))
-            result.filename = "*";
-
-        strncpy(_roFIB.m_acRegExp, result.filename.toLocal8Bit().constData(), sizeof(_roFIB.m_acFileName) - 1);
-
-        QFile oDir(result.path);
-        _roFIB.m_poFile = poGetFirstEntry(&oDir, _roFIB.m_acRegExp, m_szBDOSRootDir[_roFIB.m_ucDrive ? _roFIB.m_ucDrive : m_ucCurrentPhysicalDrive]);
+        QFile oDir(szDirectory);
+        _roFIB.m_poFile = poGetFirstEntry(&oDir, _roFIB.m_acRegExp, m_szBDOSRootDir[_ucPhysicalDrive]);
 
         vUpdateFIB(&_roFIB);
+        _roFIB.m_ucDrive = _ucPhysicalDrive + 1;
     }
 
     uiTransmit(&_roFIB, sizeof(_roFIB), 0, 0, false, TRANSMIT_DELAY_NORMAL);
@@ -233,7 +245,7 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _szPath, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, unsigned _ucPhysicalDrive, QString _szPath, tdFileInfoBlock &_roFIB)
 {
     if (ucCreateAttributes & ATTRIBUTE_DIRECTORY)
     {
@@ -258,7 +270,6 @@ void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _
 
         poFile = new QFile(_szPath);
 
-        qWarning() << QFileInfo(*poFile).absoluteFilePath();
         if (poFile->open(mode))
             _roFIB.m_ucResult = DOS_ERR_OK;
         else
@@ -273,6 +284,7 @@ void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _
         _roFIB.m_poFile = new QFile(_szPath);
 
     vUpdateFIB(&_roFIB);
+    _roFIB.m_ucDrive = _ucPhysicalDrive + 1;
 
     uiTransmit(&_roFIB, sizeof(_roFIB), 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }
@@ -341,6 +353,10 @@ void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(unsigned _ucPhysicalDrive, QStrin
     unsigned char ucResult;
 
     m_szBDOSCurrentDir[_ucPhysicalDrive] = QDir(m_szBDOSRootDir[_ucPhysicalDrive]).relativeFilePath(_szDirectory);
+
+    if (m_szBDOSCurrentDir[_ucPhysicalDrive] == ".")
+        m_szBDOSCurrentDir[_ucPhysicalDrive] = "";
+
 
     ucResult = DOS_ERR_OK;
 
@@ -491,14 +507,8 @@ void MainWindow::vDOS_GET_WHOLE_PATH_STRING(unsigned char _ucPhysicalDrive, QStr
         unsigned char ucSize;
     } s;
 
-    qDebug() << "1111";
-    qDebug() << szDirectory;
-    qDebug() << m_szBDOSRootDir[_ucPhysicalDrive];
-
-    if (QFileInfo(szDirectory).isDir())
-        szDirectory += "/";
-
-    if (szDirectory.startsWith(m_szBDOSRootDir[_ucPhysicalDrive])) {
+    if (szDirectory.startsWith(m_szBDOSRootDir[_ucPhysicalDrive]))
+    {
         szDirectory.remove(0, m_szBDOSRootDir[_ucPhysicalDrive].length());
         s.ucError = 0;
     }
@@ -509,13 +519,8 @@ void MainWindow::vDOS_GET_WHOLE_PATH_STRING(unsigned char _ucPhysicalDrive, QStr
 
     QtToBDOS(szDirectory);
 
-    qDebug() << "2222";
-    qDebug() << szDirectory;
-    qDebug() << szDirectory.lastIndexOf('\\') + 1;
-
     s.ucSize = szDirectory.size() + 1;
     s.ucPos = szDirectory.lastIndexOf('\\') + 1;
-
 
     uiTransmit(&s, sizeof(s), 0, 0, false, TRANSMIT_DELAY_NORMAL);
     uiTransmit(szDirectory.toLocal8Bit().constData(), s.ucSize, 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);

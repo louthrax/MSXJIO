@@ -16,6 +16,4 @@ QFile* poGetNextEntry(const QFile* _poCurrentEntry,
                       const QString& _szMask,
                       const QString& _szRootPath,
                       bool currentWasDir);
-MsxPathParts splitMsxPath(const QString& full);
-
 #endif

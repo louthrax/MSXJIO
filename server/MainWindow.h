@@ -100,8 +100,8 @@ private:
     void            vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle);
     void            vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize);
     void            vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize, char * _pcData);
-    void            vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlock &_roFIB);
-    void            vDOS_FIND_NEW_ENTRY(unsigned char _ucSearchAttributes, QString _szDirectory, tdFileInfoBlock &_roFIB);
+    void            vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, unsigned _ucPhysicalDrive, QString _szDirectory, tdFileInfoBlock &_roFIB);
+    void            vDOS_FIND_NEW_ENTRY(unsigned char _ucSearchAttributes, unsigned _ucPhysicalDrive, QString _szDirectory, tdFileInfoBlock &_roFIB);
     void            vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory);
     void            vDOS_CHANGE_CURRENT_DIRECTORY(unsigned _ucPhysicalDrive, QString _szDirectory);
     void            vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB);
