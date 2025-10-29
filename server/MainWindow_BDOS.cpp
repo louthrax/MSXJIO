@@ -24,7 +24,7 @@ unsigned char MainWindow::ucAddFile(QFile * _poFile)
 {
     if (_poFile)
     {
-        for(int i = 5; i < 256; i++)
+        for(int i = 128; i < 256; i++)
         {
             if (!m_apoOpenedFiles[i])
             {
