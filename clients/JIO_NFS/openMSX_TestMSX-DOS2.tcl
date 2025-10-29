@@ -3,6 +3,11 @@ diska ./Tmp/disk.dsk
 diskmanipulator import diska ./MSX-DOS2/COMMAND2.COM ./MSX-DOS2/MSXDOS2.SYS ./Tmp/main
 diskmanipulator rename diska MAIN JIO.COM
 
+diskmanipulator create ./Tmp/diskb.dsk 720
+diskb ./Tmp/diskb.dsk
+diskmanipulator import diskb ./MSX-DOS2/COMMAND2.COM ./MSX-DOS2/MSXDOS2.SYS
+
+
 set auto_enable_reverse off
 
 debug set_watchpoint write_io 0x2D

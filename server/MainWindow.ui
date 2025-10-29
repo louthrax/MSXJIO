@@ -186,6 +186,9 @@
        <property name="horizontalScrollBarPolicy">
         <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
        </property>
+       <property name="lineWrapMode">
+        <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
+       </property>
        <property name="textInteractionFlags">
         <set>Qt::TextInteractionFlag::TextSelectableByKeyboard|Qt::TextInteractionFlag::TextSelectableByMouse</set>
        </property>

@@ -41,22 +41,44 @@ unsigned char MainWindow::ucAddFile(QFile * _poFile)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::BDOSToQt(QString & _roString)
+unsigned char MainWindow::BDOSToQt(QString & _roString)
 {
-    _roString = _roString.toUpper();
+    unsigned char ucDrive;
 
-    _roString.replace("A:", "");
-
-    _roString.replace("\\", "/");
-
-    if ((_roString.length() > 0) && (_roString[0] == '/'))
-        _roString = m_szBDOSRootDir + _roString;
+    ucDrive = m_ucCurrentPhysicalDrive;
 
     if (_roString == "NUL")
         _roString = "/dev/null";
+    else
+    {
+        _roString = _roString.toUpper();
+        _roString.replace("\\", "/");
 
-    if (_roString == "")
-        _roString = ".";
+        if ((_roString.size() >= 2) && (_roString[1]==':'))
+        {
+            ucDrive = _roString[0].toLatin1() - 'A';
+            _roString.remove(0, 2);
+        }
+
+        if ((_roString.length() > 0) && (_roString[0] == '/'))
+            _roString = m_szBDOSRootDir[ucDrive] + _roString;
+        else
+        {
+            QString szResult;
+
+            szResult = m_szBDOSRootDir[ucDrive];
+
+            if(m_szBDOSCurrentDir[ucDrive].length())
+                szResult += "/" + m_szBDOSCurrentDir[ucDrive];
+
+            if(_roString.length())
+                szResult += "/" + _roString;
+
+            _roString = szResult;
+        }
+    }
+
+    return ucDrive;
 }
 
 /*
@@ -67,6 +89,11 @@ void MainWindow::QtToBDOS(QString & _roString)
 {
     if (_roString == ".")
         _roString = "";
+
+    if (_roString.startsWith("/"))
+    {
+        _roString.remove(0, 1);
+    }
 
     _roString.replace("/", "\\");
     _roString = _roString.toUpper();
@@ -170,7 +197,7 @@ void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString szDirectory, tdFileInfoBlock &_roFIB, QString _szWildcard)
+void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString szDirectory, tdFileInfoBlock &_roFIB)
 {
     if (ucSearchAttributes & ATTRIBUTE_VOLUME_NAME)
     {
@@ -179,24 +206,22 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString
     }
     else
     {
-        if (_roFIB.m_ucFF == 0xFF)
-        {
-            szDirectory = QFileInfo(*_roFIB.m_poFile).absoluteFilePath() + "/" + _szWildcard;
-            QtToBDOS(szDirectory);
-        }
-
         struct MsxPathParts result;
+
+        if (QFileInfo(szDirectory).isDir())
+            szDirectory  += "/*";
+
         result = splitMsxPath(szDirectory);
 
-        if ((result.filename == "") || (result.filename == "*.*"))
+        if (result.path == "")
+            result.path = ".";
+        if ((result.filename == "") || (result.filename == "*.*") || (result.filename == "."))
             result.filename = "*";
-
-        BDOSToQt(result.path);
 
         strncpy(_roFIB.m_acRegExp, result.filename.toLocal8Bit().constData(), sizeof(_roFIB.m_acFileName) - 1);
 
         QFile oDir(result.path);
-        _roFIB.m_poFile = poGetFirstEntry(&oDir, _roFIB.m_acRegExp, m_szBDOSRootDir);
+        _roFIB.m_poFile = poGetFirstEntry(&oDir, _roFIB.m_acRegExp, m_szBDOSRootDir[_roFIB.m_ucDrive ? _roFIB.m_ucDrive : m_ucCurrentPhysicalDrive]);
 
         vUpdateFIB(&_roFIB);
     }
@@ -208,15 +233,8 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char ucSearchAttributes, QString
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _szPath, tdFileInfoBlock &_roFIB, QString _szWildcard)
+void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, QString _szPath, tdFileInfoBlock &_roFIB)
 {
-    if (_roFIB.m_ucFF == 0xFF)
-    {
-        _szPath = QFileInfo(*_roFIB.m_poFile).absoluteFilePath() + "/" + _szWildcard;
-    }
-    else
-        BDOSToQt(_szPath);
-
     if (ucCreateAttributes & ATTRIBUTE_DIRECTORY)
     {
         if (QFile::exists(_szPath) && QFileInfo(_szPath).isDir())
@@ -284,7 +302,7 @@ QString findFileCaseInsensitive(const QString& path)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory)
 {
     struct PACKED
     {
@@ -297,14 +315,8 @@ void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDir
     if (_ucOpenMode & 0x01) mode |= QIODevice::ReadOnly;
     if (_ucOpenMode & 0x02) mode |= QIODevice::WriteOnly;
 
-    if (_roFIB.m_ucFF == 0xFF)
-        _szDirectory = QFileInfo(*_roFIB.m_poFile).absoluteFilePath();
-    else
-    {
-        BDOSToQt(_szDirectory);
-        if (_szDirectory != "/dev/null")
-            _szDirectory = findFileCaseInsensitive(_szDirectory);
-    }
+    if (_szDirectory != "/dev/null")
+        _szDirectory = findFileCaseInsensitive(_szDirectory);
 
     poFile = new QFile(_szDirectory);
 
@@ -324,13 +336,13 @@ void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDir
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(QString _szDirectory)
+void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(unsigned _ucPhysicalDrive, QString _szDirectory)
 {
     unsigned char ucResult;
 
-    BDOSToQt(_szDirectory);
+    m_szBDOSCurrentDir[_ucPhysicalDrive] = QDir(m_szBDOSRootDir[_ucPhysicalDrive]).relativeFilePath(_szDirectory);
 
-    ucResult = QDir::setCurrent(_szDirectory) ? DOS_ERR_OK : DOS_ERR_NODIR;
+    ucResult = DOS_ERR_OK;
 
     uiTransmit(&ucResult, sizeof(ucResult), 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }
@@ -341,7 +353,7 @@ void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(QString _szDirectory)
  */
 void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
 {
-    _roFIB.m_poFile = poGetNextEntry(_roFIB.m_poFile, _roFIB.m_acRegExp, m_szBDOSRootDir, _roFIB.m_cAttributes & ATTRIBUTE_DIRECTORY);
+    _roFIB.m_poFile = poGetNextEntry(_roFIB.m_poFile, _roFIB.m_acRegExp, m_szBDOSRootDir[_roFIB.m_ucDrive - 1], _roFIB.m_cAttributes & ATTRIBUTE_DIRECTORY);
 
     vUpdateFIB(&_roFIB);
 
@@ -390,9 +402,12 @@ void MainWindow::vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber)
 {
     unsigned char ucSize;
 
-    QString szLocalPath = QDir(m_szBDOSRootDir).relativeFilePath(QDir::currentPath());
+    _ucDriveNumber = _ucDriveNumber ? _ucDriveNumber - 1 : m_ucCurrentPhysicalDrive;
+
+    QString szLocalPath = m_szBDOSCurrentDir[_ucDriveNumber];
 
     QtToBDOS(szLocalPath);
+    vLog(eLogBDOSDetails, "Result: %s\n", szLocalPath.toLocal8Bit().constData());
 
     ucSize = szLocalPath.size() + 1;
 
@@ -467,7 +482,7 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenM
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_GET_WHOLE_PATH_STRING(unsigned char _ucPhysicalDrive, QString szDirectory)
 {
     struct PACKED
     {
@@ -476,37 +491,43 @@ void MainWindow::vDOS_GET_WHOLE_PATH_STRING(QString szDirectory, tdFileInfoBlock
         unsigned char ucSize;
     } s;
 
-    if (_roFIB.m_ucFF == 0xFF)
-        szDirectory = QFileInfo(*_roFIB.m_poFile).absoluteFilePath();
+    qDebug() << "1111";
+    qDebug() << szDirectory;
+    qDebug() << m_szBDOSRootDir[_ucPhysicalDrive];
+
+    if (QFileInfo(szDirectory).isDir())
+        szDirectory += "/";
+
+    if (szDirectory.startsWith(m_szBDOSRootDir[_ucPhysicalDrive])) {
+        szDirectory.remove(0, m_szBDOSRootDir[_ucPhysicalDrive].length());
+        s.ucError = 0;
+    }
     else
-        BDOSToQt(szDirectory);
+    {
+        s.ucError = 0xFF;
+    }
 
-    QString szLocalPath = QDir(m_szBDOSRootDir).relativeFilePath(szDirectory);
+    QtToBDOS(szDirectory);
 
-    QtToBDOS(szLocalPath);
+    qDebug() << "2222";
+    qDebug() << szDirectory;
+    qDebug() << szDirectory.lastIndexOf('\\') + 1;
 
-    s.ucError = 0;
-    s.ucSize = szLocalPath.size() + 1;
-    s.ucPos = szLocalPath.lastIndexOf('\\') + 1;
+    s.ucSize = szDirectory.size() + 1;
+    s.ucPos = szDirectory.lastIndexOf('\\') + 1;
 
-    vLog(eLogBDOSDetails, "szLocalPath: %s\n", szLocalPath.toLocal8Bit().constData());
 
     uiTransmit(&s, sizeof(s), 0, 0, false, TRANSMIT_DELAY_NORMAL);
-    uiTransmit(szLocalPath.toLocal8Bit().constData(), s.ucSize, 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
+    uiTransmit(szDirectory.toLocal8Bit().constData(), s.ucSize, 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
 }
 
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath)
 {
     unsigned char ucError;
-
-    if (_roFIB.m_ucFF == 0xFF)
-        _szPath = QFileInfo(*_roFIB.m_poFile).absoluteFilePath();
-    else
-        BDOSToQt(_szPath);
 
     if (QFileInfo(_szPath).isDir())
     {
@@ -524,18 +545,13 @@ void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath, tdFileInfoBlo
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes)
+void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes)
 {
     struct PACKED
     {
         unsigned char ucError;
         unsigned char ucCurrentAttributes;
     } s;
-
-    if (_roFIB.m_ucFF == 0xFF)
-        _szPath = QFileInfo(*_roFIB.m_poFile).absoluteFilePath();
-    else
-        BDOSToQt(_szPath);
 
     s.ucError = QFileInfo::exists(_szPath) ? DOS_ERR_OK : DOS_ERR_FILE;
 
@@ -553,7 +569,7 @@ void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, tdFileInfoBlock &
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileInfoBlock &_roFIB, unsigned char ucSet, unsigned short int uiNewDate, unsigned short int uiNewTime)
+void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigned char ucSet, unsigned short int uiNewDate, unsigned short int uiNewTime)
 {
     struct PACKED
     {
@@ -561,11 +577,6 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileI
         unsigned short int uiCurrentFileTimeValue;
         unsigned short int uiCurrentFileDateValue;
     } s;
-
-    if (_roFIB.m_ucFF == 0xFF)
-        _szPath = QFileInfo(*_roFIB.m_poFile).absoluteFilePath();
-    else
-        BDOSToQt(_szPath);
 
     if (ucSet)
     {
@@ -605,4 +616,17 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, tdFileI
                                        | (time.second() / 2);
 
     uiTransmit(&s, sizeof(s), 0, 0, false, TRANSMIT_DELAY_NORMAL);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+void MainWindow::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
+{
+    unsigned char ucNumberOfDrives;
+
+    m_ucCurrentPhysicalDrive = _ucDiskToSelect;
+    ucNumberOfDrives = 2;
+    uiTransmit(&ucNumberOfDrives, sizeof(ucNumberOfDrives), 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }

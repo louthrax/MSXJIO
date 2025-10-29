@@ -144,7 +144,7 @@ MsxPathParts splitMsxPath(const QString& full)
     QString s = full;
 
     // If it ends with '\', there's no filename
-    if (s.endsWith('\\'))
+    if (s.endsWith('/'))
     {
         parts.path = s;
         parts.filename.clear();
@@ -152,7 +152,7 @@ MsxPathParts splitMsxPath(const QString& full)
     }
 
     // Find last backslash
-    int lastSlash = s.lastIndexOf('\\');
+    int lastSlash = s.lastIndexOf('/');
     if (lastSlash < 0)
     {
         // No slash — only a filename, path is empty

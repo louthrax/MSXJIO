@@ -12,6 +12,8 @@ typedef unsigned int size_t;
 #define A g_aoRegisters.c.a
 #define B g_aoRegisters.c.b
 #define C g_aoRegisters.c.c
+#define D g_aoRegisters.c.d
+#define E g_aoRegisters.c.e
 #define H g_aoRegisters.c.h
 #define L g_aoRegisters.c.l
 
@@ -75,10 +77,12 @@ typedef union
  =======================================================================================================================
  */
 
-char *          g_pcSPSave = 0;
-char *          g_pcDiskTransferAddress = 0;
-tdRegisters     g_aoRegisters = { { 0,0,0,0,0 } };
-tdCommonHeader	g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
+char *                 g_pcSPSave = 0;
+char *                 g_pcDiskTransferAddress = 0;
+tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
+tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
+unsigned char          g_ucPreviousErrorCode = 0;
+__at (4) unsigned char g_ucCurrentDisk;
 
 /*
  =======================================================================================================================
@@ -433,12 +437,52 @@ static void vDOS_SET_DISK_TRANSFER_ADDRESS()
  =======================================================================================================================
  =======================================================================================================================
  */
- static void vDOS_GENERIC_FCB_HANDLER()
+static void vDOS_GENERIC_FCB_HANDLER()
 {
     vJIOTransmit(DE, sizeof(tdFileControlBlock));
     vReceive(DE, sizeof(tdFileControlBlock));
 
     A = L = FCB->m_ucResult;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_SELECT_DISK()
+{
+    vJIOTransmit(&E, sizeof(E));
+    g_ucCurrentDisk = E;
+    vReceive(&A, sizeof(A));
+    L = A;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_GET_PREVIOUS_ERROR_CODE()
+{
+    A = 0;
+    B = g_ucPreviousErrorCode;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_GET_LOGIN_VECTOR()
+{
+    HL = 0x000F;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_GET_CURRENT_DRIVE()
+{
+    L = A = g_ucCurrentDisk;
 }
 
 /*
@@ -461,7 +505,7 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x0B DOS_CONSOLE_STATUS                    */ 0,
     /* 0x0C DOS_RETURN_VERSION_NUMBER             */ 0,
     /* 0x0D DOS_DISK_RESET                        */ 0,
-    /* 0x0E DOS_SELECT_DISK                       */ 0,
+    /* 0x0E DOS_SELECT_DISK                       */ vDOS_SELECT_DISK,
     /* 0x0F DOS_OPEN_FILE_FCB                     */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x10 DOS_CLOSE_FILE_FCB                    */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x11 DOS_SEARCH_FOR_FIRST_ENTRY_FCB        */ vDOS_GENERIC_FCB_HANDLER,
@@ -471,8 +515,8 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ 0,
     /* 0x16 DOS_CREATE_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x17 DOS_RENAME_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x18 DOS_GET_LOGIN_VECTOR                  */ 0,
-    /* 0x19 DOS_GET_CURRENT_DRIVE                 */ 0,
+    /* 0x18 DOS_GET_LOGIN_VECTOR                  */ vDOS_GET_LOGIN_VECTOR,
+    /* 0x19 DOS_GET_CURRENT_DRIVE                 */ vDOS_GET_CURRENT_DRIVE,
     /* 0x1A DOS_SET_DISK_TRANSFER_ADDRESS         */ vDOS_SET_DISK_TRANSFER_ADDRESS,
     /* 0x1B DOS_GET_ALLOCATION_INFORMATION        */ vDOS_GET_ALLOCATION_INFORMATION,
     /* 0x1C                                       */ 0,
@@ -541,14 +585,14 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x5B DOS_PARSE_PATHNAME                    */ 0,
     /* 0x5C DOS_PARSE_FILENAME                    */ 0,
     /* 0x5D DOS_CHECK_CHARACTER                   */ 0,
-    /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING
-    /* 0x5F DOS_FLUSH_DISK_BUFFERS                */ 
-    /* 0x60 DOS_FORK_A_CHILD_PROCESS              */ 
-    /* 0x61 DOS_REJOIN_PARENT_PROCESS             */ 
-    /* 0x62 DOS_TERMINATE_WITH_ERROR_CODE         */ 
-    /* 0x63 DOS_DEFINE_ABORT_ROUTINE              */ 
-    /* 0x64 DOS_DEFINE_DISK_ERROR_HANDLER_ROUTINE */ 
-    /* 0x65 DOS_GET_PREVIOUS_ERROR_CODE           */ 
+    /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING,
+    /* 0x5F DOS_FLUSH_DISK_BUFFERS                */ 0,
+    /* 0x60 DOS_FORK_A_CHILD_PROCESS              */ 0,
+    /* 0x61 DOS_REJOIN_PARENT_PROCESS             */ 0,
+    /* 0x62 DOS_TERMINATE_WITH_ERROR_CODE         */ 0,
+    /* 0x63 DOS_DEFINE_ABORT_ROUTINE              */ 0,
+    /* 0x64 DOS_DEFINE_DISK_ERROR_HANDLER_ROUTINE */ 0,
+    /* 0x65 DOS_GET_PREVIOUS_ERROR_CODE           */ vDOS_GET_PREVIOUS_ERROR_CODE
     /* 0x66 DOS_EXPLAIN_ERROR_CODE                */ 
     /* 0x67 DOS_FORMAT_A_DISK                     */ 
     /* 0x68 DOS_CREATE_OR_DESTROY_RAMDISK         */ 
@@ -568,11 +612,12 @@ static const tdDosHandler g_aDosHandlers[] =
  */
 static bool bDoCommand()
 {
-    if ((C <= DOS_GET_WHOLE_PATH_STRING) && g_aDosHandlers[C])
+    if ((C <= DOS_GET_PREVIOUS_ERROR_CODE) && g_aDosHandlers[C])
     {
         g_oCommonHeader.m_ucFunction = C;
         vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
         g_aDosHandlers[C]();
+        g_ucPreviousErrorCode = A;
 
         return true;
     }
