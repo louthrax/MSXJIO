@@ -158,7 +158,7 @@ private:
     QSettings                       *m_poSettings;
     tdConnectionState               m_eConnectionState = eCStateDisconnected;
     QFile*                          m_apoOpenedFiles[256] = {0};
-    QString                         m_szBDOSRootDir[8] = { "/mnt/DataLinux/Projects/MSX/sdcard", "/mnt/DataLinux/Projects/MSX/sdcardb", "", "", "", "", "", "" };
+    QString                         m_szBDOSRootDir[8] = { "/mnt/DataLinux/Projects/MSX/sdcard", "", "", "", "", "", "", "" };
     QString                         m_szBDOSCurrentDir[8] = { "", "", "", "", "", "", "", "" };
     unsigned char                   m_ucCurrentPhysicalDrive = 0;
 };

@@ -17,6 +17,7 @@ void main(char * driver_target);
  */
 void vSetStack(void * _pvNewStack) __naked
 {
+    _pvNewStack;
 __asm
     ld  hl,(0xF349)
     ld  de,_driver_end
@@ -36,6 +37,7 @@ __endasm;
  */
 void vJumpTo( char *_pcAddress) __naked
 {
+    _pcAddress;
 __asm
     nop
     jp (hl)
@@ -48,6 +50,9 @@ __endasm;
  */
 void vMemCopy(void *dest, const void *src, unsigned int n)
 {
+    dest;
+    src;
+    n;
 __asm
     ex      de,hl
 	ld	    c,(ix+4)
@@ -77,7 +82,7 @@ void main(char * driver_target)
 {
     char * jumper_target;
 
-    jumper_target = 0x8100;
+    jumper_target = (char*)0x8100;
 
     vMemCopy(jumper_target, &jumper_start, &jumper_end - &jumper_start);
     vRelocate(jumper_target, &jumper_reloc_start, (&jumper_reloc_end - &jumper_reloc_start) >> 1);

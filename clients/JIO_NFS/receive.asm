@@ -1,11 +1,9 @@
 bJIOReceive:
-	push	ix
 	push	de
 
 	ld	de,0
 
 	dec	hl
-	ld	b,(hl)	; What if HL=0 ?
 	ld	c,0xa2
 	ld	ix,0
 	add	ix,sp
@@ -40,12 +38,7 @@ WU_PO:	in	f,(c)	; 14
 
 RX_PO:	in	f,(c)	; 14
 	jp	po,RX_PO	; 11	 LOOP=25
-
-	;timing alternatives:
-	;ret	po	;  6 = 31 CYCLES
-	;ld	sp,hl	;  7	= 32 CYCLES
-	ld	b,(hl)	;  8	= 33 CYCLES
-	;neg	                                ; 10 =	35 CYCLES
+	ret	po	;  6 = 31 CYCLES
 	
 	in	a,(c)	; 14	 Bit 0
 	nop
@@ -98,13 +91,11 @@ RX_PO:	in	f,(c)	; 14
 ReceiveOK:
 	ld	sp,ix
 	pop	de
-	pop	ix
 	ld	a,1
 	ret
 
 RxTimeOut:
 	pop	de
-	pop	ix
 	xor	 a
 	ret
 
@@ -129,12 +120,7 @@ WU_PE:	in	f,(c)	; 14
 
 RX_PE:	in	f,(c)	; 14
 	jp	pe,RX_PE	; 11	 LOOP=25
-	
-	;timing alternatives:
-	;ret	pe	;  6 = 31 CYCLES
-	;ld	sp,hl	;  7	= 32 CYCLES
-	ld	b,(hl)	;  8	= 33 CYCLES
-	;neg	                                ; 10 =	35 CYCLES
+	ret	pe	;  6 = 31 CYCLES
 
 	in	a,(c)	; 14	 Bit 0
 	cpl	                                ;  5

@@ -83,6 +83,7 @@ typedef union
 
 char *                 g_pcSPSave = 0;
 char *                 g_pcDiskTransferAddress = 0;
+char                   g_CallStack[32] = {0};
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 unsigned char          g_ucPreviousErrorCode = 0;
@@ -126,14 +127,10 @@ Hook:
     push    af
     push    bc
 
-    ld      sp,(_g_pcSPSave)
-
     call    _bDoCommand
 
     or      a
     jr      z,OriginalCode
-
-    ld      sp,_g_aoRegisters
 
     pop     bc
     pop     af
@@ -144,7 +141,6 @@ Hook:
     ret
 
 OriginalCode:
-    ld      sp,_g_aoRegisters
     pop     bc
     pop     af
     pop     hl
@@ -193,7 +189,9 @@ static size_t strlen(const char *str)
  */
 static bool bJIOReceive(void *_pvDestination, unsigned int _uiSize) __naked
 {
-__asm
+    _pvDestination;
+    _uiSize;
+    __asm
 #include "receive.asm"
 __endasm;
 }
@@ -204,6 +202,8 @@ __endasm;
  */
 static void vJIOTransmit(void *_pvSource, unsigned int _uiSize) __naked
 {
+    _pvSource;
+    _uiSize;
 __asm
 #include "transmit.asm"
 __endasm;
@@ -262,6 +262,15 @@ bool bIsLogicalDriveHandled(unsigned char _ucLogicalDrive)
  =======================================================================================================================
  =======================================================================================================================
  */
+static void vSendCommonHeader()
+{
+    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 
 static void vTransmitPathOrFIB()
 {
@@ -302,15 +311,6 @@ bool bIsPathOrFIBHandled(unsigned char * _pucFIB)
     }
 
     return bIsLogicalDriveHandled(ucDrive);
-}
-
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-static void vSendCommonHeader()
-{
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
 }
 
 /*
@@ -677,7 +677,8 @@ static void vDOS_GET_PREVIOUS_ERROR_CODE()
 static void vDOS_GET_LOGIN_VECTOR()
 {
     vSendCommonHeader();
-    HL = 0x000F;
+    H = 0;
+    L = 15;
 
     g_bResult = true;
 }
@@ -834,10 +835,6 @@ static bool bDoCommand()
     }
     else
     {
-        g_oCommonHeader.m_ucFunction = 0xFF;
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
-        vJIOTransmit(&C, sizeof(C));
-
         return false;
    }
 }
