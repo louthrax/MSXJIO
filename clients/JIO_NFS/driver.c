@@ -83,7 +83,6 @@ typedef union
 
 char *                 g_pcSPSave = 0;
 char *                 g_pcDiskTransferAddress = 0;
-char                   g_CallStack[32] = {0};
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 unsigned char          g_ucPreviousErrorCode = 0;
@@ -127,26 +126,29 @@ Hook:
     push    af
     push    bc
 
+    ld      sp,(_g_pcSPSave)
+
     call    _bDoCommand
 
     or      a
     jr      z,OriginalCode
-
-    pop     bc
-    pop     af
-    pop     hl
-    pop     de
-    pop     ix
-    ld      sp,(_g_pcSPSave)
-    ret
+    ld      a,0xC9
 
 OriginalCode:
+    ld      (RetOrNop),a
+
+    ld      sp,_g_aoRegisters
+
     pop     bc
     pop     af
     pop     hl
     pop     de
     pop     ix
     ld      sp,(_g_pcSPSave)
+
+
+RetOrNop:
+    ret
 
     .db     0xC3
 Hook_OriginalCode:
@@ -265,6 +267,7 @@ bool bIsLogicalDriveHandled(unsigned char _ucLogicalDrive)
 static void vSendCommonHeader()
 {
     vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    g_bResult = true;
 }
 
 /*
@@ -327,8 +330,6 @@ static void vDOS_FIND_FIRST_ENTRY()
         vReceive(FIB, sizeof(tdFileInfoBlock));
 
         A = FIB->m_ucResult;
-
-        g_bResult = true;
     }
 }
 
@@ -346,8 +347,6 @@ static void vDOS_FIND_NEW_ENTRY()
         vReceive(FIB, sizeof(tdFileInfoBlock));
 
         A = FIB->m_ucResult;
-
-        g_bResult = true;
     }
 }
 
@@ -364,8 +363,6 @@ static void vDOS_FIND_NEXT_ENTRY()
 
         vReceive(FIB, sizeof(*FIB));
         A = FIB->m_ucResult;
-
-        g_bResult = true;
     }
 }
 
@@ -380,8 +377,6 @@ static void vDOS_GET_ALLOCATION_INFORMATION()
     BCi = 512;
     DEi = 60000;
     HLi = 30000;
-
-    g_bResult = true;
 }
 
 /*
@@ -396,8 +391,6 @@ static void vDOS_CHANGE_CURRENT_DIRECTORY()
         vTransmitString(DE);
 
         vReceive(&A, sizeof(A));
-
-        g_bResult = true;
     }
 }
 
@@ -414,8 +407,6 @@ static void vDOS_OPEN_FILE_HANDLE()
 
         vReceive(&BC, sizeof(BC));
         A = C;
-
-        g_bResult = true;
     }
 }
 
@@ -431,8 +422,6 @@ static void vDOS_CLOSE_FILE_HANDLE()
         vJIOTransmit(&B, sizeof(B));
 
         vReceive(&A, sizeof(A));
-
-        g_bResult = true;
     }
 }
 
@@ -451,8 +440,6 @@ static void vDOS_READ_FROM_FILE_HANDLE()
         vReceive(&A, sizeof(A) + sizeof(HL));
         if (HL)
             vReceive(DE, (unsigned int)HL);
-
-        g_bResult = true;
     }
 }
 
@@ -471,8 +458,6 @@ static void vDOS_WRITE_TO_FILE_HANDLE()
             vJIOTransmit(DE, (unsigned int)HL);
 
         vReceive(&A, sizeof(A) + sizeof(HL));
-
-        g_bResult = true;
     }
 }
 
@@ -490,8 +475,6 @@ static void vDOS_MOVE_FILE_HANDLE_POINTER()
         vJIOTransmit(&HL, sizeof(HL) + sizeof(DE));
 
         vReceive(&A, sizeof(A) + sizeof(HL) + sizeof(DE));
-
-        g_bResult = true;
     }
 }
 
@@ -509,8 +492,6 @@ static void vDOS_GET_CURRENT_DIRECTORY()
         vReceive(&L, sizeof(L));
         vReceive(DE, L);
         A = 0;
-
-        g_bResult = true;
     }
 }
 
@@ -529,8 +510,6 @@ static void vDOS_CREATE_FILE_HANDLE()
 
         vReceive(&BC, sizeof(BC));
         A = C;
-
-        g_bResult = true;
     }
 }
 
@@ -542,8 +521,6 @@ static void vDOS_ENSURE_FILE_HANDLE()
 {
     vSendCommonHeader();
     A = 0;
-
-    g_bResult = true;
 }
 
 /*
@@ -558,8 +535,6 @@ static void vDOS_GET_WHOLE_PATH_STRING()
         vReceive(&A, sizeof(A) + sizeof(HL));
         vReceive(DE, H);
         HLi = DEi + L;
-
-        g_bResult = true;
     }
 }
 
@@ -572,10 +547,7 @@ static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
     if (bIsPathOrFIBHandled(DE))
     {
         vTransmitPathOrFIB();
-        
         vReceive(&A, sizeof(A));
-
-        g_bResult = true;
     }
 }
 
@@ -591,8 +563,6 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
         vJIOTransmit(&A, sizeof(A) + sizeof(L));
 
         vReceive(&A, sizeof(A) + sizeof(L));
-
-        g_bResult = true;
     }
 }
 
@@ -607,8 +577,6 @@ static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
         vSendCommonHeader();
         vJIOTransmit(&A, sizeof(A) + sizeof(HL) + sizeof(DE) + sizeof(IX));
         vReceive(&A, sizeof(A) + sizeof(HL) + sizeof(DE));
-
-        g_bResult = true;
     }
 }
 
@@ -620,8 +588,6 @@ static void vDOS_SET_DISK_TRANSFER_ADDRESS()
 {
     vSendCommonHeader();
     g_pcDiskTransferAddress = DE;
-
-    g_bResult = true;
 }
 
 /*
@@ -635,8 +601,6 @@ static void vDOS_GENERIC_FCB_HANDLER()
     vReceive(DE, sizeof(tdFileControlBlock));
 
     A = L = FCB->m_ucResult;
-
-    g_bResult = true;
 }
 
 /*
@@ -652,8 +616,6 @@ static void vDOS_SELECT_DISK()
         g_ucCurrentDisk = E;
         vReceive(&A, sizeof(A));
         L = A;
-
-        g_bResult = true;
     }
 }
 
@@ -666,8 +628,6 @@ static void vDOS_GET_PREVIOUS_ERROR_CODE()
     vSendCommonHeader();
     A = 0;
     B = g_ucPreviousErrorCode;
-
-    g_bResult = true;
 }
 
 /*
@@ -679,8 +639,6 @@ static void vDOS_GET_LOGIN_VECTOR()
     vSendCommonHeader();
     H = 0;
     L = 15;
-
-    g_bResult = true;
 }
 
 /*
@@ -692,8 +650,6 @@ static void vDOS_GET_CURRENT_DRIVE()
     vSendCommonHeader();
 
     L = A = g_ucCurrentDisk;
-
-    g_bResult = true;
 }
 
 /*
