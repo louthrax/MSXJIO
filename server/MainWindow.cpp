@@ -362,7 +362,6 @@ Task MainWindow::oParser()
             switch(ucFunction)
             {
             case DOS_FIND_FIRST_ENTRY:
-               vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
                if (oFIB.m_ucFF == 0xFF)
                {
@@ -371,6 +370,7 @@ Task MainWindow::oParser()
                }
                else
                    szWildcard.clear();
+               vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
 
                vLog(eLogBDOSDetails, "ucSearchAttributes %d\n", ucSearchAttributes);
                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
@@ -382,8 +382,9 @@ Task MainWindow::oParser()
                break;
 
             case DOS_FIND_NEW_ENTRY:
-                vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
                 vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
+                vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
+                vReceive(oFIB.m_acFileName, 13, 0, uiCRC);
                 if (oFIB.m_ucFF == 0xFF)
                 {
                     vReceiveString(szWildcard, uiCRC);
@@ -418,8 +419,8 @@ Task MainWindow::oParser()
                 break;
 
             case DOS_OPEN_FILE_HANDLE:
-                vReceive(&ucOpenMode, sizeof(ucOpenMode), 0, uiCRC);
                 vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
+                vReceive(&ucOpenMode, sizeof(ucOpenMode), 0, uiCRC);
 
                 vLog(eLogBDOSDetails, "ucOpenMode %d\n", ucOpenMode);
                 vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());

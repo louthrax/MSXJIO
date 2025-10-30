@@ -1,6 +1,5 @@
 #include "Find.h"
 
-
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -9,8 +8,10 @@ static QRegularExpression compileMask(const QString& dosMask)
 {
     QString mask = dosMask.trimmed();
 
-    if ((mask == "") || (mask == "*.*"))
+    if (mask == "")
         mask = "*";
+
+    mask.replace("*.*", "*");
 
     QString rx = QRegularExpression::wildcardToRegularExpression(mask);
     return QRegularExpression(rx, QRegularExpression::CaseInsensitiveOption);
@@ -85,7 +86,8 @@ QFile* poGetNextEntry(const QFile* _poCurrentEntry,
 
     // Find the boundary: count leading directories in 'all'
     int dirBoundary = 0;
-    for (; dirBoundary < all.size(); ++dirBoundary) {
+    for (; dirBoundary < all.size(); ++dirBoundary)
+    {
         if (!QFileInfo(dir.absoluteFilePath(all.at(dirBoundary))).isDir())
             break;
     }
@@ -94,13 +96,18 @@ QFile* poGetNextEntry(const QFile* _poCurrentEntry,
     int idx = all.indexOf(currentName, 0, Qt::CaseInsensitive);
     int start = -1;
 
-    if (idx >= 0) {
+    if (idx >= 0)
+    {
         start = idx + 1;
-    } else {
+    }
+    else
+    {
         // Binary-search-like lower_bound within the right bucket
-        auto lowerBound = [&](int begin, int end, const QString& key) {
+        auto lowerBound = [&](int begin, int end, const QString& key)
+        {
             int lo = begin, hi = end;
-            while (lo < hi) {
+            while (lo < hi)
+            {
                 int mid = (lo + hi) / 2;
                 const QString& val = all.at(mid);
                 if (QString::compare(val, key, Qt::CaseInsensitive) <= 0)
@@ -111,17 +118,22 @@ QFile* poGetNextEntry(const QFile* _poCurrentEntry,
             return lo; // first element > key in [begin, end)
         };
 
-        if (currentWasDir) {
+        if (currentWasDir)
+        {
             start = lowerBound(0, dirBoundary, currentName);
             if (start > dirBoundary) start = dirBoundary;
-        } else {
+        }
+        else
+        {
             start = lowerBound(dirBoundary, all.size(), currentName);
         }
     }
 
-    for (int i = qMax(0, start); i < all.size(); ++i) {
+    for (int i = qMax(0, start); i < all.size(); ++i)
+    {
         const QString& name = all.at(i);
-        if (reg.match(name).hasMatch()) {
+        if (reg.match(name).hasMatch())
+        {
             return new QFile(dir.absoluteFilePath(name));
         }
     }

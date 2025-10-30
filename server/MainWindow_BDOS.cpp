@@ -10,16 +10,6 @@
  =======================================================================================================================
  =======================================================================================================================
  */
-
-/*
-0 - Standard input (CON)
-1 - Standard output (CON)
-2 - Standard error input/output (CON)
-3 - Standard auxiliary input/output (AUX)
-4 - Standard printer output (PRN)
-5 - Standard NUL handle (NUL)
-*/
-
 unsigned char MainWindow::ucAddFile(QFile * _poFile)
 {
     if (_poFile)
@@ -47,20 +37,16 @@ unsigned char MainWindow::BDOSToQt(QString & _roString)
 
     ucDrive = m_ucCurrentPhysicalDrive;
 
-    if (_roString == "NUL")
-        _roString = "/dev/null";
-    else
+    _roString = _roString.toUpper();
+    _roString.replace("\\", "/");
+
+    if ((_roString.size() >= 2) && (_roString[1]==':'))
     {
-        _roString = _roString.toUpper();
-        _roString.replace("\\", "/");
+        ucDrive = _roString[0].toLatin1() - 'A';
+        _roString.remove(0, 2);
+    }
 
-        if ((_roString.size() >= 2) && (_roString[1]==':'))
-        {
-            ucDrive = _roString[0].toLatin1() - 'A';
-            _roString.remove(0, 2);
-        }
-
-        if ((_roString.length() > 0) && (_roString[0] == '/'))
+    if ((_roString.length() > 0) && (_roString[0] == '/'))
             _roString = m_szBDOSRootDir[ucDrive] + _roString;
         else
         {
@@ -76,7 +62,6 @@ unsigned char MainWindow::BDOSToQt(QString & _roString)
 
             _roString = szResult;
         }
-    }
 
     return ucDrive;
 }
@@ -200,8 +185,9 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, unsign
 {
     if (_ucSearchAttributes & ATTRIBUTE_VOLUME_NAME)
     {
-        strcpy(_roFIB.m_acFileName, "JIONFS");
-        _roFIB.m_ucDrive = _ucPhysicalDrive;
+        strcpy(_roFIB.m_acFileName, "JIONFS A:");
+        _roFIB.m_acFileName[7] = _ucPhysicalDrive + 'A';
+        _roFIB.m_ucDrive = _ucPhysicalDrive + 1;
     }
     else
     {
@@ -245,20 +231,52 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, unsign
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, unsigned _ucPhysicalDrive, QString _szPath, tdFileInfoBlock &_roFIB)
+void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, unsigned _ucPhysicalDrive, QString szPath, tdFileInfoBlock &_roFIB)
 {
+    QString szDirectory;
+    QString szMask;
+
+    if (szPath.endsWith('/'))
+    {
+        szDirectory = szPath;
+        szDirectory.chop(1);
+        szMask = "*";
+    }
+    else
+    {
+        int lastSlash = szPath.lastIndexOf('/');
+        if (lastSlash < 0)
+        {
+            szDirectory = szPath;
+            szMask = "*";
+        }
+        else
+        {
+            szDirectory = szPath.left(lastSlash);
+            szMask = szPath.mid(lastSlash + 1);
+        }
+    }
+
+    if (szMask.contains("?") || szMask.contains("*"))
+    {
+        szMask = _roFIB.m_acFileName;
+    }
+
+    szDirectory += "/" + szMask;
+
+
     if (ucCreateAttributes & ATTRIBUTE_DIRECTORY)
     {
-        if (QFile::exists(_szPath) && QFileInfo(_szPath).isDir())
+        if (QFile::exists(szDirectory) && QFileInfo(szDirectory).isDir())
             _roFIB.m_ucResult = 0;
         else
         {
-            _roFIB.m_ucResult = QDir().mkdir(_szPath) ? DOS_ERR_OK : 255;
+            _roFIB.m_ucResult = QDir().mkdir(szDirectory) ? DOS_ERR_OK : 255;
 
             if (_roFIB.m_ucResult == DOS_ERR_OK)
             {
-                QFileDevice::Permissions perms = QFile(_szPath).permissions();
-                QFile::setPermissions(_szPath, perms);
+                QFileDevice::Permissions perms = QFile(szDirectory).permissions();
+                QFile::setPermissions(szDirectory, perms);
             }
         }
     }
@@ -268,7 +286,7 @@ void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, unsigned 
 
         QIODevice::OpenMode mode = QIODevice::Truncate | QIODevice::ReadWrite;
 
-        poFile = new QFile(_szPath);
+        poFile = new QFile(szDirectory);
 
         if (poFile->open(mode))
             _roFIB.m_ucResult = DOS_ERR_OK;
@@ -281,7 +299,7 @@ void MainWindow::vDOS_FIND_NEW_ENTRY(unsigned char ucCreateAttributes, unsigned 
     }
 
     if(_roFIB.m_ucResult == DOS_ERR_OK)
-        _roFIB.m_poFile = new QFile(_szPath);
+        _roFIB.m_poFile = new QFile(szDirectory);
 
     vUpdateFIB(&_roFIB);
     _roFIB.m_ucDrive = _ucPhysicalDrive + 1;
@@ -562,7 +580,7 @@ void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, unsigned char _uc
 
     if (_ucSetAttributes)
     {
-
+        // TODO
     }
 
     s.ucCurrentAttributes = QFileInfo(_szPath).isDir() ? 0 : ATTRIBUTE_DIRECTORY;
@@ -585,7 +603,6 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigne
 
     if (ucSet)
     {
-        // Decode MSX-DOS packed date/time
         const int year   = 1980 + ((uiNewDate >> 9) & 0x7F);
         const int month  = (uiNewDate >> 5) & 0x0F;
         const int day    =  uiNewDate       & 0x1F;
@@ -599,11 +616,9 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigne
 
         const QDateTime newDt(date, time, Qt::LocalTime);
 
-        bool ok = false;
         QFile f(_szPath);
-        ok = f.setFileTime(newDt, QFileDevice::FileModificationTime);
 
-        s.ucError = ok ? DOS_ERR_OK : DOS_ERR_FILE;
+        s.ucError = f.setFileTime(newDt, QFileDevice::FileModificationTime) ? DOS_ERR_OK : DOS_ERR_FILE;
     }
 
     s.ucError = 0;

@@ -2,6 +2,8 @@
 #include "../../common/drv_jio.inc"
 #include "../../common/msxdos2.h"
 
+#define START_HANDLE 128
+
 typedef unsigned char bool;
 
 typedef void (*tdDosHandler)();
@@ -84,7 +86,7 @@ char *                 g_pcDiskTransferAddress = 0;
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 unsigned char          g_ucPreviousErrorCode = 0;
-bool g_bResult = 0;
+bool                   g_bResult = 0;
 __at (4) unsigned char g_ucCurrentDisk;
 
 /*
@@ -161,7 +163,21 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-static size_t my_strlen(const char *str)
+int strcmp(const char *s1, const char *s2)
+{
+    while (*s1 && (*s1 == *s2))
+    {
+        s1++;
+        s2++;
+    }
+    return (unsigned char)*s1 - (unsigned char)*s2;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static size_t strlen(const char *str)
 {
     const char *s = str;
 
@@ -199,7 +215,7 @@ __endasm;
  */
 static void vTransmitString(char *_pcString)
 {
-    vJIOTransmit(_pcString, my_strlen(_pcString) + 1);
+    vJIOTransmit(_pcString, strlen(_pcString) + 1);
 }
 
 /*
@@ -217,7 +233,7 @@ static void vReceive(void *_pvAddress, unsigned int _uiLength)
  */
 bool bIsPhysicalDriveHandled(unsigned char _ucPhysicalDrive)
 {
-    return _ucPhysicalDrive != 0;
+    return _ucPhysicalDrive == 0;
 }
 
 /*
@@ -227,6 +243,37 @@ bool bIsPhysicalDriveHandled(unsigned char _ucPhysicalDrive)
 bool bIsLogicalDriveHandled(unsigned char _ucLogicalDrive)
 {
     return bIsPhysicalDriveHandled(_ucLogicalDrive ? _ucLogicalDrive - 1 : g_ucCurrentDisk);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+ bool bIsDeviceName(const char *s)
+{
+    return (strcmp(s, "CON") == 0) ||
+           (strcmp(s, "PRN") == 0) ||
+           (strcmp(s, "LST") == 0) ||
+           (strcmp(s, "AUX") == 0) ||
+           (strcmp(s, "NUL") == 0);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+
+static void vTransmitPathOrFIB()
+{
+    vSendCommonHeader();
+
+    if (DE[0] == 0xFF)
+    {
+        vJIOTransmit(DE, sizeof(tdFileInfoBlock));
+        vTransmitString(HL);
+    }
+    else
+        vTransmitString(DE);
 }
 
 /*
@@ -244,6 +291,8 @@ bool bIsPathOrFIBHandled(unsigned char * _pucFIB)
     }
     else
     {
+        if (bIsDeviceName(_pucFIB))
+            return false;
         if (_pucFIB[0] && (_pucFIB[1] == ':'))
         {
             ucDrive = _pucFIB[0] - 'A' + 1;
@@ -259,21 +308,41 @@ bool bIsPathOrFIBHandled(unsigned char * _pucFIB)
  =======================================================================================================================
  =======================================================================================================================
  */
+static void vSendCommonHeader()
+{
+    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 static void vDOS_FIND_FIRST_ENTRY()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vTransmitPathOrFIB();
         vJIOTransmit(&B, sizeof(B));
 
-        if (DE[0] == 0xFF)
-        {
-            vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-            vTransmitString(HL);
-        }
-        else
-            vTransmitString(DE);
+        vReceive(FIB, sizeof(tdFileInfoBlock));
 
+        A = FIB->m_ucResult;
+
+        g_bResult = true;
+    }
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_FIND_NEW_ENTRY()
+{
+    if (bIsPathOrFIBHandled(DE))
+    {
+        vTransmitPathOrFIB();
+        vJIOTransmit(&B, sizeof(B));
+        vJIOTransmit(IX+1, 13);
         vReceive(FIB, sizeof(tdFileInfoBlock));
 
         A = FIB->m_ucResult;
@@ -290,7 +359,7 @@ static void vDOS_FIND_NEXT_ENTRY()
 {
     if (bIsPathOrFIBHandled(IX))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(FIB, sizeof(*FIB));
 
         vReceive(FIB, sizeof(*FIB));
@@ -306,7 +375,7 @@ static void vDOS_FIND_NEXT_ENTRY()
  */
 static void vDOS_GET_ALLOCATION_INFORMATION()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     A = 2;
     BCi = 512;
     DEi = 60000;
@@ -323,7 +392,7 @@ static void vDOS_CHANGE_CURRENT_DIRECTORY()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vTransmitString(DE);
 
         vReceive(&A, sizeof(A));
@@ -340,13 +409,8 @@ static void vDOS_OPEN_FILE_HANDLE()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vTransmitPathOrFIB();
         vJIOTransmit(&A, sizeof(A));
-
-        if (DE[0] == 0xFF)
-            vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-        else
-            vTransmitString(DE);
 
         vReceive(&BC, sizeof(BC));
         A = C;
@@ -361,9 +425,9 @@ static void vDOS_OPEN_FILE_HANDLE()
  */
 static void vDOS_CLOSE_FILE_HANDLE()
 {
-    if (B >= 128)
+    if (B >= START_HANDLE)
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&B, sizeof(B));
 
         vReceive(&A, sizeof(A));
@@ -378,9 +442,9 @@ static void vDOS_CLOSE_FILE_HANDLE()
  */
 static void vDOS_READ_FROM_FILE_HANDLE()
 {
-    if (B >= 128)
+    if (B >= START_HANDLE)
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&B, sizeof(B));
         vJIOTransmit(&HL, sizeof(HL));
 
@@ -398,9 +462,9 @@ static void vDOS_READ_FROM_FILE_HANDLE()
  */
 static void vDOS_WRITE_TO_FILE_HANDLE()
 {
-    if (B >= 128)
+    if (B >= START_HANDLE)
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&B, sizeof(B));
         vJIOTransmit(&HL, sizeof(HL));
         if (HL)
@@ -418,9 +482,9 @@ static void vDOS_WRITE_TO_FILE_HANDLE()
  */
 static void vDOS_MOVE_FILE_HANDLE_POINTER()
 {
-    if (B >= 128)
+    if (B >= START_HANDLE)
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&B, sizeof(B));
         vJIOTransmit(&A, sizeof(A));
         vJIOTransmit(&HL, sizeof(HL) + sizeof(DE));
@@ -437,9 +501,9 @@ static void vDOS_MOVE_FILE_HANDLE_POINTER()
  */
 static void vDOS_GET_CURRENT_DIRECTORY()
 {
-    if (!((B == 1) || ((B == 0) && (g_ucCurrentDisk == 1))))
+    if (bIsLogicalDriveHandled(B))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&B, sizeof(B));
 
         vReceive(&L, sizeof(L));
@@ -458,7 +522,7 @@ static void vDOS_CREATE_FILE_HANDLE()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vTransmitString(DE);
         vJIOTransmit(&A, sizeof(A));
         vJIOTransmit(&B, sizeof(B));
@@ -476,7 +540,7 @@ static void vDOS_CREATE_FILE_HANDLE()
  */
 static void vDOS_ENSURE_FILE_HANDLE()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     A = 0;
 
     g_bResult = true;
@@ -490,12 +554,7 @@ static void vDOS_GET_WHOLE_PATH_STRING()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
-        if (DE[0] == 0xFF)
-            vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-        else
-            vTransmitString(DE);
-
+        vTransmitPathOrFIB();
         vReceive(&A, sizeof(A) + sizeof(HL));
         vReceive(DE, H);
         HLi = DEi + L;
@@ -512,12 +571,8 @@ static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
-        if (DE[0] == 0xFF)
-            vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-        else
-            vTransmitString(DE);
-
+        vTransmitPathOrFIB();
+        
         vReceive(&A, sizeof(A));
 
         g_bResult = true;
@@ -532,12 +587,7 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
 {
     if (bIsPathOrFIBHandled(DE))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
-        if (DE[0] == 0xFF)
-            vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-        else
-            vTransmitString(DE);
-
+        vTransmitPathOrFIB();
         vJIOTransmit(&A, sizeof(A) + sizeof(L));
 
         vReceive(&A, sizeof(A) + sizeof(L));
@@ -552,9 +602,9 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
  */
 static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
 {
-    if (B >= 128)
+    if (B >= START_HANDLE)
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&A, sizeof(A) + sizeof(HL) + sizeof(DE) + sizeof(IX));
         vReceive(&A, sizeof(A) + sizeof(HL) + sizeof(DE));
 
@@ -568,7 +618,7 @@ static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
  */
 static void vDOS_SET_DISK_TRANSFER_ADDRESS()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     g_pcDiskTransferAddress = DE;
 
     g_bResult = true;
@@ -580,7 +630,7 @@ static void vDOS_SET_DISK_TRANSFER_ADDRESS()
  */
 static void vDOS_GENERIC_FCB_HANDLER()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     vJIOTransmit(DE, sizeof(tdFileControlBlock));
     vReceive(DE, sizeof(tdFileControlBlock));
 
@@ -597,7 +647,7 @@ static void vDOS_SELECT_DISK()
 {
     if (bIsPhysicalDriveHandled(E))
     {
-        vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+        vSendCommonHeader();
         vJIOTransmit(&E, sizeof(E));
         g_ucCurrentDisk = E;
         vReceive(&A, sizeof(A));
@@ -613,7 +663,7 @@ static void vDOS_SELECT_DISK()
  */
 static void vDOS_GET_PREVIOUS_ERROR_CODE()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     A = 0;
     B = g_ucPreviousErrorCode;
 
@@ -626,7 +676,7 @@ static void vDOS_GET_PREVIOUS_ERROR_CODE()
  */
 static void vDOS_GET_LOGIN_VECTOR()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
     HL = 0x000F;
 
     g_bResult = true;
@@ -638,7 +688,7 @@ static void vDOS_GET_LOGIN_VECTOR()
  */
 static void vDOS_GET_CURRENT_DRIVE()
 {
-    vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
+    vSendCommonHeader();
 
     L = A = g_ucCurrentDisk;
 
@@ -717,7 +767,7 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x3F                                       */ 0,
     /* 0x40 DOS_FIND_FIRST_ENTRY                  */ vDOS_FIND_FIRST_ENTRY,
     /* 0x41 DOS_FIND_NEXT_ENTRY                   */ vDOS_FIND_NEXT_ENTRY,
-    /* 0x42 DOS_FIND_NEW_ENTRY                    */ vDOS_FIND_FIRST_ENTRY,
+    /* 0x42 DOS_FIND_NEW_ENTRY                    */ vDOS_FIND_NEW_ENTRY,
     /* 0x43 DOS_OPEN_FILE_HANDLE                  */ vDOS_OPEN_FILE_HANDLE,
     /* 0x44 DOS_CREATE_FILE_HANDLE                */ vDOS_CREATE_FILE_HANDLE,
     /* 0x45 DOS_CLOSE_FILE_HANDLE                 */ vDOS_CLOSE_FILE_HANDLE,
