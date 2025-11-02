@@ -114,6 +114,8 @@ private:
     void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigned char ucGetOrSet, unsigned short int uiNewDate, unsigned short int uiNewTime);
     void            vDOS_SELECT_DISK(unsigned char _ucDiskToSelect);
 
+    void            vResetNFS();
+
     unsigned char   BDOSToQt(QString & _roString);
     void            QtToBDOS(QString & _roString);
 
@@ -158,7 +160,15 @@ private:
     QSettings                       *m_poSettings;
     tdConnectionState               m_eConnectionState = eCStateDisconnected;
     QFile*                          m_apoOpenedFiles[256] = {0};
-    QString                         m_szBDOSRootDir[8] = { "/mnt/DataLinux/Projects/MSX/sdcard", "", "", "", "", "", "", "" };
+    QString                         m_szBDOSRootDir[8] = {
+                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drivea",
+                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/driveb",
+                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drivec",
+                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drived",
+                                        "",
+                                        "",
+                                        "",
+                                        "" };
     QString                         m_szBDOSCurrentDir[8] = { "", "", "", "", "", "", "", "" };
     unsigned char                   m_ucCurrentPhysicalDrive = 0;
 };

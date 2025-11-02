@@ -10,6 +10,27 @@
  =======================================================================================================================
  =======================================================================================================================
  */
+void MainWindow::vResetNFS()
+{
+    for(int i = 0; i < 256; i++)
+    {
+        if (m_apoOpenedFiles[i])
+        {
+            m_apoOpenedFiles[i]->close();
+            m_apoOpenedFiles[i] = NULL;
+        }
+    }
+
+    for (QString &dir : m_szBDOSCurrentDir)
+        dir = "";
+
+    m_ucCurrentPhysicalDrive = 0;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 unsigned char MainWindow::ucAddFile(QFile * _poFile)
 {
     if (_poFile)
@@ -647,6 +668,6 @@ void MainWindow::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
     unsigned char ucNumberOfDrives;
 
     m_ucCurrentPhysicalDrive = _ucDiskToSelect;
-    ucNumberOfDrives = 2;
+    ucNumberOfDrives = 8;
     uiTransmit(&ucNumberOfDrives, sizeof(ucNumberOfDrives), 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }

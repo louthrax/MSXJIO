@@ -176,15 +176,13 @@ RESOURCES += \
     Fonts.qrc
 
 DISTFILES += \
-    ../clients/JIO_MSX-DOS/crt.asm \
-    ../clients/JIO_MSX-DOS/disk.inc \
-    ../clients/JIO_MSX-DOS/dos1x.asm \
-    ../clients/JIO_MSX-DOS/drv_jio.c \
-    ../clients/JIO_MSX-DOS/drv_jio.asm \
-    ../clients/JIO_MSX-DOS/drv_jio.inc \
-    ../clients/JIO_MSX-DOS/msx.inc \
-    ../clients/JIO_MSX-DOS/p0_kernel.asm \
-    ../clients/JIO_MSX-DOS/p1_main.asm \
-    ../clients/JIO_MSX-DOS/p3_paging.asm \
+../clients/JIO_MSX-DOS/*.sh \
+../clients/JIO_MSX-DOS/*.asm \
+../clients/JIO_MSX-DOS/*.c \
+../clients/JIO_MSX-DOS/*.h \
+../clients/JIO_NFS/*.sh \
+../clients/JIO_NFS/*.asm \
+../clients/JIO_NFS/*.c \
+../clients/JIO_NFS/*.h \
     android/AndroidManifest.xml \
     readme.md

@@ -46,10 +46,10 @@
     <item>
      <widget class="QFrame" name="frame">
       <property name="frameShape">
-       <enum>QFrame::Shape::StyledPanel</enum>
+       <enum>QFrame::Shape::NoFrame</enum>
       </property>
-      <property name="frameShadow">
-       <enum>QFrame::Shadow::Raised</enum>
+      <property name="lineWidth">
+       <number>0</number>
       </property>
       <widget class="QPushButton" name="fileSelectPushButton">
        <property name="geometry">
@@ -75,7 +75,7 @@
        <property name="geometry">
         <rect>
          <x>150</x>
-         <y>470</y>
+         <y>300</y>
          <width>61</width>
          <height>56</height>
         </rect>
@@ -124,7 +124,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>470</y>
+         <y>300</y>
          <width>131</width>
          <height>56</height>
         </rect>
@@ -143,7 +143,7 @@
        <property name="geometry">
         <rect>
          <x>220</x>
-         <y>470</y>
+         <y>300</y>
          <width>131</width>
          <height>56</height>
         </rect>
@@ -177,14 +177,14 @@
          <x>10</x>
          <y>10</y>
          <width>341</width>
-         <height>391</height>
+         <height>221</height>
         </rect>
        </property>
        <property name="frameShape">
         <enum>QFrame::Shape::NoFrame</enum>
        </property>
        <property name="horizontalScrollBarPolicy">
-        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+        <enum>Qt::ScrollBarPolicy::ScrollBarAsNeeded</enum>
        </property>
        <property name="lineWrapMode">
         <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
@@ -252,7 +252,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>530</y>
+         <y>360</y>
          <width>341</width>
          <height>4</height>
         </rect>
@@ -288,7 +288,7 @@
        <property name="geometry">
         <rect>
          <x>290</x>
-         <y>410</y>
+         <y>240</y>
          <width>61</width>
          <height>51</height>
         </rect>
@@ -340,7 +340,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>410</y>
+         <y>240</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -356,7 +356,7 @@
        <property name="geometry">
         <rect>
          <x>100</x>
-         <y>410</y>
+         <y>240</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -372,7 +372,7 @@
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>440</y>
+         <y>270</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -388,7 +388,7 @@
        <property name="geometry">
         <rect>
          <x>100</x>
-         <y>440</y>
+         <y>270</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -404,7 +404,7 @@
        <property name="geometry">
         <rect>
          <x>190</x>
-         <y>410</y>
+         <y>240</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -456,7 +456,7 @@
        <property name="geometry">
         <rect>
          <x>190</x>
-         <y>440</y>
+         <y>270</y>
          <width>81</width>
          <height>26</height>
         </rect>
@@ -466,6 +466,558 @@
        </property>
        <property name="checkable">
         <bool>true</bool>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveA">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>370</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveD">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>430</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveB">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>390</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveC">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>410</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveE">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>450</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveF">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>470</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveG">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>490</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLineEdit" name="directoryPathLineEdit_DriveH">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>510</y>
+         <width>251</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="placeholderText">
+        <string>Directory to serve</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveA">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>370</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>A:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveB">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>390</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>B:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveC">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>410</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>C:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveD">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>430</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>D:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveE">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>450</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>E:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveF">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>470</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>F:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveG">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>490</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>G:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QLabel" name="label_DriveH">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>510</y>
+         <width>21</width>
+         <height>17</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>H:</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveA_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>370</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveB_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>390</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveC_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>410</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveD_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>430</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveE_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>450</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveF_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>470</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveG_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>490</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileSelectDriveH_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>300</x>
+         <y>510</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/openFile.svg</normaloff>:/icons/openFile.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveA_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>370</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveB_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>390</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveC_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>410</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveD_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>430</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveE_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>450</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveF_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>470</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveG_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>490</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="fileEjectDriveH_PushButton">
+       <property name="geometry">
+        <rect>
+         <x>330</x>
+         <y>510</y>
+         <width>21</width>
+         <height>21</height>
+        </rect>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/eject.svg</normaloff>:/icons/eject.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>16</width>
+         <height>16</height>
+        </size>
        </property>
       </widget>
      </widget>

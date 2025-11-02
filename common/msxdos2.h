@@ -32,6 +32,9 @@ typedef enum
     DOS_SET_DISK_TRANSFER_ADDRESS         = 0x1A,
     DOS_GET_ALLOCATION_INFORMATION        = 0x1B,
 
+    CHECK_NFS                             = 0x1C,
+    RESET_NFS                             = 0x1D,
+
     DOS_RANDOM_READ_FCB                   = 0x21,
     DOS_RANDOM_WRITE_FCB                  = 0x22,
     DOS_GET_FILE_SIZE_FCB                 = 0x23,

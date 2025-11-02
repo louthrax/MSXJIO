@@ -7,7 +7,6 @@
 typedef unsigned char bool;
 
 typedef void (*tdDosHandler)();
-typedef unsigned char bool;
 typedef unsigned int size_t;
 
 #define false	0
@@ -80,33 +79,15 @@ typedef union
  =======================================================================================================================
  =======================================================================================================================
  */
-
 char *                 g_pcSPSave = 0;
 char *                 g_pcDiskTransferAddress = 0;
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
+bool                   g_bHandledDrives[8] = { 0 };
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 unsigned char          g_ucPreviousErrorCode = 0;
 bool                   g_bResult = 0;
-__at (4) unsigned char g_ucCurrentDisk;
-
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-static void install(void) __naked
-{
-__asm
-    ld                              hl,(0xF37B)
-    ld                              (Hook_OriginalCode),hl
-
-    ld                              a,0xC3
-    ld                              (0xF37A),a
-
-    ld                              hl,Hook
-    ld                              (0xF37B),hl
-    ret
-__endasm;
-}
+const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
+unsigned char          g_ucCurrentDisk = 0;
 
 /*
  =======================================================================================================================
@@ -131,10 +112,10 @@ Hook:
     call    _bDoCommand
 
     or      a
-    jr      z,OriginalCode
+    jr      z,Hook_1
     ld      a,0xC9
 
-OriginalCode:
+Hook_1:
     ld      (RetOrNop),a
 
     ld      sp,_g_aoRegisters
@@ -146,12 +127,12 @@ OriginalCode:
     pop     ix
     ld      sp,(_g_pcSPSave)
 
-
 RetOrNop:
     ret
 
-    .db     0xC3
 Hook_OriginalCode:
+    .db     0xC3
+Hook_OriginalAddress:
     nop
     nop
 __endasm;
@@ -161,28 +142,58 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-int strcmp(const char *s1, const char *s2)
+bool streq(const char *s1, const char *s2) __naked
 {
-    while (*s1 && (*s1 == *s2))
-    {
-        s1++;
-        s2++;
-    }
-    return (unsigned char)*s1 - (unsigned char)*s2;
+    s1;
+    s2;
+__asm
+loop:
+        ld      a,(de)
+
+        cp      'a'
+        jr      c,upper_done
+        cp      'z'+1
+        jr      nc,upper_done
+        sub     32
+
+upper_done:
+        cp      (hl)
+        jr      nz,diff
+        or      a
+        jr      z,eq
+        inc     de
+        inc     hl
+        jr      loop
+eq:
+        inc     a
+        ret
+diff:
+        xor     a
+        ret
+__endasm;
 }
 
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
-static size_t strlen(const char *str)
+static size_t strlen(const char *str) __naked
 {
-    const char *s = str;
+__asm
 
-    while (*s)
-        ++s;
+        ld      c,l
+        ld      b,h
 
-    return (size_t)(s - str);
+loop2:  ld      a,(hl)
+        or      a
+        inc     hl
+        jr      nz,loop2
+
+        dec     hl
+        sbc     hl,bc
+        ex      de,hl
+        ret
+__endasm;
 }
 
 /*
@@ -226,7 +237,7 @@ static void vTransmitString(char *_pcString)
  */
 static void vReceive(void *_pvAddress, unsigned int _uiLength)
 {
-	while(!bJIOReceive(_pvAddress, _uiLength));
+    while(!bJIOReceive(_pvAddress, _uiLength));
 }
 
 /*
@@ -235,7 +246,7 @@ static void vReceive(void *_pvAddress, unsigned int _uiLength)
  */
 bool bIsPhysicalDriveHandled(unsigned char _ucPhysicalDrive)
 {
-    return _ucPhysicalDrive == 0;
+    return g_bHandledDrives[_ucPhysicalDrive];
 }
 
 /*
@@ -251,13 +262,16 @@ bool bIsLogicalDriveHandled(unsigned char _ucLogicalDrive)
  =======================================================================================================================
  =======================================================================================================================
  */
- bool bIsDeviceName(const char *s)
+bool bIsDeviceName(const char *s)
 {
-    return (strcmp(s, "CON") == 0) ||
-           (strcmp(s, "PRN") == 0) ||
-           (strcmp(s, "LST") == 0) ||
-           (strcmp(s, "AUX") == 0) ||
-           (strcmp(s, "NUL") == 0);
+    char * szName;
+
+    for(szName = g_acDevicesNames; *szName; szName += 4)
+    {
+        if (streq(szName, s))
+            return true;
+    }
+    return false;
 }
 
 /*
@@ -274,7 +288,6 @@ static void vSendCommonHeader()
  =======================================================================================================================
  =======================================================================================================================
  */
-
 static void vTransmitPathOrFIB()
 {
     vSendCommonHeader();
@@ -299,6 +312,8 @@ bool bIsPathOrFIBHandled(unsigned char * _pucFIB)
     ucDrive = 0;
     if (_pucFIB[0] == 0xFF)
     {
+        if (bIsDeviceName(_pucFIB+1) || (((tdFileInfoBlock*)_pucFIB)->m_cAttributes & 128))
+            return false;
         ucDrive = ((tdFileInfoBlock*)_pucFIB)->m_ucDrive;
     }
     else
@@ -320,9 +335,18 @@ bool bIsPathOrFIBHandled(unsigned char * _pucFIB)
  =======================================================================================================================
  =======================================================================================================================
  */
+bool bIsPathOrFIBHandled_DE()
+{
+    return bIsPathOrFIBHandled(DE);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 static void vDOS_FIND_FIRST_ENTRY()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vJIOTransmit(&B, sizeof(B));
@@ -339,7 +363,7 @@ static void vDOS_FIND_FIRST_ENTRY()
  */
 static void vDOS_FIND_NEW_ENTRY()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vJIOTransmit(&B, sizeof(B));
@@ -372,11 +396,14 @@ static void vDOS_FIND_NEXT_ENTRY()
  */
 static void vDOS_GET_ALLOCATION_INFORMATION()
 {
-    vSendCommonHeader();
-    A = 2;
-    BCi = 512;
-    DEi = 60000;
-    HLi = 30000;
+    if (bIsLogicalDriveHandled(E))
+    {
+        vSendCommonHeader();
+        A = 2;
+        BCi = 512;
+        DEi = 60000;
+        HLi = 30000;
+    }
 }
 
 /*
@@ -385,7 +412,7 @@ static void vDOS_GET_ALLOCATION_INFORMATION()
  */
 static void vDOS_CHANGE_CURRENT_DIRECTORY()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vSendCommonHeader();
         vTransmitString(DE);
@@ -400,7 +427,7 @@ static void vDOS_CHANGE_CURRENT_DIRECTORY()
  */
 static void vDOS_OPEN_FILE_HANDLE()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vJIOTransmit(&A, sizeof(A));
@@ -501,7 +528,7 @@ static void vDOS_GET_CURRENT_DIRECTORY()
  */
 static void vDOS_CREATE_FILE_HANDLE()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vSendCommonHeader();
         vTransmitString(DE);
@@ -529,7 +556,7 @@ static void vDOS_ENSURE_FILE_HANDLE()
  */
 static void vDOS_GET_WHOLE_PATH_STRING()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vReceive(&A, sizeof(A) + sizeof(HL));
@@ -544,7 +571,7 @@ static void vDOS_GET_WHOLE_PATH_STRING()
  */
 static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vReceive(&A, sizeof(A));
@@ -557,7 +584,7 @@ static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
  */
 static void vDOS_GET_SET_FILE_ATTRIBUTES()
 {
-    if (bIsPathOrFIBHandled(DE))
+    if (bIsPathOrFIBHandled_DE())
     {
         vTransmitPathOrFIB();
         vJIOTransmit(&A, sizeof(A) + sizeof(L));
@@ -656,6 +683,44 @@ static void vDOS_GET_CURRENT_DRIVE()
  =======================================================================================================================
  =======================================================================================================================
  */
+static void vDOS_PARSE_PATHNAME()
+{
+    g_bResult = true;
+__asm
+    ld    de,(_g_aoRegisters + 6)
+    ld    bc,(_g_aoRegisters + 0)
+
+    call  Hook_OriginalCode
+
+    ld    (_g_aoRegisters + 6),de
+    ld    (_g_aoRegisters + 0),bc
+    ld    (_g_aoRegisters + 4),hl
+    ld    (_g_aoRegisters + 3),a
+
+    bit   2,b
+    ret   nz
+
+    ld a,(_g_ucCurrentDisk)
+    inc a
+    ld (_g_aoRegisters + 0),a
+__endasm;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vCheckRFS()
+{
+    g_bResult = true;
+    L = 'R';
+    DE = (unsigned char*)main;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 static const tdDosHandler g_aDosHandlers[] =
 {
     /* 0x00 DOS_PROGRAM_TERMINATE                 */ 0,
@@ -678,27 +743,27 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x11 DOS_SEARCH_FOR_FIRST_ENTRY_FCB        */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x12 DOS_SEARCH_FOR_NEXT_ENTRY_FCB         */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x13 DOS_DELETE_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x14 DOS_SEQUENTIAL_READ_FCB               */ 0,
-    /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ 0,
+    /* 0x14 DOS_SEQUENTIAL_READ_FCB               */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x16 DOS_CREATE_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x17 DOS_RENAME_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x18 DOS_GET_LOGIN_VECTOR                  */ vDOS_GET_LOGIN_VECTOR,
     /* 0x19 DOS_GET_CURRENT_DRIVE                 */ vDOS_GET_CURRENT_DRIVE,
     /* 0x1A DOS_SET_DISK_TRANSFER_ADDRESS         */ vDOS_SET_DISK_TRANSFER_ADDRESS,
     /* 0x1B DOS_GET_ALLOCATION_INFORMATION        */ vDOS_GET_ALLOCATION_INFORMATION,
-    /* 0x1C                                       */ 0,
-    /* 0x1D                                       */ 0,
+    /* 0x1C                                       */ vCheckRFS,
+    /* 0x1D                                       */ vSendCommonHeader,
     /* 0x1E                                       */ 0,
     /* 0x1F                                       */ 0,
     /* 0x20                                       */ 0,
-    /* 0x21 DOS_RANDOM_READ_FCB                   */ 0,
-    /* 0x22 DOS_RANDOM_WRITE_FCB                  */ 0,
-    /* 0x23 DOS_GET_FILE_SIZE_FCB                 */ 0,
+    /* 0x21 DOS_RANDOM_READ_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x22 DOS_RANDOM_WRITE_FCB                  */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x23 DOS_GET_FILE_SIZE_FCB                 */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x24 DOS_SET_RANDOM_RECORD_FCB             */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x25                                       */ 0,
-    /* 0x26 DOS_RANDOM_BLOCK_WRITE_FCB            */ 0,
-    /* 0x27 DOS_RANDOM_BLOCK_READ_FCB             */ 0,
-    /* 0x28 DOS_RANDOM_WRITE_ZERO_FILL_FCB        */ 0,
+    /* 0x26 DOS_RANDOM_BLOCK_WRITE_FCB            */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x27 DOS_RANDOM_BLOCK_READ_FCB             */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x28 DOS_RANDOM_WRITE_ZERO_FILL_FCB        */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x29                                       */ 0,
     /* 0x2A DOS_GET_DATE                          */ 0,
     /* 0x2B DOS_SET_DATE                          */ 0,
@@ -749,7 +814,7 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x58 DOS_GET_VERIFY_FLAG_SETTING           */ 0,
     /* 0x59 DOS_GET_CURRENT_DIRECTORY             */ vDOS_GET_CURRENT_DIRECTORY,
     /* 0x5A DOS_CHANGE_CURRENT_DIRECTORY          */ vDOS_CHANGE_CURRENT_DIRECTORY,
-    /* 0x5B DOS_PARSE_PATHNAME                    */ 0,
+    /* 0x5B DOS_PARSE_PATHNAME                    */ vDOS_PARSE_PATHNAME,
     /* 0x5C DOS_PARSE_FILENAME                    */ 0,
     /* 0x5D DOS_CHECK_CHARACTER                   */ 0,
     /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING,
@@ -792,5 +857,5 @@ static bool bDoCommand()
     else
     {
         return false;
-   }
+    }
 }

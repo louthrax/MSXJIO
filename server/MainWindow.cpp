@@ -361,6 +361,10 @@ Task MainWindow::oParser()
 
             switch(ucFunction)
             {
+            case RESET_NFS:
+                vResetNFS();
+                break;
+
             case DOS_FIND_FIRST_ENTRY:
                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
                if (oFIB.m_ucFF == 0xFF)
@@ -893,6 +897,16 @@ MainWindow::MainWindow() :
 
     m_poUI->addressLineEdit->setText(roSelectedID());
 
+
+    m_poUI->fileSelectDriveA_PushButton->setToolTip("Select the directory to serve for drive A:.");
+    m_poUI->fileSelectDriveB_PushButton->setToolTip("Select the directory to serve for drive B:.");
+    m_poUI->fileSelectDriveC_PushButton->setToolTip("Select the directory to serve for drive C:.");
+    m_poUI->fileSelectDriveD_PushButton->setToolTip("Select the directory to serve for drive D:.");
+    m_poUI->fileSelectDriveE_PushButton->setToolTip("Select the directory to serve for drive E:.");
+    m_poUI->fileSelectDriveF_PushButton->setToolTip("Select the directory to serve for drive F:.");
+    m_poUI->fileSelectDriveG_PushButton->setToolTip("Select the directory to serve for drive G:.");
+    m_poUI->fileSelectDriveH_PushButton->setToolTip("Select the directory to serve for drive H:.");
+
     m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
     m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
@@ -1356,6 +1370,30 @@ void MainWindow::onButtonClicked()
             onImagePathValidated();
         }
     }
+    else if(poSender == m_poUI->fileSelectDriveA_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveB_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveC_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveD_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveE_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveF_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveG_PushButton)
+    {
+    }
+    else if(poSender == m_poUI->fileSelectDriveH_PushButton)
+    {
+    }
     else if(poSender == m_poUI->connectPushButton)
     {
         if(m_eConnectionState == eCStateDisconnected)
@@ -1446,7 +1484,7 @@ void MainWindow::vLog(tdLogType _eLogType, QString fmt, ...)
     case eLogRead:		  oFormat.setForeground(QColor(  0, 192,   0)); break;
     case eLogWrite:		  oFormat.setForeground(QColor(255, 128, 128)); break;
     case eLogBDOS:		  oFormat.setForeground(QColor(  0,   0, 192)); break;
-    case eLogBDOSDetails: oFormat.setForeground(QColor( 50,  50, 192)); message = "  " + message; break;
+    case eLogBDOSDetails: oFormat.setForeground(QColor( 90,  90, 192)); message = "  " + message; break;
     case eLogConnected:   oFormat.setForeground(QColor(128, 128, 255)); break;
     }
 
