@@ -161,10 +161,10 @@ private:
     tdConnectionState               m_eConnectionState = eCStateDisconnected;
     QFile*                          m_apoOpenedFiles[256] = {0};
     QString                         m_szBDOSRootDir[8] = {
-                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drivea",
-                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/driveb",
-                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drivec",
-                                        "/mnt/DataLinux/Projects/MSXJIO/clients/JIO_NFS/drived",
+                                        "/mnt/DataLinux/Projects/MSXJIO_Shared/drivea",
+                                        "/mnt/DataLinux/Projects/MSXJIO_Shared/driveb",
+                                        "/mnt/DataLinux/Projects/MSXJIO_Shared/drivec",
+                                        "/mnt/DataLinux/Projects/MSXJIO_Shared/drived",
                                         "",
                                         "",
                                         "",
