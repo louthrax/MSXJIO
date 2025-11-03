@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/Tmp"
+cd "$(dirname "$0")"
+mkdir -p Tmp
+cd Tmp
 
 rm -f *
 
