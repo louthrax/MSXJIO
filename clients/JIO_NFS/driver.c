@@ -288,14 +288,15 @@ static void vSendCommonHeader()
  =======================================================================================================================
  =======================================================================================================================
  */
-static void vTransmitPathOrFIB()
+static void vTransmitPathOrFIB(bool _bAlsoSendHL)
 {
     vSendCommonHeader();
 
     if (DE[0] == 0xFF)
     {
         vJIOTransmit(DE, sizeof(tdFileInfoBlock));
-        vTransmitString(HL);
+        if (_bAlsoSendHL)
+          vTransmitString(HL);
     }
     else
         vTransmitString(DE);
@@ -348,7 +349,7 @@ static void vDOS_FIND_FIRST_ENTRY()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(true);
         vJIOTransmit(&B, sizeof(B));
 
         vReceive(FIB, sizeof(tdFileInfoBlock));
@@ -365,7 +366,7 @@ static void vDOS_FIND_NEW_ENTRY()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(true);
         vJIOTransmit(&B, sizeof(B));
         vJIOTransmit(IX+1, 13);
         vReceive(FIB, sizeof(tdFileInfoBlock));
@@ -429,7 +430,7 @@ static void vDOS_OPEN_FILE_HANDLE()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(false);
         vJIOTransmit(&A, sizeof(A));
 
         vReceive(&BC, sizeof(BC));
@@ -558,7 +559,7 @@ static void vDOS_GET_WHOLE_PATH_STRING()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(false);
         vReceive(&A, sizeof(A) + sizeof(HL));
         vReceive(DE, H);
         HLi = DEi + L;
@@ -573,7 +574,7 @@ static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(false);
         vReceive(&A, sizeof(A));
     }
 }
@@ -586,7 +587,7 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
 {
     if (bIsPathOrFIBHandled_DE())
     {
-        vTransmitPathOrFIB();
+        vTransmitPathOrFIB(false);
         vJIOTransmit(&A, sizeof(A) + sizeof(L));
 
         vReceive(&A, sizeof(A) + sizeof(L));
