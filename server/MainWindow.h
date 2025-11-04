@@ -113,6 +113,9 @@ private:
     void            vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes);
     void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigned char ucGetOrSet, unsigned short int uiNewDate, unsigned short int uiNewTime);
     void            vDOS_SELECT_DISK(unsigned char _ucDiskToSelect);
+    void            vDOS_OPEN_FILE_FCB(tdFileControlBlock & _roFCB);
+    void            vDOS_CLOSE_FILE_FCB(tdFileControlBlock & _roFCB);
+    void            vDOS_RANDOM_BLOCK_READ_FCB(tdFileControlBlock & _roFCB);
 
     void            vResetNFS();
 

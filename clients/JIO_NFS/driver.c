@@ -80,7 +80,7 @@ typedef union
  =======================================================================================================================
  */
 char *                 g_pcSPSave = 0;
-char *                 g_pcDiskTransferAddress = 0;
+char *                 g_pcDiskTransferAddress = 0x80;
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };
 bool                   g_bHandledDrives[8] = { 0 };
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
@@ -614,7 +614,6 @@ static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
  */
 static void vDOS_SET_DISK_TRANSFER_ADDRESS()
 {
-    vSendCommonHeader();
     g_pcDiskTransferAddress = DE;
 }
 
@@ -628,7 +627,26 @@ static void vDOS_GENERIC_FCB_HANDLER()
     vJIOTransmit(DE, sizeof(tdFileControlBlock));
     vReceive(DE, sizeof(tdFileControlBlock));
 
-    A = L = FCB->m_ucResult;
+    A = L = ((tdFileControlBlock*)DE)->m_ucResult;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+static void vDOS_RANDOM_BLOCK_READ_FCB()
+{
+    vSendCommonHeader();
+    ((tdFileControlBlock*)DE)->m_uiNumberOfRecords = HL;
+    ((tdFileControlBlock*)DE)->m_uiDTA = g_pcDiskTransferAddress;
+    vJIOTransmit(DE, sizeof(tdFileControlBlock));
+
+    vReceive(DE, sizeof(tdFileControlBlock));
+    HL = DE = ((tdFileControlBlock*)DE)->m_uiNumberOfRecords;
+    if (HL)
+         vReceive(g_pcDiskTransferAddress, (unsigned int)HL);
+
+    A = ((tdFileControlBlock*)DE)->m_ucResult;
 }
 
 /*
@@ -741,13 +759,13 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x0E DOS_SELECT_DISK                       */ vDOS_SELECT_DISK,
     /* 0x0F DOS_OPEN_FILE_FCB                     */ vDOS_GENERIC_FCB_HANDLER,
     /* 0x10 DOS_CLOSE_FILE_FCB                    */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x11 DOS_SEARCH_FOR_FIRST_ENTRY_FCB        */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x12 DOS_SEARCH_FOR_NEXT_ENTRY_FCB         */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x13 DOS_DELETE_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x14 DOS_SEQUENTIAL_READ_FCB               */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x16 DOS_CREATE_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x17 DOS_RENAME_FILE_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x11 DOS_SEARCH_FOR_FIRST_ENTRY_FCB        */ 0,
+    /* 0x12 DOS_SEARCH_FOR_NEXT_ENTRY_FCB         */ 0,
+    /* 0x13 DOS_DELETE_FILE_FCB                   */ 0,
+    /* 0x14 DOS_SEQUENTIAL_READ_FCB               */ 0,
+    /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ 0,
+    /* 0x16 DOS_CREATE_FILE_FCB                   */ 0,
+    /* 0x17 DOS_RENAME_FILE_FCB                   */ 0,
     /* 0x18 DOS_GET_LOGIN_VECTOR                  */ vDOS_GET_LOGIN_VECTOR,
     /* 0x19 DOS_GET_CURRENT_DRIVE                 */ vDOS_GET_CURRENT_DRIVE,
     /* 0x1A DOS_SET_DISK_TRANSFER_ADDRESS         */ vDOS_SET_DISK_TRANSFER_ADDRESS,
@@ -757,14 +775,14 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x1E                                       */ 0,
     /* 0x1F                                       */ 0,
     /* 0x20                                       */ 0,
-    /* 0x21 DOS_RANDOM_READ_FCB                   */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x22 DOS_RANDOM_WRITE_FCB                  */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x23 DOS_GET_FILE_SIZE_FCB                 */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x24 DOS_SET_RANDOM_RECORD_FCB             */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x21 DOS_RANDOM_READ_FCB                   */ 0,
+    /* 0x22 DOS_RANDOM_WRITE_FCB                  */ 0,
+    /* 0x23 DOS_GET_FILE_SIZE_FCB                 */ 0,
+    /* 0x24 DOS_SET_RANDOM_RECORD_FCB             */ 0,
     /* 0x25                                       */ 0,
-    /* 0x26 DOS_RANDOM_BLOCK_WRITE_FCB            */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x27 DOS_RANDOM_BLOCK_READ_FCB             */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x28 DOS_RANDOM_WRITE_ZERO_FILL_FCB        */ vDOS_GENERIC_FCB_HANDLER,
+    /* 0x26 DOS_RANDOM_BLOCK_WRITE_FCB            */ 0,
+    /* 0x27 DOS_RANDOM_BLOCK_READ_FCB             */ vDOS_RANDOM_BLOCK_READ_FCB,
+    /* 0x28 DOS_RANDOM_WRITE_ZERO_FILL_FCB        */ 0,
     /* 0x29                                       */ 0,
     /* 0x2A DOS_GET_DATE                          */ 0,
     /* 0x2B DOS_SET_DATE                          */ 0,

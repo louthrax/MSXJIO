@@ -220,7 +220,7 @@ typedef struct __attribute__((packed))
 tdFileInfoBlock;
 
 
-typedef struct
+typedef struct __attribute__((packed))
 {
     unsigned char m_ucDriverNumber;
     char          m_acFileName[8];
@@ -238,18 +238,25 @@ typedef struct
 
         struct
         {
-            unsigned int m_uiRecordSize;
+            unsigned short int m_uiRecordSize;
         } dos;
     } u;
 
     unsigned int  m_ulFileSize;
     unsigned int  m_ulVolumeID;
+
+    unsigned char ucNewFileHandle;
     unsigned char m_ucResult;
+    unsigned short int m_uiNumberOfRecords;
+    unsigned short int m_uiDTA;
+    unsigned char m_acPadding[2];
+
     unsigned char m_ucCurrentRecordWithinExtent;
     unsigned int  m_ulRandomRecordNumber;
 }
 tdFileControlBlock;
 
+static_assert(sizeof(tdFileControlBlock) == 37);
 static_assert(sizeof(tdFileInfoBlock) == 48);
 
 #else
@@ -293,7 +300,11 @@ typedef struct
 
     unsigned long m_ulFileSize;
     unsigned long m_ulVolumeID;
+    unsigned char ucNewFileHandle;
     unsigned char m_ucResult;
+    unsigned int m_uiNumberOfRecords;
+    unsigned int m_uiDTA;
+    unsigned char m_acPadding[2];
     unsigned char m_ucCurrentRecordWithinExtent;
     unsigned long m_ulRandomRecordNumber;
 }

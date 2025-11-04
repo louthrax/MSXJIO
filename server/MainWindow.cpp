@@ -351,7 +351,8 @@ Task MainWindow::oParser()
             unsigned short int    uiNewDate;
             char*                 pcData;
 
-            tdFileInfoBlock oFIB;
+            tdFileInfoBlock       oFIB;
+            tdFileControlBlock    oFCB;
             QString               szPath;
             QString               szWildcard;
 
@@ -537,6 +538,23 @@ Task MainWindow::oParser()
                 vLog(eLogBDOSDetails, "ucDiskToSelect %d\n", ucDiskToSelect);
 
                 vDOS_SELECT_DISK(ucDiskToSelect);
+                break;
+
+
+            case DOS_OPEN_FILE_FCB:
+                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
+                vDOS_OPEN_FILE_FCB(oFCB);
+                break;
+
+            case DOS_CLOSE_FILE_FCB:
+                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
+                vDOS_CLOSE_FILE_FCB(oFCB);
+                break;
+
+            case DOS_RANDOM_BLOCK_READ_FCB:
+                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
+
+                vDOS_RANDOM_BLOCK_READ_FCB(oFCB);
                 break;
 
             case 0xFF:

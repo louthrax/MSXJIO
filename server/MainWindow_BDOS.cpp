@@ -671,3 +671,68 @@ void MainWindow::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
     ucNumberOfDrives = 8;
     uiTransmit(&ucNumberOfDrives, sizeof(ucNumberOfDrives), 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+void MainWindow::vDOS_OPEN_FILE_FCB(tdFileControlBlock & _roFCB)
+{
+    QString szPath;
+    QString szFileName;
+    QFile * poFile;
+
+    szPath = m_szBDOSRootDir[m_ucCurrentPhysicalDrive];
+
+    if (!m_szBDOSCurrentDir[m_ucCurrentPhysicalDrive].isEmpty())
+        szPath = szPath + "/" + m_szBDOSCurrentDir[m_ucCurrentPhysicalDrive];
+
+    szFileName =QString(_roFCB.m_acFileName).first(8);
+
+    if (strlen(_roFCB.m_acFileNameExtension) > 0)
+    {
+        szFileName += ".";
+        szFileName += _roFCB.m_acFileNameExtension;
+    }
+    szFileName = szFileName.toUpper();
+
+    if (!szFileName.isEmpty())
+        szPath = szPath + "/" + szFileName;
+
+
+    poFile = new QFile(szPath);
+
+    _roFCB.m_ucResult = 0;
+
+    if (poFile->exists() && poFile->open(QIODevice::ReadWrite))
+    {
+        _roFCB.ucNewFileHandle = ucAddFile(poFile);
+        _roFCB.m_ulFileSize = poFile->size();
+    }
+    else
+    {
+        delete poFile;
+        _roFCB.ucNewFileHandle = 0;
+        _roFCB.m_ucResult = 1;
+    }
+
+    uiTransmit(&_roFCB, sizeof(_roFCB), 0, 0, false, TRANSMIT_DELAY_NORMAL);
+}
+
+
+void MainWindow::vDOS_CLOSE_FILE_FCB(tdFileControlBlock & _roFCB)
+{
+    _roFCB.m_ucResult = 0;
+    uiTransmit(&_roFCB, sizeof(_roFCB), 0, 0, false, TRANSMIT_DELAY_NORMAL);
+}
+
+
+void MainWindow::vDOS_RANDOM_BLOCK_READ_FCB(tdFileControlBlock & _roFCB)
+{
+    QByteArray data = m_apoOpenedFiles[_roFCB.ucNewFileHandle]->read(_roFCB.m_uiNumberOfRecords);
+    _roFCB.m_ucResult = data.size() != _roFCB.m_uiNumberOfRecords;
+    _roFCB.m_uiNumberOfRecords = data.size();
+    _roFCB.m_ulRandomRecordNumber += data.size();
+    uiTransmit(&_roFCB, sizeof(_roFCB), 0, 0, false, TRANSMIT_DELAY_NORMAL);
+    uiTransmit(data.constData(), data.size(), 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
+}
