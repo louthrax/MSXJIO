@@ -38,7 +38,7 @@ WU_PO:	in	f,(c)	; 14
 
 RX_PO:	in	f,(c)	; 14
 	jp	po,RX_PO	; 11	 LOOP=25
-	ret	po	;  6 = 31 CYCLES
+	ld                              b,(hl)	;  8 = 33 CYCLES
 	
 	in	a,(c)	; 14	 Bit 0
 	nop
@@ -120,7 +120,7 @@ WU_PE:	in	f,(c)	; 14
 
 RX_PE:	in	f,(c)	; 14
 	jp	pe,RX_PE	; 11	 LOOP=25
-	ret	pe	;  6 = 31 CYCLES
+	ld                              b,(hl)                          ;  8 = 33 CYCLES
 
 	in	a,(c)	; 14	 Bit 0
 	cpl	                                ;  5
