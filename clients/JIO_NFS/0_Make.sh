@@ -31,6 +31,7 @@ zcc -a --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     ..
 
 mv ../driver.c.asm .
 mv ../main.c.asm .
+mv main JIO.COM
 
 cd ..
 

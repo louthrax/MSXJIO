@@ -1,7 +1,5 @@
 diskmanipulator create ./Tmp/disk.dsk 720
 diska ./Tmp/disk.dsk
-diskmanipulator import diska ./MSX-DOS2/ ./Tmp/main
-diskmanipulator rename diska MAIN JIO.COM
 
 diskmanipulator create ./Tmp/diskb.dsk 720
 diskb ./Tmp/diskb.dsk
