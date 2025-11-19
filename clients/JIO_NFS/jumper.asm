@@ -16,7 +16,7 @@
                                 ; Load BASIC in page 1
                                 ld                              a,(EXPTBL)
                                 ld                              h,0x40
-                                call                            my_enaslt
+                                call                            0x24
 
 sethook:
                                 ld                              hl,call_system

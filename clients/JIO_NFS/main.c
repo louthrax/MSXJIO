@@ -252,10 +252,6 @@ void vInstall()
     *((unsigned char*)0xF37A) = (unsigned char)0xC3;
     *((unsigned int*)0xF37B) = HIMSAV + driver_Hook;
     g_pbHandledDrives = HIMSAV + driver__g_bHandledDrives;
-__asm
-  ld c,0x1D
-  call 0xF37A
-__endasm;
 }
 
 /*
@@ -332,6 +328,30 @@ void vError(const char * _szErrorMessage, int _iErrorCode)
 {
     puts(_szErrorMessage);
     g_iResult = _iErrorCode;
+}
+
+
+bool bHasTurbo() __naked
+{
+__asm
+
+  ld a,(0xFCC1)
+  ld hl,0x180
+  call  0x000C
+  cp 0xC3
+  jr nz,noTurbo
+
+  ld a,(0xFCC1)
+  ld hl,0x183
+  call  0x000C
+  cp 0xC3
+  jr nz,noTurbo
+  ld a,1
+  ret
+noTurbo:
+  xor a
+  ret
+__endasm;
 }
 
 /*
@@ -429,6 +449,13 @@ int main(int argc, char **argv)
             puts("Installing RFS and drives...\r\n");
             vReserveMemory();
             vInstall();
+            HIMSAV[driver__g_bHasTurbo] = bHasTurbo();
+__asm
+  ld c,0x1D
+  call 0xF37A
+__endasm;
+
+
             vApplyDriveChanges();
             vJumpTo(jumper_target);
         }

@@ -7,4 +7,5 @@ cd "$(dirname "$0")"
 ./0_Make.sh
 
 killall openmsx || true
-openmsx -machine Philips_NMS_8255 -script openMSX_Run.tcl
+openmsx -machine Panasonic_FS-A1ST -script openMSX_Run.tcl
+#openmsx -machine Philips_NMS_8255 -script openMSX_Run.tcl

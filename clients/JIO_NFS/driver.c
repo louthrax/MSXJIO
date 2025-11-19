@@ -88,6 +88,7 @@ unsigned char          g_ucPreviousErrorCode = 0;
 bool                   g_bResult = 0;
 const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
 unsigned char          g_ucCurrentDisk = 0;
+unsigned char          g_bHasTurbo = false;
 
 /*
  =======================================================================================================================
@@ -857,24 +858,109 @@ static const tdDosHandler g_aDosHandlers[] =
     /* 0x70 DOS_GET_SET_REDIRECTION_STATUS        */ 
 };
 
+
+#define CHGCPU 0x0180
+#define GETCPU 0x0183
+#define EXPTBL 0xFCC1
+#define CALSLT 0x001C
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+char cGetCPU() __naked
+{
+__asm
+        ld	ix,GETCPU
+        ld	iy,(EXPTBL-1)
+        jp	CALSLT
+__endasm;
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+void vSetCPU(char _cCPUMode) __naked
+{
+__asm
+        ld	ix,CHGCPU
+        ld	iy,(EXPTBL-1)
+        call	CALSLT
+        di
+        ret
+__endasm;
+}
+
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
 static bool bDoCommand()
 {
+    g_bResult = false;
+
     if ((C <= DOS_GET_PREVIOUS_ERROR_CODE) && g_aDosHandlers[C])
     {
         g_oCommonHeader.m_ucFunction = C;
 
-        g_bResult = false;
+__asm
+
+        ld a,(_g_bHasTurbo)
+        or  a
+        jr  z,noTurbo1
+
+
+        push    iy
+
+        ex af,af'
+        push  af
+        ex af,af'
+
+        exx
+        push hl
+        push de
+        push bc
+        exx
+
+        call _cGetCPU
+
+        push  af
+
+        xor a
+        call _vSetCPU
+
+noTurbo1:
+__endasm;
+
         g_aDosHandlers[C]();
         g_ucPreviousErrorCode = A;
 
-        return g_bResult;
+__asm
+        ld a,(_g_bHasTurbo)
+        or  a
+        jr  z,noTurbo2
+
+        pop af
+        call _vSetCPU
+
+        exx
+        pop bc
+        pop de
+        pop hl
+        exx
+
+        ex af,af'
+        pop af
+        ex af,af'
+
+        pop     iy
+
+noTurbo2:
+
+__endasm;
+
     }
-    else
-    {
-        return false;
-    }
+
+    return g_bResult;
 }
