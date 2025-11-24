@@ -660,10 +660,12 @@ static void vDOS_SELECT_DISK()
     {
         vSendCommonHeader();
         vJIOTransmit(&E, sizeof(E));
-        g_ucCurrentDisk = E;
         vReceive(&A, sizeof(A));
         L = A;
+        g_bResult = false;
     }
+
+    g_ucCurrentDisk = E;
 }
 
 /*
