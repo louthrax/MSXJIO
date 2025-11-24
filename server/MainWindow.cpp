@@ -856,6 +856,52 @@ MainWindow::MainWindow() :
     m_poSettings = new QSettings();
 
     m_poUI->setupUi(this);
+
+    connect(m_poUI->unlockPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->timeout, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->slowTx, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->refreshPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->readOnly, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->namesListWidget, &QListWidget::itemClicked, this, &MainWindow::onItemActivated);
+    connect(m_poUI->fileSelectPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->connectPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->clearPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->bluetoothButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->autoRetry, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->USBButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->TxCRC, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->RxCRC, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+
+    connect(m_poUI->fileEjectDriveA_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveB_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveC_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveD_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveE_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveF_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveG_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileEjectDriveH_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+
+
+    connect(m_poUI->fileSelectDriveA_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveB_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveC_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveD_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveE_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveF_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveG_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->fileSelectDriveH_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+
+
+    connect(m_poUI->directoryPathLineEdit_DriveA, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveB, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveC, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveD, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveE, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveF, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveG, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+    connect(m_poUI->directoryPathLineEdit_DriveH, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
+
     setFixedSize(size());
     setFocusPolicy(Qt::StrongFocus);
 
@@ -894,6 +940,16 @@ MainWindow::MainWindow() :
     onImagePathValidated();
     m_oDrive.m_oLastPathBrowsed = m_poSettings->value("LastPathBrowsed").toString();
 
+    m_szBDOSRootDir[0] = m_poSettings->value("DrivePathA").toString();
+    m_szBDOSRootDir[1] = m_poSettings->value("DrivePathB").toString();
+    m_szBDOSRootDir[2] = m_poSettings->value("DrivePathC").toString();
+    m_szBDOSRootDir[3] = m_poSettings->value("DrivePathD").toString();
+    m_szBDOSRootDir[4] = m_poSettings->value("DrivePathE").toString();
+    m_szBDOSRootDir[5] = m_poSettings->value("DrivePathF").toString();
+    m_szBDOSRootDir[6] = m_poSettings->value("DrivePathG").toString();
+    m_szBDOSRootDir[7] = m_poSettings->value("DrivePathH").toString();
+
+
 #ifdef Q_OS_ANDROID
     m_eSelectedInterface = eInterfaceBluetooth;
     m_poUI->bluetoothButton->hide();
@@ -927,6 +983,16 @@ MainWindow::MainWindow() :
     m_poUI->fileSelectDriveG_PushButton->setToolTip("Select the directory to serve for drive G:.");
     m_poUI->fileSelectDriveH_PushButton->setToolTip("Select the directory to serve for drive H:.");
 
+
+    m_poUI->fileEjectDriveA_PushButton->setToolTip("Do not serve drive A:.");
+    m_poUI->fileEjectDriveB_PushButton->setToolTip("Do not serve drive B:.");
+    m_poUI->fileEjectDriveC_PushButton->setToolTip("Do not serve drive C:.");
+    m_poUI->fileEjectDriveD_PushButton->setToolTip("Do not serve drive D:.");
+    m_poUI->fileEjectDriveE_PushButton->setToolTip("Do not serve drive E:.");
+    m_poUI->fileEjectDriveF_PushButton->setToolTip("Do not serve drive F:.");
+    m_poUI->fileEjectDriveG_PushButton->setToolTip("Do not serve drive G:.");
+    m_poUI->fileEjectDriveH_PushButton->setToolTip("Do not serve drive H:.");
+
     m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
     m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
@@ -948,6 +1014,8 @@ MainWindow::MainWindow() :
     m_poUI->logWidget->setToolTip("Server log.");
 
     vSetState(m_eConnectionState);
+
+    vUpdateDrivePathsTexts();
 
 #ifdef Q_OS_ANDROID
     vRequestAndroidPermissionsAndSetInterface(this);
@@ -1165,6 +1233,16 @@ void MainWindow::vSaveSettings()
     m_poSettings->setValue("Timeout", m_bTimeout);
     m_poSettings->setValue("ReadOnly", m_bReadOnly);
     m_poSettings->setValue("SlowTx", m_bSlowTx);
+
+    m_poSettings->setValue("DrivePathA", m_szBDOSRootDir[0]);
+    m_poSettings->setValue("DrivePathB", m_szBDOSRootDir[1]);
+    m_poSettings->setValue("DrivePathC", m_szBDOSRootDir[2]);
+    m_poSettings->setValue("DrivePathD", m_szBDOSRootDir[3]);
+    m_poSettings->setValue("DrivePathE", m_szBDOSRootDir[4]);
+    m_poSettings->setValue("DrivePathF", m_szBDOSRootDir[5]);
+    m_poSettings->setValue("DrivePathG", m_szBDOSRootDir[6]);
+    m_poSettings->setValue("DrivePathH", m_szBDOSRootDir[7]);
+
 #ifndef Q_OS_ANDROID
     m_poSettings->setValue("SelectedInterface", m_eSelectedInterface);
 #endif
@@ -1306,6 +1384,44 @@ void MainWindow::vUpdateLights()
  =======================================================================================================================
  =======================================================================================================================
  */
+void MainWindow::vUpdateDrivePathsTexts()
+{
+    m_poUI->directoryPathLineEdit_DriveA->setText(m_szBDOSRootDir[0]);
+    m_poUI->directoryPathLineEdit_DriveB->setText(m_szBDOSRootDir[1]);
+    m_poUI->directoryPathLineEdit_DriveC->setText(m_szBDOSRootDir[2]);
+    m_poUI->directoryPathLineEdit_DriveD->setText(m_szBDOSRootDir[3]);
+    m_poUI->directoryPathLineEdit_DriveE->setText(m_szBDOSRootDir[4]);
+    m_poUI->directoryPathLineEdit_DriveF->setText(m_szBDOSRootDir[5]);
+    m_poUI->directoryPathLineEdit_DriveG->setText(m_szBDOSRootDir[6]);
+    m_poUI->directoryPathLineEdit_DriveH->setText(m_szBDOSRootDir[7]);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+void MainWindow::onDirectoryPathChanged()
+{
+    /*~~~~~~~~~~~~~~*/
+    QLineEdit *poSender;
+    /*~~~~~~~~~~~~~~*/
+
+    poSender = (QLineEdit*) QObject::sender();
+
+    if (poSender == m_poUI->directoryPathLineEdit_DriveA) m_szBDOSRootDir[0] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveB) m_szBDOSRootDir[1] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveC) m_szBDOSRootDir[2] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveD) m_szBDOSRootDir[3] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveE) m_szBDOSRootDir[4] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveF) m_szBDOSRootDir[5] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveG) m_szBDOSRootDir[6] = poSender->text(); else
+    if (poSender == m_poUI->directoryPathLineEdit_DriveH) m_szBDOSRootDir[7] = poSender->text();
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 void MainWindow::onButtonClicked()
 {
     /*~~~~~~~~~~~~~~*/
@@ -1361,7 +1477,6 @@ void MainWindow::onButtonClicked()
     else if(poSender == m_poUI->fileSelectPushButton)
     {
         /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-        QString lastFilePath = m_poSettings->value("LastMediaInserted").toString();
         QString initialDir;
         /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -1390,29 +1505,71 @@ void MainWindow::onButtonClicked()
             onImagePathValidated();
         }
     }
-    else if(poSender == m_poUI->fileSelectDriveA_PushButton)
+    else if(
+        (poSender == m_poUI->fileSelectDriveA_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveB_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveC_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveD_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveE_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveF_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveG_PushButton) ||
+        (poSender == m_poUI->fileSelectDriveH_PushButton))
     {
+
+        QString initialDir;
+
+        if(!m_oDrive.m_oLastPathBrowsed.isEmpty() && QFileInfo::exists(m_oDrive.m_oLastPathBrowsed))
+        {
+            initialDir = QFileInfo(m_oDrive.m_oLastPathBrowsed).absolutePath();
+        }
+        else
+        {
+            initialDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+        }
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+        QString oDrivePath = QFileDialog::getExistingDirectory(
+            nullptr,
+            "Select drive directory to serve...",
+            initialDir,
+            QFileDialog::ShowDirsOnly
+                | QFileDialog::DontResolveSymlinks
+            );
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+        if(!oDrivePath.isEmpty())
+        {
+            if (poSender == m_poUI->fileSelectDriveA_PushButton) m_szBDOSRootDir[0] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveB_PushButton) m_szBDOSRootDir[1] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveC_PushButton) m_szBDOSRootDir[2] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveD_PushButton) m_szBDOSRootDir[3] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveE_PushButton) m_szBDOSRootDir[4] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveF_PushButton) m_szBDOSRootDir[5] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveG_PushButton) m_szBDOSRootDir[6] = oDrivePath; else
+            if (poSender == m_poUI->fileSelectDriveH_PushButton) m_szBDOSRootDir[7] = oDrivePath;
+
+            vUpdateDrivePathsTexts();
+        }
     }
-    else if(poSender == m_poUI->fileSelectDriveB_PushButton)
+    else if(
+        (poSender == m_poUI->fileEjectDriveA_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveB_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveC_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveD_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveE_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveF_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveG_PushButton) ||
+        (poSender == m_poUI->fileEjectDriveH_PushButton))
     {
-    }
-    else if(poSender == m_poUI->fileSelectDriveC_PushButton)
-    {
-    }
-    else if(poSender == m_poUI->fileSelectDriveD_PushButton)
-    {
-    }
-    else if(poSender == m_poUI->fileSelectDriveE_PushButton)
-    {
-    }
-    else if(poSender == m_poUI->fileSelectDriveF_PushButton)
-    {
-    }
-    else if(poSender == m_poUI->fileSelectDriveG_PushButton)
-    {
-    }
-    else if(poSender == m_poUI->fileSelectDriveH_PushButton)
-    {
+        if (poSender == m_poUI->fileEjectDriveA_PushButton) m_szBDOSRootDir[0] = ""; else
+        if (poSender == m_poUI->fileEjectDriveB_PushButton) m_szBDOSRootDir[1] = ""; else
+        if (poSender == m_poUI->fileEjectDriveC_PushButton) m_szBDOSRootDir[2] = ""; else
+        if (poSender == m_poUI->fileEjectDriveD_PushButton) m_szBDOSRootDir[3] = ""; else
+        if (poSender == m_poUI->fileEjectDriveE_PushButton) m_szBDOSRootDir[4] = ""; else
+        if (poSender == m_poUI->fileEjectDriveF_PushButton) m_szBDOSRootDir[5] = ""; else
+        if (poSender == m_poUI->fileEjectDriveG_PushButton) m_szBDOSRootDir[6] = ""; else
+        if (poSender == m_poUI->fileEjectDriveH_PushButton) m_szBDOSRootDir[7] = "";
+
+        vUpdateDrivePathsTexts();
     }
     else if(poSender == m_poUI->connectPushButton)
     {

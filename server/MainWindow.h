@@ -67,6 +67,7 @@ public slots:
     void        onDeviceDisconnected();
 
     void        onButtonClicked();
+    void        onDirectoryPathChanged();
     void        onItemActivated(QListWidgetItem *_poItem);
     void        onImagePathValidated();
     void        onAddressLineValidated();
@@ -89,6 +90,7 @@ private:
     void		vSaveSettings();
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
     void		vUpdateLights();
+    void        vUpdateDrivePathsTexts();
 
     void vUpdateFIB(tdFileInfoBlock *_poFIB);
 
@@ -163,15 +165,7 @@ private:
     QSettings                       *m_poSettings;
     tdConnectionState               m_eConnectionState = eCStateDisconnected;
     QFile*                          m_apoOpenedFiles[256] = {0};
-    QString                         m_szBDOSRootDir[8] = {
-                                        "/mnt/DataLinux/Projects/MSXShared/drive_a",
-                                        "/mnt/DataLinux/Projects/MSXShared/drive_b",
-                                        "/mnt/DataLinux/Projects/MSXShared/drive_c",
-                                        "/mnt/DataLinux/Projects/MSXShared/drive_d",
-                                        "",
-                                        "",
-                                        "",
-                                        "" };
+    QString                         m_szBDOSRootDir[8] = { "", "", "", "", "", "", "", "" };
     QString                         m_szBDOSCurrentDir[8] = { "", "", "", "", "", "", "", "" };
     unsigned char                   m_ucCurrentPhysicalDrive = 0;
 };
