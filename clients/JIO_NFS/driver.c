@@ -737,125 +737,43 @@ static void vCheckRFS()
     DE = (unsigned char*)main;
 }
 
-/*
- =======================================================================================================================
- =======================================================================================================================
- */
-static const tdDosHandler g_aDosHandlers[] =
+typedef struct
 {
-    /* 0x00 DOS_PROGRAM_TERMINATE                 */ 0,
-    /* 0x01 DOS_CONSOLE_INPUT                     */ 0,
-    /* 0x02 DOS_CONSOLE_OUTPUT                    */ 0,
-    /* 0x03 DOS_AUXILIARY_INPUT                   */ 0,
-    /* 0x04 DOS_AUXILIARY_OUTPUT                  */ 0,
-    /* 0x05 DOS_PRINTER_OUTPUT                    */ 0,
-    /* 0x06 DOS_DIRECT_CONSOLE_IO                 */ 0,
-    /* 0x07 DOS_DIRECT_CONSOLE_INPUT              */ 0,
-    /* 0x08 DOS_CONSOLE_INPUT_WITHOUT_ECHO        */ 0,
-    /* 0x09 DOS_STRING_OUTPUT                     */ 0,
-    /* 0x0A DOS_BUFFERED_LINE_INPUT               */ 0,
-    /* 0x0B DOS_CONSOLE_STATUS                    */ 0,
-    /* 0x0C DOS_RETURN_VERSION_NUMBER             */ 0,
-    /* 0x0D DOS_DISK_RESET                        */ 0,
-    /* 0x0E DOS_SELECT_DISK                       */ vDOS_SELECT_DISK,
-    /* 0x0F DOS_OPEN_FILE_FCB                     */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x10 DOS_CLOSE_FILE_FCB                    */ vDOS_GENERIC_FCB_HANDLER,
-    /* 0x11 DOS_SEARCH_FOR_FIRST_ENTRY_FCB        */ 0,
-    /* 0x12 DOS_SEARCH_FOR_NEXT_ENTRY_FCB         */ 0,
-    /* 0x13 DOS_DELETE_FILE_FCB                   */ 0,
-    /* 0x14 DOS_SEQUENTIAL_READ_FCB               */ 0,
-    /* 0x15 DOS_SEQUENTIAL_WRITE_FCB              */ 0,
-    /* 0x16 DOS_CREATE_FILE_FCB                   */ 0,
-    /* 0x17 DOS_RENAME_FILE_FCB                   */ 0,
-    /* 0x18 DOS_GET_LOGIN_VECTOR                  */ vDOS_GET_LOGIN_VECTOR,
-    /* 0x19 DOS_GET_CURRENT_DRIVE                 */ vDOS_GET_CURRENT_DRIVE,
-    /* 0x1A DOS_SET_DISK_TRANSFER_ADDRESS         */ vDOS_SET_DISK_TRANSFER_ADDRESS,
-    /* 0x1B DOS_GET_ALLOCATION_INFORMATION        */ vDOS_GET_ALLOCATION_INFORMATION,
-    /* 0x1C                                       */ vCheckRFS,
-    /* 0x1D                                       */ vSendCommonHeader,
-    /* 0x1E                                       */ 0,
-    /* 0x1F                                       */ 0,
-    /* 0x20                                       */ 0,
-    /* 0x21 DOS_RANDOM_READ_FCB                   */ 0,
-    /* 0x22 DOS_RANDOM_WRITE_FCB                  */ 0,
-    /* 0x23 DOS_GET_FILE_SIZE_FCB                 */ 0,
-    /* 0x24 DOS_SET_RANDOM_RECORD_FCB             */ 0,
-    /* 0x25                                       */ 0,
-    /* 0x26 DOS_RANDOM_BLOCK_WRITE_FCB            */ 0,
-    /* 0x27 DOS_RANDOM_BLOCK_READ_FCB             */ vDOS_RANDOM_BLOCK_READ_FCB,
-    /* 0x28 DOS_RANDOM_WRITE_ZERO_FILL_FCB        */ 0,
-    /* 0x29                                       */ 0,
-    /* 0x2A DOS_GET_DATE                          */ 0,
-    /* 0x2B DOS_SET_DATE                          */ 0,
-    /* 0x2C DOS_GET_TIME                          */ 0,
-    /* 0x2D DOS_SET_TIME                          */ 0,
-    /* 0x2E DOS_SET_RESET_VERIFY_FLAG             */ 0,
-    /* 0x2F DOS_ABSOLUTE_SECTOR_READ              */ 0,
-    /* 0x30 DOS_ABSOLUTE_SECTOR_WRITE             */ 0,
-    /* 0x31 DOS_GET_DISK_PARAMETERS               */ 0,
-    /* 0x32                                       */ 0,
-    /* 0x33                                       */ 0,
-    /* 0x34                                       */ 0,
-    /* 0x35                                       */ 0,
-    /* 0x36                                       */ 0,
-    /* 0x37                                       */ 0,
-    /* 0x38                                       */ 0,
-    /* 0x39                                       */ 0,
-    /* 0x3A                                       */ 0,
-    /* 0x3B                                       */ 0,
-    /* 0x3C                                       */ 0,
-    /* 0x3D                                       */ 0,
-    /* 0x3E                                       */ 0,
-    /* 0x3F                                       */ 0,
-    /* 0x40 DOS_FIND_FIRST_ENTRY                  */ vDOS_FIND_FIRST_ENTRY,
-    /* 0x41 DOS_FIND_NEXT_ENTRY                   */ vDOS_FIND_NEXT_ENTRY,
-    /* 0x42 DOS_FIND_NEW_ENTRY                    */ vDOS_FIND_NEW_ENTRY,
-    /* 0x43 DOS_OPEN_FILE_HANDLE                  */ vDOS_OPEN_FILE_HANDLE,
-    /* 0x44 DOS_CREATE_FILE_HANDLE                */ vDOS_CREATE_FILE_HANDLE,
-    /* 0x45 DOS_CLOSE_FILE_HANDLE                 */ vDOS_CLOSE_FILE_HANDLE,
-    /* 0x46 DOS_ENSURE_FILE_HANDLE                */ vDOS_ENSURE_FILE_HANDLE,
-    /* 0x47 DOS_DUPLICATE_FILE_HANDLE             */ 0,
-    /* 0x48 DOS_READ_FROM_FILE_HANDLE             */ vDOS_READ_FROM_FILE_HANDLE,
-    /* 0x49 DOS_WRITE_TO_FILE_HANDLE              */ vDOS_WRITE_TO_FILE_HANDLE,
-    /* 0x4A DOS_MOVE_FILE_HANDLE_POINTER          */ vDOS_MOVE_FILE_HANDLE_POINTER,
-    /* 0x4B DOS_IO_CONTROL_FOR_DEVICES            */ 0,
-    /* 0x4C DOS_TEST_FILE_HANDLE                  */ 0,
-    /* 0x4D DOS_DELETE_FILE_OR_SUBDIRECTORY       */ vDOS_DELETE_FILE_OR_SUBDIRECTORY,
-    /* 0x4E DOS_RENAME_FILE_OR_SUBDIRECTORY       */ 0,
-    /* 0x4F DOS_MOVE_FILE_OR_SUBDIRECTORY         */ 0,
-    /* 0x50 DOS_GET_SET_FILE_ATTRIBUTES           */ vDOS_GET_SET_FILE_ATTRIBUTES,
-    /* 0x51 DOS_GET_SET_FILE_DATE_AND_TIME        */ 0,
-    /* 0x52 DOS_DELETE_FILE_HANDLE                */ 0,
-    /* 0x53 DOS_RENAME_FILE_HANDLE                */ 0,
-    /* 0x54 DOS_MOVE_FILE_HANDLE                  */ 0,
-    /* 0x55 DOS_GET_SET_FILE_HANDLE_ATTRIBUTES    */ 0,
-    /* 0x56 DOS_GET_SET_FILE_HANDLE_DATE_AND_TIME */ vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME,
-    /* 0x57 DOS_GET_DISK_TRANSFER_ADDRESS         */ 0,
-    /* 0x58 DOS_GET_VERIFY_FLAG_SETTING           */ 0,
-    /* 0x59 DOS_GET_CURRENT_DIRECTORY             */ vDOS_GET_CURRENT_DIRECTORY,
-    /* 0x5A DOS_CHANGE_CURRENT_DIRECTORY          */ vDOS_CHANGE_CURRENT_DIRECTORY,
-    /* 0x5B DOS_PARSE_PATHNAME                    */ vDOS_PARSE_PATHNAME,
-    /* 0x5C DOS_PARSE_FILENAME                    */ 0,
-    /* 0x5D DOS_CHECK_CHARACTER                   */ 0,
-    /* 0x5E DOS_GET_WHOLE_PATH_STRING             */ vDOS_GET_WHOLE_PATH_STRING,
-    /* 0x5F DOS_FLUSH_DISK_BUFFERS                */ 0,
-    /* 0x60 DOS_FORK_A_CHILD_PROCESS              */ 0,
-    /* 0x61 DOS_REJOIN_PARENT_PROCESS             */ 0,
-    /* 0x62 DOS_TERMINATE_WITH_ERROR_CODE         */ 0,
-    /* 0x63 DOS_DEFINE_ABORT_ROUTINE              */ 0,
-    /* 0x64 DOS_DEFINE_DISK_ERROR_HANDLER_ROUTINE */ 0,
-    /* 0x65 DOS_GET_PREVIOUS_ERROR_CODE           */ vDOS_GET_PREVIOUS_ERROR_CODE
-    /* 0x66 DOS_EXPLAIN_ERROR_CODE                */ 
-    /* 0x67 DOS_FORMAT_A_DISK                     */ 
-    /* 0x68 DOS_CREATE_OR_DESTROY_RAMDISK         */ 
-    /* 0x69 DOS_ALLOCATE_SECTOR_BUFFERS           */ 
-    /* 0x6A DOS_LOGICAL_DRIVE_ASSIGNMENT          */ 
-    /* 0x6B DOS_GET_ENVIRONMENT_ITEM              */ 
-    /* 0x6C DOS_SET_ENVIRONMENT_ITEM              */ 
-    /* 0x6D DOS_FIND_ENVIRONMENT_ITEM             */ 
-    /* 0x6E DOS_GET_SET_DISK_CHECK_STATUS         */ 
-    /* 0x6F DOS_GET_MSX_DOS_VERSION_NUMBER        */ 
-    /* 0x70 DOS_GET_SET_REDIRECTION_STATUS        */ 
+    unsigned char code;    // DOS function number (C)
+    tdDosHandler  handler; // function pointer
+} tdDosDispatchEntry;
+
+static const tdDosDispatchEntry g_aDosHandlers[] =
+{
+    { 0x0E, vDOS_SELECT_DISK },
+    { 0x0F, vDOS_GENERIC_FCB_HANDLER }, // DOS_OPEN_FILE_FCB
+    { 0x10, vDOS_GENERIC_FCB_HANDLER }, // DOS_CLOSE_FILE_FCB
+    { 0x18, vDOS_GET_LOGIN_VECTOR },
+    { 0x19, vDOS_GET_CURRENT_DRIVE },
+    { 0x1A, vDOS_SET_DISK_TRANSFER_ADDRESS },
+    { 0x1B, vDOS_GET_ALLOCATION_INFORMATION },
+    { 0x1C, vCheckRFS },
+    { 0x1D, vSendCommonHeader },
+    { 0x27, vDOS_RANDOM_BLOCK_READ_FCB },
+    { 0x40, vDOS_FIND_FIRST_ENTRY },
+    { 0x41, vDOS_FIND_NEXT_ENTRY },
+    { 0x42, vDOS_FIND_NEW_ENTRY },
+    { 0x43, vDOS_OPEN_FILE_HANDLE },
+    { 0x44, vDOS_CREATE_FILE_HANDLE },
+    { 0x45, vDOS_CLOSE_FILE_HANDLE },
+    { 0x46, vDOS_ENSURE_FILE_HANDLE },
+    { 0x48, vDOS_READ_FROM_FILE_HANDLE },
+    { 0x49, vDOS_WRITE_TO_FILE_HANDLE },
+    { 0x4A, vDOS_MOVE_FILE_HANDLE_POINTER },
+    { 0x4D, vDOS_DELETE_FILE_OR_SUBDIRECTORY },
+    { 0x50, vDOS_GET_SET_FILE_ATTRIBUTES },
+    { 0x56, vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME },
+    { 0x59, vDOS_GET_CURRENT_DIRECTORY },
+    { 0x5A, vDOS_CHANGE_CURRENT_DIRECTORY },
+    { 0x5B, vDOS_PARSE_PATHNAME },
+    { 0x5E, vDOS_GET_WHOLE_PATH_STRING },
+    { 0x65, vDOS_GET_PREVIOUS_ERROR_CODE },
+    { 0, 0 }
 };
 
 
@@ -898,18 +816,18 @@ __endasm;
  */
 static bool bDoCommand()
 {
+    const tdDosDispatchEntry* pEntry;
+
     g_bResult = false;
 
-    if ((C <= DOS_GET_PREVIOUS_ERROR_CODE) && g_aDosHandlers[C])
+    for (pEntry = g_aDosHandlers; pEntry->code && (pEntry->code != C); pEntry++);
+
+    if (pEntry->code)
     {
-        g_oCommonHeader.m_ucFunction = C;
-
 __asm
-
         ld a,(_g_bHasTurbo)
         or  a
         jr  z,noTurbo1
-
 
         push    iy
 
@@ -933,8 +851,9 @@ __asm
 noTurbo1:
 __endasm;
 
-        g_aDosHandlers[C]();
-        g_ucPreviousErrorCode = A;
+    g_oCommonHeader.m_ucFunction = C;
+    pEntry->handler();
+    g_ucPreviousErrorCode = A;
 
 __asm
         ld a,(_g_bHasTurbo)
@@ -955,9 +874,7 @@ __asm
         ex af,af'
 
         pop     iy
-
 noTurbo2:
-
 __endasm;
 
     }
