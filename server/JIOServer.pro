@@ -106,7 +106,8 @@ APP_BUNDLE = $$OUT_PWD/$$DESTDIR/$${TARGET}.app
 
 macx {
     INFO_PLIST = $$APP_BUNDLE/Contents/Info.plist
-    QMAKE_POST_LINK += /usr/libexec/PlistBuddy -c $$quote('"Set :NSBluetoothAlwaysUsageDescription string Enable Bluetooth communication with MSX"') "$$INFO_PLIST";
+# Following line might be required :
+# QMAKE_POST_LINK += /usr/libexec/PlistBuddy -c $$quote('"Set :NSBluetoothAlwaysUsageDescription string Enable Bluetooth communication with MSX"') "$$INFO_PLIST";
 }
 
 
@@ -169,6 +170,7 @@ HEADERS += \
     InterfaceBluetoothSocket.h \
     InterfaceSerialPort.h \
     MainWindow.h \
+    Pack.h \
     PartitionExtractor.h
 
 RESOURCES += \

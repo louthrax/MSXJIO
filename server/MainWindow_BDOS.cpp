@@ -3,8 +3,7 @@
 #include "MainWindow.h"
 #include "Find.h"
 #include "../common/drv_jio.inc"
-
-#define PACKED __attribute__((packed))
+#include "Pack.h"
 
 /*
  =======================================================================================================================
@@ -167,11 +166,13 @@ void MainWindow::vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle)
  */
 void MainWindow::vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize)
 {
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned short int uiSize;
     } s;
+    PACK_POP
 
     QByteArray data = m_apoOpenedFiles[_ucFileHandle]->read(_uiSize);
     s.uiSize = data.size();
@@ -186,12 +187,13 @@ void MainWindow::vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigne
  */
 void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize, char * _pcData)
 {
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned short int uiSize;
     } s;
-
+    PACK_POP
     s.ucError = 0;
     s.uiSize = m_apoOpenedFiles[_ucFileHandle]->write(_pcData, _uiSize);
 
@@ -355,11 +357,13 @@ QString findFileCaseInsensitive(const QString& path)
  */
 void MainWindow::vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory)
 {
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned char ucNewFileHandle;
     } s;
+    PACK_POP
     QFile * poFile;
 
     QIODevice::OpenMode mode = QIODevice::ReadWrite;
@@ -422,11 +426,14 @@ void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
 void MainWindow::vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, int _iOffset)
 {
     QFile * poFile;
-    struct PACKED
+
+    PACK_PUSH
+    struct
     {
         unsigned char ucResult;
         int           iNewPos;
     } s;
+    PACK_POP
 
     if ((poFile = m_apoOpenedFiles[_ucFileHandle]))
     {
@@ -478,11 +485,13 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenM
 {
     QFile * poFile;
 
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned char ucNewFileHandle;
     } s;
+    PACK_POP
 
     BDOSToQt(_szPath);
 
@@ -539,12 +548,14 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenM
  */
 void MainWindow::vDOS_GET_WHOLE_PATH_STRING(unsigned char _ucPhysicalDrive, QString szDirectory)
 {
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned char ucPos;
         unsigned char ucSize;
     } s;
+    PACK_POP
 
     if (szDirectory.startsWith(m_szBDOSRootDir[_ucPhysicalDrive]))
     {
@@ -591,11 +602,13 @@ void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath)
  */
 void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes)
 {
-    struct PACKED
+    PACK_PUSH
+    struct
     {
         unsigned char ucError;
         unsigned char ucCurrentAttributes;
     } s;
+    PACK_POP
 
     s.ucError = QFileInfo::exists(_szPath) ? DOS_ERR_OK : DOS_ERR_FILE;
 

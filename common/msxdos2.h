@@ -1,3 +1,8 @@
+#ifndef MSXDOS2_H
+#define MSXDOS2_H
+
+#include "Pack.h"
+
 typedef enum
 {
     DOS_PROGRAM_TERMINATE                 = 0x00,
@@ -203,7 +208,10 @@ enum {
 };
 
 #ifdef QT_VERSION
-typedef struct __attribute__((packed))
+
+PACK_PUSH
+
+typedef struct
 {
     unsigned char      m_ucFF;					    /*      0 - Always 0FFh */
     char               m_acFileName[13]; 			/*  1..13 - Filename as an ASCIIZ string */
@@ -220,7 +228,7 @@ typedef struct __attribute__((packed))
 tdFileInfoBlock;
 
 
-typedef struct __attribute__((packed))
+typedef struct
 {
     unsigned char m_ucDriverNumber;
     char          m_acFileName[8];
@@ -255,6 +263,8 @@ typedef struct __attribute__((packed))
     unsigned int  m_ulRandomRecordNumber;
 }
 tdFileControlBlock;
+
+PACK_POP
 
 static_assert(sizeof(tdFileControlBlock) == 37);
 static_assert(sizeof(tdFileInfoBlock) == 48);
@@ -405,3 +415,5 @@ only the first three bytes are used (implied record size is 128 bytes). This is
 compatible with CP/M and with MSX-DOS 1.
 
 */
+
+#endif
