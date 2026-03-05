@@ -9,7 +9,7 @@ set "WINDEPLOYQT=C:\Qt\6.9.0\msvc2022_64\bin\windeployqt.exe"
 set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 rem =========================
 
-set "SCRIPT_DIR=%~dp0"
+set "SCRIPT_DIR=%~dp0\.."
 if errorlevel 1 goto fail
 
 for %%F in ("%SCRIPT_DIR%\*.pro") do (
@@ -60,7 +60,7 @@ if errorlevel 1 goto fail
 copy /Y "release\%PROJECT_NAME%.exe" "deploy\%PROJECT_NAME%.exe"
 if errorlevel 1 goto fail
 
-"%SCRIPT_DIR%\MakeWinInst.py" "%PROJECT_NAME% %BUILD_VERSION%" "%PROJECT_NAME%" "%BUILD_VERSION%" "deploy" "%OUT_EXE%"
+"%SCRIPT_DIR%\tools\MakeWinInst.py" "%PROJECT_NAME% %BUILD_VERSION%" "%PROJECT_NAME%" "%BUILD_VERSION%" "deploy" "%OUT_EXE%"
 if errorlevel 1 goto fail
 
 exit /b 0

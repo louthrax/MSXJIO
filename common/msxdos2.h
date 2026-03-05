@@ -1,8 +1,6 @@
 #ifndef MSXDOS2_H
 #define MSXDOS2_H
 
-#include "Pack.h"
-
 typedef enum
 {
     DOS_PROGRAM_TERMINATE                 = 0x00,
@@ -208,6 +206,8 @@ enum {
 };
 
 #ifdef QT_VERSION
+
+#include "Pack.h"
 
 PACK_PUSH
 

@@ -16,7 +16,7 @@ done
 
 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $SSH_PORT laurent@127.0.0.1 "
   cd \"Host$SCRIPT_DIR\"
-  ./build_macOS.zsh
+  ./tools/build_macOS.zsh
   result=$?
   (sleep 1 && sudo shutdown -h now) &
   exit $result

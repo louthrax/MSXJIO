@@ -5,7 +5,7 @@ set -euo pipefail
 QT_DIR="$HOME/Qt/6.8.3/macos"
 # -------------------------------------
 
-script_dir="$(cd "$(dirname "$0")" && pwd)"
+script_dir="$(cd "$(dirname "$0")" && pwd)/.."
 project_dir="$(pwd)"
 
 PROJECT_NAME="$(basename "$(ls "$script_dir"/*.pro)" .pro)"

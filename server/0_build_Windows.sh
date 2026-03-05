@@ -20,4 +20,4 @@ until ssh -p "$SSH_PORT" laurent@127.0.0.1 "net use ${DRIVE}: \\\\10.0.2.2\\Host
 done
 
 ssh -p "$SSH_PORT" laurent@127.0.0.1 \
-  "net use ${DRIVE}: \\\\10.0.2.2\\Host && cd /D $WIN_PATH && .\\build_Windows.bat"
+  "net use ${DRIVE}: \\\\10.0.2.2\\Host && cd /D $WIN_PATH && .\\tools\\build_Windows.bat"

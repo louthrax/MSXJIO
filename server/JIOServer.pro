@@ -1,8 +1,11 @@
 QT += core gui widgets bluetooth serialport
 
+MAKEFILE = Makefile
+
 CONFIG += c++20
 
-MAKEFILE = Makefile
+WARN_CXX = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
+WARN_C   = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
 
 ICON_SVG = $$PWD/$${TARGET}.svg
 
@@ -22,7 +25,7 @@ macx {
 
     icns_from_svg.target   = $$ICON_RELATIVE
     icns_from_svg.depends  = $$ICON_SVG
-    icns_from_svg.commands = $$PWD/svg2icns.sh $$ICON_SVG $$ICON_RELATIVE
+    icns_from_svg.commands = $$PWD/tools/svg2icns.sh $$ICON_SVG $$ICON_RELATIVE
 
     QMAKE_EXTRA_TARGETS += icns_from_svg
 }
@@ -45,10 +48,35 @@ win32 {
     PRE_TARGETDEPS      += $$ICON_ICO
 }
 
-DEFINES += BUILD_DATE=$$BUILD_DATE BUILD_HASH=$$BUILD_HASH BUILD_VERSION=$$BUILD_VERSION
+android {
+    ANDROID_RES_DIR = $$PWD/android/res
 
-WARN_CXX = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
-WARN_C   = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
+    RESOLUTIONS_W = \
+        ldpi:36 \
+        mdpi:48 \
+        hdpi:72 \
+        xhdpi:96 \
+        xxhdpi:144 \
+        xxxhdpi:192
+
+    for (ENTRY, RESOLUTIONS_W) {
+        RES = $$section(ENTRY, :, 0, 0)
+        WIDTH = $$section(ENTRY, :, 1, 1)
+
+        DIR = $$ANDROID_RES_DIR/drawable-$$RES
+        PNG_FILE = $$DIR/icon.png
+        MYTARGET = icon_$${RES}_png
+
+        $${MYTARGET}.commands = mkdir -p $$DIR && rsvg-convert -w $${WIDTH} -h $${WIDTH} $$ICON_SVG -o $$PNG_FILE
+        $${MYTARGET}.depends = $$ICON_SVG
+
+        QMAKE_EXTRA_TARGETS += $$MYTARGET
+        PRE_TARGETDEPS += $$MYTARGET
+        QMAKE_CLEAN += $$PNG_FILE
+    }
+}
+
+DEFINES += BUILD_DATE=$$BUILD_DATE BUILD_HASH=$$BUILD_HASH BUILD_VERSION=$$BUILD_VERSION
 
 CONFIG(release, debug|release) {
 
@@ -82,6 +110,7 @@ linux:!android:!macx:static {
 
     QMAKE_POST_LINK += strip $$OUT_PWD/$${TARGET} && upx $$OUT_PWD/$${TARGET}
 }
+
 
 RESOURCES += \
     Icons.qrc \
