@@ -33,8 +33,10 @@ RFS_HDR:	DEFB	"JIO",0,RFS_COMMAND
 RFS_FUNC:	DEFB	0
 RFS_BUF:	DEFS	8,0		; command parameters / result
 RFS_TXB:	DEFB	0		; single byte to transmit
+	IFNDEF HYBRID
 RFS_MODE:	DEFB	0		; open mode
 RFS_RH:		DEFB	0		; remote file handle
+	ENDIF
 RFS_OP:		DEFB	0		; b0 = read, b2 = segment type
 RFS_TURBO:	DEFB	0		; turbo R flag
 RFS_CPU:	DEFB	0		; saved CPU mode
@@ -46,18 +48,28 @@ RFS_LEFT:	DEFW	0		; bytes left
 RFS_DONE:	DEFW	0		; bytes done
 RFS_CHUNK:	DEFW	0		; bytes in current chunk
 RFS_PTR:	DEFW	0		; page 2 transfer address of current chunk
+	IFNDEF HYBRID
 RFS_OFS:	DEFS	4,0		; FCB file offset
 RFS_MA:		DEFS	4,0		; FCB multiply operand
 RFS_REQ:	DEFW	0		; FCB block records requested
-	IFNDEF HYBRID
 RFS_PBUF:	DEFS	16,0		; FCB path "D:NAME.EXT"
 	ENDIF
 	IFDEF HYBRID
-RFS_FIB		EQU	I_B99A		; FCB search FIB (64 bytes, work area of the removed FCB code)
-RFS_DPB		EQU	I_B975		; unopened FCB for _SFIRST (37 bytes, work area of the removed FCB code)
+; Work area of the removed FCB code in the data segment (page 2, cleared at boot): only for variables that are
+; not used while a TPA segment is mapped in page 2 (RFS_RW)
+RFS_DPB		EQU	I_B975		; unopened FCB for _SFIRST (37 bytes)
 RFS_PBUF	EQU	I_B975		; FCB path, not used at the same time as RFS_DPB
-RFS_NJIO:	DEFB	0		; number of JIO drives (first physical drives)
-RFS_WPJIO:	DEFB	0		; last entry found is on a JIO drive (_WPATH)
+RFS_FIB		EQU	I_B99A		; FCB search FIB (RFS_FIBSZ bytes of the 64 bytes area)
+RFS_OFS		EQU	RFS_FIB+RFS_FIBSZ	; FCB file offset (4 bytes)
+RFS_MA		EQU	RFS_OFS+4	; FCB multiply operand (4 bytes)
+RFS_REQ		EQU	RFS_MA+4	; FCB block records requested (2 bytes)
+RFS_MODE	EQU	RFS_REQ+2	; open mode
+RFS_RH		EQU	RFS_MODE+1	; remote file handle
+RFS_NJIO	EQU	RFS_RH+1	; number of JIO drives (first physical drives)
+RFS_WPJIO	EQU	RFS_NJIO+1	; last entry found is on a JIO drive (_WPATH)
+	IF RFS_WPJIO >= I_B9DA
+		ERROR	"RFS variables overflow the FCB work area"
+	ENDIF
 RFS_DRVP:	DEFB	"A:"		; drive prefix of paths without drive
 	ELSE
 RFS_FIB:	DEFS	RFS_FIBSZ,0	; FCB search FIB
@@ -96,7 +108,7 @@ J_RI6:		LD	(RFS_NJIO),A
 		RET	Z			; no JIO drive (no server)
 		LD	A,RFS_RESET		; reset server state (no answer)
 		CALL	RFS_CMD
-		JP	RFS_END
+		JR	RFS_END
 	ELSE
 		LD	A,RFS_RESET		; reset server state (no answer)
 		CALL	RFS_CMD
@@ -1338,7 +1350,11 @@ R_HATTR:	LD	(RFS_BUF+1),A
 		LD	C,55H
 		LD	HL,3
 		CALL	RFS_HBUF
-		JP	J_AT1
+	IFDEF HYBRID
+		JR	J_AT1
+	ELSE
+		JP	J_AT1			; out of JR range
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Function $56 _HFTIME
@@ -1357,7 +1373,11 @@ R_HFTIME:	LD	(RFS_BUF+1),A
 		LD	C,56H
 		LD	HL,6
 		CALL	RFS_HBUF
-		JP	J_FT1
+	IFDEF HYBRID
+		JR	J_FT1
+	ELSE
+		JP	J_FT1			; out of JR range
+	ENDIF
 
 ; Subroutine send file handle and RFS_BUF parameters, receive result in RFS_BUF
 ; Input:  B  = file handle
@@ -1606,7 +1626,7 @@ R_FMAKE:	PUSH	DE
 		CALL	X_CREATE
 J_FO3:		POP	IX
 		OR	A
-		JP	NZ,RFS_FERR
+		JR	NZ,RFS_FERR
 		PUSH	IX
 		PUSH	BC
 		CALL	C2136			; IX = pointer to FAB
@@ -1784,7 +1804,7 @@ J_SF2:		LD	(HL),0
 		LD	DE,(DTA_AD)
 		LD	B,33
 		CALL	RFS_TODTA
-		JP	RFS_FOK
+		JR	RFS_FOK
 
 ; Subroutine find first entry of FCB, result in RFS_FIB
 ; Input:  IX = pointer to FCB

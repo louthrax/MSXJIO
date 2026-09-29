@@ -944,7 +944,7 @@ J05EA:		JP	Z,J07A1
 		LD	E,A
 		LD	A,(D_BB7B)
 		OR	A
-		JP	NZ,J0653
+		JR	NZ,J0653
 		LD	A,(D_BB86)
 		CP	B
 		JR	Z,J063F
@@ -1026,7 +1026,7 @@ J0678:		LD	(HL),E
 		CALL	C07DC
 		INC	B
 		INC	B
-		JP	C06FD
+		JR	C06FD
 
 J0687:		LD	A,(D_BB86)
 		CP	C
@@ -1051,7 +1051,7 @@ J06A2:		INC	HL
 J06A3:		LD	(HL),E
 		CALL	C07DC
 		INC	B
-		JP	C06FD
+		JR	C06FD
 
 J06AB:		CALL	C08B2
 J06AE:		LD	A,7
@@ -1388,7 +1388,7 @@ C0882:		LD	HL,(D_BB8B)
 		CALL	C0915
 		LD	(D_BB8B),HL
 		BIT	1,(IY+9)
-		JP	Z,J0908
+		JR	Z,J0908
 		LD	C,0FFH
 		JP	K_HCONOUT
 
@@ -2487,7 +2487,7 @@ J0F60:		LD	A,H
 		JR	NZ,J0F60
 J0F71:		POP	BC
 		POP	HL
-		JP	C0FC8
+		JR	C0FC8
 
 I0F76:		DEFW	0
 
@@ -2814,7 +2814,7 @@ C111B:		CALL	C1110
 		LD	C,A
 		CALL	C113C
 		LD	E,A
-		JP	J1105
+		JR	J1105
 
 ; Subroutine read byte (BCD) from real time clock
 ; Input:  E = register+1
@@ -4048,7 +4048,7 @@ F_GETCD:	LD	A,B
 		CALL	C12C3
 		POP	DE
 		RET	NZ
-		JP	F_WPATH
+		JR	F_WPATH
 
 I1842:		DEFB	0
 
@@ -4072,7 +4072,7 @@ F_CHDIR:	XOR	A
 		LD	(HL),D
 		INC	HL
 		EX	DE,HL
-		JP	F_WPATH
+		JR	F_WPATH
 
 ; ---------------------------------------------------------
 ; Function $5B _PARSE
@@ -4805,7 +4805,7 @@ J1C8E:		PUSH	HL
 		DEC	A
 		JR	Z,J1CA4
 		BIT	1,(IY+41)
-		JP	Z,J1D19
+		JR	Z,J1D19
 		JR	J1CF9
 
 J1CA4:		POP	HL
@@ -6085,7 +6085,7 @@ J23F2:		LD	(DE),A
 		DJNZ	J23F2
 		POP	DE
 		POP	HL
-		JP	J2390
+		JR	J2390
 
 ; Subroutine move current directory entry
 C23FD:		XOR	A
@@ -8165,29 +8165,6 @@ J2F14:		POP	DE
 		POP	BC
 J2F16:		EX	(SP),IX
 		POP	HL
-		RET
-
-; Subroutine clear FAT
-C2F1A:		LD	DE,0
-		LD	C,A
-		LD	B,15
-		CALL	C2DD3
-		INC	DE
-		LD	BC,0FFFFH
-		CALL	C2DD3
-J2F2A:		INC	DE
-		LD	BC,0
-		CALL	C2DD3
-		PUSH	HL
-		LD	BC,22
-		ADD	HL,BC
-		LD	A,(HL)
-		INC	HL
-		LD	H,(HL)
-		LD	L,A
-		SBC	HL,DE
-		POP	HL
-		JR	NZ,J2F2A
 		RET
 
 ; Subroutine allocate clusters
