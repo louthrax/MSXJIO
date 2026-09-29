@@ -17,7 +17,7 @@ PUBLISHER = "Louthrax"
 COMPANY_DOMAIN = "com.louthrax"   # used for component id
 
 # Path to Qt Installer Framework binarycreator.exe
-BINARYCREATOR_PATH = r"C:\Qt\Tools\QtInstallerFramework\4.10\bin\binarycreator.exe"
+BINARYCREATOR_PATH = r"C:\Qt\Tools\QtInstallerFramework\4.11\bin\binarycreator.exe"
 
 # Windows-specific: where the app will be installed
 TARGET_DIR_TEMPLATE = "@ApplicationsDir@/{APP_NAME}"
