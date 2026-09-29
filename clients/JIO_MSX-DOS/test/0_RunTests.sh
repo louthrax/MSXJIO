@@ -175,6 +175,33 @@ test_longnames() { # name rom map machine slots description
     end_checks "$1" "$6"
 }
 
+# REN, MOVE, ATTRIB (_RENAME, _MOVE, _ATTR): on drive A: (JIO), and on the floppy B: for the hybrid ROM
+renmove_cmds() { # drive (same escapes as the other command strings: run_scenario uses printf)
+    echo -n "$1:"'\r\nCOPY A:HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMD SUB\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDEL SUB\\R2.TXT\r\nATTRIB -R SUB\\R2.TXT\r\nCOPY SUB\\R2.TXT R3.TXT\r\nDIR /W\r\n'
+}
+check_renmove() { # directory of the drive files, drive
+    local f="$1" r1 r2 r3 sub
+    if [ "$2" = A ]; then r1=R1.TXT; r2=R2.TXT; r3=R3.TXT; sub=SUB; else r1=r1.txt; r2=r2.txt; r3=r3.txt; sub=sub; fi
+    check "$2: REN of a file" "$([ ! -e "$f/$r1" ] && echo ok)"
+    check "$2: MOVE into a directory" "$([ ! -e "$f/$r2" ] && [ -f "$f/$sub/$r2" ] && echo ok)"
+    check "$2: file still there after DEL of the read only file, copied back (R3.TXT)" "$(cmp -s "$f/$r3" "$OUT/base/hello.txt" && echo ok)"
+}
+test_renmove() { # name rom map machine slots description [floppy size]
+    wanted "$1" || return
+    local cmds
+    cmds="$(renmove_cmds A)"
+    [ -n "${7:-}" ] && cmds="$cmds$(renmove_cmds B)"
+    run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/screens.tcl" "${7:-}" "$OUT/floppy_base" 1 "10 20 30 40 50 60"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check_renmove "$d/drive" A
+    check "A: DEL of a read only file refused" "$(grep -qi 'read only' "$d/screens.txt" && echo ok)"
+    check "A: read only attribute removed (host file writable)" "$([ -w "$d/drive/SUB/R2.TXT" ] && echo ok)"
+    [ -n "${7:-}" ] && check_renmove "$d/floppy_out" B
+    [ -n "${7:-}" ] && check "B: DEL of a read only file refused on both drives" "$([ "$(grep -ci 'read only' "$d/screens.txt")" -ge 2 ] && echo ok)"
+    end_checks "$1" "$6"
+}
+
 # Disk BASIC on drive $6
 test_basic() { # name rom map machine slots drive description [floppy size]
     wanted "$1" || return
@@ -281,6 +308,7 @@ if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
     test_dos_jio   jio_takeover "$J" "$JM" Philips_NMS_8255  "-ext msxdos2 -cartb $J" "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
     test_basic     jio_basic    "$J" "$JM" Philips_VG_8235   "-carta $J" A           "VG-8235, Disk BASIC"
     test_ramdisk   jio_ramdisk  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, RAMDISK (H: on the server), MSX reset"
+    test_renmove   jio_renmove  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, REN, MOVE, ATTRIB"
     test_longnames jio_longnames "$J" "$JM" Philips_VG_8235  "-carta $J"             "VG-8235, long host names and 8.3 aliases"
 fi
 
@@ -292,6 +320,7 @@ if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then
     test_noserver        hyb_noserver    "$H" "$HM" Philips_VG_8235   360 "VG-8235, no server: boots from the floppy"
     test_basic           hyb_basic_jio   "$H" "$HM" Philips_VG_8235   "-carta $H" A "VG-8235, Disk BASIC on the JIO drive" 360
     test_basic           hyb_basic_flop  "$H" "$HM" Philips_VG_8235   "-carta $H" B "VG-8235, Disk BASIC on the floppy" 360
+    test_renmove         hyb_renmove     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, REN, MOVE, ATTRIB on JIO drive A: and floppy B:" 360
     test_longnames       hyb_longnames   "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, long host names and 8.3 aliases"
     test_ramdisk         hyb_ramdisk     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
     test_takeover_hybrid hyb_takeover    "$H" "$HM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"

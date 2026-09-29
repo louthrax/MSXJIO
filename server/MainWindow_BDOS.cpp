@@ -1050,6 +1050,10 @@ unsigned char MainWindow::ucDelete(unsigned char _ucDrive, const QString &_szPat
         return QDir().rmdir(_szPath) ? DOS_ERR_OK : DOS_ERR_ACCV;
     }
 
+    // Read-only attribute (the host would delete a file without write permission)
+    if (!oInfo.isWritable())
+        return DOS_ERR_FILRO;
+
     return QFile::remove(_szPath) ? DOS_ERR_OK : DOS_ERR_FILRO;
 }
 
@@ -1305,6 +1309,9 @@ void MainWindow::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
 {
     QString         szPath;
     unsigned char   ucError = ucGetHandlePath(_ucFileHandle, szPath);
+
+    if ((ucError == DOS_ERR_OK) && !QFileInfo(szPath).isWritable())
+        ucError = DOS_ERR_FILRO;    // read-only attribute
 
     if (ucError == DOS_ERR_OK)
     {

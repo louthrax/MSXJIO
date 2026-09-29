@@ -21,6 +21,7 @@ assert struct.calcsize(FIBFMT) == 50
 
 E_OK, E_IDRV, E_NOFIL, E_NODIR, E_DUPF, E_DIRNE = 0, 0xDB, 0xD7, 0xD6, 0xD3, 0xD0
 E_DIRX, E_FILEX, E_IHAND = 0xCC, 0xCB, 0xC3
+E_FILRO = 0xD1
 E_DKFUL, E_RAMDX, E_NORAM = 0xD4, 0xBC, 0xDE
 
 
@@ -297,6 +298,25 @@ class Server:
             return E_IDRV, None, None, item
         return E_OK, d, p, item
 
+    def rename_or_move(self, d, p, new, move):
+        if move:
+            dd, ndir = self.resolve(new, d)
+            np = os.path.join(ndir, os.path.basename(p)) if ndir and os.path.isdir(ndir) else None
+            if not np:
+                return E_NODIR
+        else:
+            np = os.path.join(os.path.dirname(p), self.find_entry(os.path.dirname(p), new))
+        if os.path.exists(np):
+            return E_DUPF
+        os.rename(p, np)
+        return E_OK
+
+    def handle_drive(self, p):
+        for d, root in ROOTS.items():
+            if os.path.abspath(p).startswith(os.path.abspath(root) + os.sep):
+                return d
+        return self.cur
+
     def add_file(self, f):
         for h in range(128, 256):
             if h not in self.files:
@@ -498,6 +518,8 @@ class Server:
                         os.rmdir(p)
                     except OSError:
                         e = E_DIRNE
+                elif not os.access(p, os.W_OK):
+                    e = E_FILRO             # read-only attribute
                 else:
                     os.remove(p)
             return [bytes([e])]
@@ -507,17 +529,7 @@ class Server:
             e, d, p = self.target(path, fib)
             LOG.write('%s %s -> %r\n' % ('RENAME' if func == 0x4E else 'MOVE', p, new))
             if e == E_OK:
-                if func == 0x4E:
-                    np = os.path.join(os.path.dirname(p), self.find_entry(os.path.dirname(p), new))
-                else:
-                    dd, ndir = self.resolve(new, d)
-                    np = os.path.join(ndir, os.path.basename(p)) if ndir and os.path.isdir(ndir) else None
-                    e = E_OK if np else E_NODIR
-                if e == E_OK:
-                    if os.path.exists(np):
-                        e = E_DUPF
-                    else:
-                        os.rename(p, np)
+                e = self.rename_or_move(d, p, new, func == 0x4F)
             return [bytes([e])]
         if func in (0x50, 0x55):
             if func == 0x50:
@@ -527,9 +539,13 @@ class Server:
                 h = r.byte()
                 f = self.files.get(h)
                 e, p = (E_OK, f.name) if f else (E_IHAND, None)
-            r.byte(), r.byte()
+            st, na = r.byte(), r.byte()
             if e == E_OK and not os.path.exists(p):
                 e = E_NOFIL
+            if e == E_OK and st and not os.path.isdir(p):
+                mode = os.stat(p).st_mode
+                os.chmod(p, (mode & ~0o222) if na & 1 else (mode | 0o200))
+            LOG.write('ATTR %s set=%d attr=%02X -> %02X\n' % (p, st, na, self.attributes(p) if e == E_OK else 0))
             return [bytes([e, self.attributes(p) if e == E_OK else 0])]
         if func in (0x51, 0x56):
             if func == 0x51:
@@ -547,8 +563,20 @@ class Server:
         if func in (0x52, 0x53, 0x54):
             h = r.byte()
             new = r.string() if func != 0x52 else ''
-            LOG.write('H-function %02X %02X %r\n' % (func, h, new))
-            return [bytes([E_OK])]
+            f = self.files.get(h)
+            LOG.write('H-function %02X %02X %r %s\n' % (func, h, new, f.name if f else None))
+            if not f:
+                return [bytes([E_IHAND])]
+            p = f.name
+            if func == 0x52:
+                if not os.access(p, os.W_OK):
+                    return [bytes([E_FILRO])]
+                f.close()
+                del self.files[h]
+                os.remove(p)
+                return [bytes([E_OK])]
+            e = self.rename_or_move(self.handle_drive(p), p, new, func == 0x54)
+            return [bytes([e])]
         if func == 0x59:
             d = r.byte()
             d = d - 1 if d else self.cur

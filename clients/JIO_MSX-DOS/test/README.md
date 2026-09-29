@@ -46,6 +46,7 @@ only tested on real hardware.
 | `hyb_basic_jio`, `hyb_basic_flop` | hybrid | VG-8235 | Disk BASIC on the JIO drive / on the floppy |
 | `jio_ramdisk`, `hyb_ramdisk` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | `RAMDISK 32K` (H: on the server): copies both ways (byte compare), MD, FCB functions on H:, free space, disk full, H: -> floppy (hybrid), `RAMDISK 0 /D`, RAM disk destroyed by a MSX reset (`tcl/reboot.tcl`) |
 | `jio_longnames`, `hyb_longnames` | JIO only, hybrid | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
+| `jio_renmove`, `hyb_renmove` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and, with the hybrid ROM, on the floppy B: |
 | `hyb_takeover` | hybrid | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the hybrid ROM takes over, copy to the floppy |
 
 ## Results
