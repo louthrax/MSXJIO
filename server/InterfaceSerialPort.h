@@ -22,6 +22,7 @@ public:
     void        vDisconnectDevice();
     void        vDisconnectDevice2();
     qint64      uiBytesAvailable();
+    void        vSetLowLatency();
 
 public slots:
     void onReadyRead();

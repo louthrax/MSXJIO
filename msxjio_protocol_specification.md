@@ -111,6 +111,77 @@ Count * 512 bytes of raw data
 `0x55 0x55` : Not changed
   
   
+#### 0x16 — COMMAND BDOS
+
+**Description:** Remote file system. MSX-DOS 2 file functions are executed by the server on the directories it serves as drives A: to H: (JIO MSX-DOS 2 ROM, no FAT or sectors on the MSX side).  
+CRC is not used: the flags byte is `0x00` and no CRC follows the payload.  
+The server answers with zero, one or more response packets (sync bytes `0xFF ... 0xF0` followed by the data). Empty packets are not sent.
+
+**Payload:**
+| Field     | Size        | Description                              |
+|:----------|:------------|:-----------------------------------------|
+| Function  | 1 byte      | MSX-DOS function number (see below)      |
+| Data      | variable    | Function parameters                      |
+
+**Parameter types:**
+- *byte*, *word* (2 bytes), *dword* (4 bytes): little endian
+- *string*: ASCIIZ string, including the terminating `0x00`
+- *path*: either a *string* (MSX-DOS path, may start with a drive), or a *FIB* (first byte `0xFF`)
+- *FIB*: File Info Block, 50 bytes:
+
+| Offset | Size | Description                                                    |
+|-------:|-----:|:---------------------------------------------------------------|
+|      0 |    1 | Always `0xFF`                                                  |
+|      1 |   13 | File name (ASCIIZ)                                             |
+|     14 |    1 | Attributes                                                     |
+|     15 |    2 | Time of last modification                                      |
+|     17 |    2 | Date of last modification                                      |
+|     19 |    2 | Start cluster (always 0)                                       |
+|     21 |    4 | File size                                                      |
+|     25 |    1 | Drive (1 = A:)                                                 |
+|     26 |    6 | Reserved for the client (bit 7 of byte 30 set = device), byte 26 = search attributes |
+|     32 |    4 | Server find entry id                                           |
+|     36 |   13 | Search mask                                                    |
+|     49 |    1 | Error code (MSX-DOS 2 error, `0x00` = no error)                |
+
+**Functions:**
+| Function | Name      | Parameters                                                   | Response packets                                   |
+|:---------|:----------|:-------------------------------------------------------------|:---------------------------------------------------|
+| `0x0E`   | _SELDSK   | drive (byte, 0 = A:)                                         | number of drives (byte)                            |
+| `0x18`   | _LOGIN    | none                                                         | drives served (byte, bit 0 = A:)                   |
+| `0x1B`   | _ALLOC    | drive (byte, 0 = current, 1 = A:)                            | sectors per cluster (byte, 0 = invalid drive), total clusters (word), free clusters (word) |
+| `0x1D`   | RESET     | none                                                         | none (all files closed, current directories reset) |
+| `0x40`   | _FFIRST   | path, [file name (string) if path is a FIB], attributes (byte) | FIB                                              |
+| `0x41`   | _FNEXT    | FIB                                                          | FIB                                                |
+| `0x42`   | _FNEW     | path, [file name (string) if path is a FIB], attributes (byte), template file name (13 bytes) | FIB               |
+| `0x43`   | _OPEN     | path, open mode (byte)                                       | error (byte), file handle (byte)                   |
+| `0x44`   | _CREATE   | path, open mode (byte), attributes (byte)                    | error (byte), file handle (byte, `0xFF` for a sub-directory) |
+| `0x45`   | _CLOSE    | file handle (byte)                                           | error (byte)                                       |
+| `0x48`   | _READ     | file handle (byte), size (word)                              | error (byte), size read (word) ; data (if size read > 0) |
+| `0x49`   | _WRITE    | file handle (byte), size (word), data                        | error (byte), size written (word)                  |
+| `0x4A`   | _SEEK     | file handle (byte), method (byte), offset (dword)            | error (byte), new file pointer (dword)             |
+| `0x4D`   | _DELETE   | path                                                         | error (byte)                                       |
+| `0x4E`   | _RENAME   | path, new name (string)                                      | error (byte)                                       |
+| `0x4F`   | _MOVE     | path, new path (string)                                      | error (byte)                                       |
+| `0x50`   | _ATTR     | path, set (byte, 0 = get), attributes (byte)                 | error (byte), attributes (byte)                    |
+| `0x51`   | _FTIME    | path, set (byte, 0 = get), time (word), date (word)          | error (byte), time (word), date (word)             |
+| `0x52`   | _HDELETE  | file handle (byte)                                           | error (byte)                                       |
+| `0x53`   | _HRENAME  | file handle (byte), new name (string)                        | error (byte)                                       |
+| `0x54`   | _HMOVE    | file handle (byte), new path (string)                        | error (byte)                                       |
+| `0x55`   | _HATTR    | file handle (byte), set (byte, 0 = get), attributes (byte)   | error (byte), attributes (byte)                    |
+| `0x56`   | _HFTIME   | file handle (byte), set (byte, 0 = get), time (word), date (word) | error (byte), time (word), date (word)        |
+| `0x59`   | _GETCD    | drive (byte, 0 = current, 1 = A:)                            | size (byte, including the `0x00`) ; path (string)  |
+| `0x5A`   | _CHDIR    | path                                                         | error (byte)                                       |
+| `0x5E`   | _WPATH    | none                                                         | error (byte), offset of last item (byte), size (byte, including the `0x00`) ; whole path of last entry found (string) |
+| `0x68`   | _RAMD     | size (byte: `0x00` = destroy, `0x01`-`0xFE` = create with this number of 16 KB segments, `0xFF` = get size) | error (byte), RAM disk size (byte, segments, 0 = no RAM disk), drives served (byte, bit 0 = A:) |
+
+Notes:
+- File handles are allocated by the server (`0x80` to `0xFF`). The file pointer is kept by the server.
+- Paths without a drive use the drive selected by _SELDSK. Relative paths use the current directory of the drive (_CHDIR).
+- Device names (CON, AUX, PRN, LST, NUL) and the FCB functions (MSX-DOS 1) are handled by the client, using the functions above.
+- A _READ or _WRITE never crosses a 16 KB page boundary of the client memory.
+  
+  
 #### 0xNN — COMMAND DRIVE REPORT [NN]
 
 **Description:** Report a disk i/o result to the server  

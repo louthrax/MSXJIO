@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+#
+# Emulator tests of the JIO MSX-DOS 2 ROMs (no MSX and no JIO server needed).
+#
+# openMSX runs the ROM, tcl/bridge.tcl intercepts the serial routines of the
+# kernel and forwards the bytes to mockserver.py, which serves a host directory
+# as drive A:. See README.md.
+#
+# Usage: ./0_RunTests.sh [jio|hybrid|all] [scenario...]
+#   jio     JIO only ROM (p0_kernel.asm, same build as 0_Make_DOS2.sh)
+#   hybrid  hybrid ROM (p0_hybrid.asm, same build as 0_Make_DOS2_Hybrid.sh)
+#   all     both (default)
+# Results: out/<scenario>/ (screens, mock server log, JIO drive, floppy contents)
+
+set -u
+
+cd "$(dirname "$(realpath "$0")")"
+TEST=$(pwd)
+SRC=$(realpath ..)
+OUT=$TEST/out
+MSXDOS2_FILES=$(realpath ../../JIO_NFS/MSX-DOS2)
+MOCK_PORT=${MOCK_PORT:-9876}
+export MOCK_PORT
+
+WHAT=${1:-all}
+shift || true
+ONLY="$*"
+
+PASSED=0
+FAILED=0
+FAILED_LIST=""
+
+mkdir -p "$OUT"
+
+# ------------------------------------------------------------------------------
+# Build
+# ------------------------------------------------------------------------------
+build_rom() { # name kernel defines
+    local name=$1 kernel=$2 defines=$3
+    rm -rf "$OUT/obj_$name"
+    mkdir -p "$OUT/obj_$name"
+    ( cd "$SRC" &&
+      date +"db \"%Y-%m-%d\"" > rdate.inc &&
+      z88dk-z80asm -b -d -l -m $defines -O"$OUT/obj_$name" -o=jio_$name.bin p1_main.asm p3_paging.asm drv_jio.asm "$kernel" &&
+      z88dk-appmake +glue -b "$OUT/obj_$name/jio_$name" --filler 0xFF --clean > /dev/null &&
+      z88dk-appmake +rom -b "$OUT/obj_$name/jio_${name}__.bin" -o "$OUT/jio_$name.rom" -s 32768 --org 0 > /dev/null
+      rc=$?; rm -f rdate.inc; exit $rc ) || { echo "Build of $name ROM failed"; exit 1; }
+    awk '/^__P0_KERNEL_size/ { printf "  %s ROM: kernel %d bytes (limit 16384)\n", n, strtonum("0x" substr($3,2)) }' n="$name" "$OUT/obj_$name/jio_$name.map"
+}
+
+# Addresses of the intercepted routines, from the map file
+make_bridge() { # map output
+    local a
+    a() { grep -E "^$1 " "$2" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
+    sed -e "s/@RFS_TX@/$(a RFS_TX "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g" \
+        "$TEST/tcl/bridge.tcl.in" > "$2"
+}
+
+prepare_files() {
+    rm -rf "$OUT/base" "$OUT/floppy_base"
+    mkdir -p "$OUT/base" "$OUT/floppy_base"
+    ( cd "$TEST/fcbtest" && z88dk-z80asm -b -o="$OUT/base/FCBTEST.COM" fcbtest.asm && rm -f "$OUT"/base/*.o fcbtest.o ) || { echo "Build of FCBTEST.COM failed"; exit 1; }
+    ( cd "$TEST/fibtest" && z88dk-z80asm -b -o="$OUT/base/FIBTEST.COM" fibtest.asm && rm -f "$OUT"/base/*.o fibtest.o ) || { echo "Build of FIBTEST.COM failed"; exit 1; }
+    cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
+    printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
+    printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
+}
+
+# ------------------------------------------------------------------------------
+# Scenario
+# ------------------------------------------------------------------------------
+# run_scenario name rom map machine "slots" autoexec script [floppy size] [floppy files dir] [jio drives] [screen times]
+run_scenario() {
+    local name=$1 rom=$2 map=$3 machine=$4 slots=$5 autoexec=$6 script=$7
+    local fsize=${8:-} ffiles=${9:-} njio=${10:-1} times=${11:-"15 30 45 60"}
+    local dir="$OUT/$name" disk="" mp rc
+
+    rm -rf "$dir"
+    mkdir -p "$dir/drive"
+    cd "$dir"
+    cp "$OUT"/base/* drive/
+    [ -n "${SETUP:-}" ] && $SETUP drive
+    printf "$autoexec" > drive/AUTOEXEC.BAT
+    make_bridge "$map" bridge.tcl
+
+    if [ -n "$fsize" ]; then
+        FLOPPY_SIZE=$fsize FLOPPY_FILES=$ffiles timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/mkdisk.tcl" > /dev/null 2>&1
+        disk="-diska floppy.dsk"
+    fi
+
+    python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
+    mp=$!
+    sleep 1
+    JIO_DRIVES=$njio SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
+        -script bridge.tcl -script "$script" > openmsx.log 2>&1
+    rc=$?
+    kill $mp 2> /dev/null
+    wait $mp 2> /dev/null
+
+    if [ -n "$fsize" ]; then
+        mkdir -p floppy_out
+        timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/rddisk.tcl" > /dev/null 2>&1
+    fi
+    cat screen_*.txt > screens.txt 2> /dev/null
+    echo "$rc" > exit_code
+    cd "$TEST"
+}
+
+# ------------------------------------------------------------------------------
+# Checks
+# ------------------------------------------------------------------------------
+ERRORS=""
+check()      { [ "$2" ] || ERRORS="$ERRORS\n    - $1"; }
+has_text()   { grep -qF -- "$2" "$1" 2> /dev/null; }
+count_text() { grep -cF -- "$2" "$1" 2> /dev/null; }
+
+begin_checks() { # name
+    ERRORS=""
+    local dir="$OUT/$1"
+    check "openMSX exit code $(cat "$dir/exit_code")" "$([ "$(cat "$dir/exit_code")" = 0 ] && echo ok)"
+    check "protocol errors in server.log" "$( ! grep -q '\*\*\*' "$dir/server.log" && echo ok)"
+}
+
+end_checks() { # name description
+    if [ -z "$ERRORS" ]; then
+        echo "  PASS  $1: $2"
+        PASSED=$((PASSED + 1))
+    else
+        echo "  FAIL  $1: $2"
+        echo -e "$ERRORS" | sed '/^$/d'
+        FAILED=$((FAILED + 1))
+        FAILED_LIST="$FAILED_LIST $1"
+    fi
+}
+
+wanted() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
+
+FCB_OK='RENAME/DEL/DEL: 00 00 FF'
+FIB_OK='00 D7 00 00 FIBTEST: Hello'
+FNEW_OK='00 CC FF 00 FNEW DIRX'
+
+# JIO drive only: DOS commands, big copy, redirection, FCB functions
+DOS_JIO='VER\r\nFIBTEST\r\nCOPY COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nDIR > \\OUT.TXT\r\nCD \\\r\nFCBTEST\r\nDIR /W\r\n'
+test_dos_jio() { # name rom map machine slots description
+    wanted "$1" || return
+    run_scenario "$1" "$2" "$3" "$4" "$5" "$DOS_JIO" "$TEST/tcl/screens.tcl" "" "" 1 "5 6 7 8 9 10 11 12 13 14 45"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "FCB test result" "$(has_text "$d/screens.txt" "$FCB_OK" && echo ok)"
+    check "open with the FIB after the last _FNEXT" "$(has_text "$d/screens.txt" "$FIB_OK" && echo ok)"
+    check "_FNEW on a directory returns its FIB" "$(has_text "$d/screens.txt" "$FNEW_OK" && echo ok)"
+    check "X.COM identical to COMMAND2.COM" "$(cmp -s "$d/drive/X.COM" "$d/drive/COMMAND2.COM" && echo ok)"
+    check "SUB/HELLO.TXT copied" "$([ -f "$d/drive/SUB/HELLO.TXT" ] && echo ok)"
+    check "redirected DIR (OUT.TXT)" "$(has_text "$d/drive/OUT.TXT" 'Directory of A:\SUB' && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# Long host names: 8.3 aliases (XXXXXX~N.EXT) on the MSX
+setup_longnames() { # drive directory
+    mkdir -p "$1/Bombaman (2004)(TeamBomba)" "$1/BOMBAMAN_(2005)X"
+    printf 'GAME FILE\r\n' > "$1/Bombaman (2004)(TeamBomba)/GAME.TXT"
+    printf 'LONG NAME FILE\r\n' > "$1/LongFileName.text"
+}
+LONGNAMES='MD BOMBAMAN_(2004)(TEAMBOMBA)\r\nCD BOMBAMAN_(2004)(TEAMBOMBA)\r\nCD\r\nCD \\\r\nCD BOMBAM~1\r\nTYPE GAME.TXT\r\nCD \\\r\nTYPE LONGFI~1.TEX\r\nCOPY HELLO.TXT BOMBAM~2\r\nDIR /W\r\n'
+test_longnames() { # name rom map machine slots description
+    wanted "$1" || return
+    SETUP=setup_longnames run_scenario "$1" "$2" "$3" "$4" "$5" "$LONGNAMES" "$TEST/tcl/screens.tcl" "" "" 1 "25"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "long directory created on the host" "$([ -d "$d/drive/BOMBAMAN_(2004)(TEAMBOMBA)" ] && echo ok)"
+    check "CD with the long name, shown as alias" "$(has_text "$d/screens.txt" 'A:\BOMBAM~2' && echo ok)"
+    check "CD and TYPE with aliases" "$(has_text "$d/screens.txt" 'GAME FILE' && has_text "$d/screens.txt" 'LONG NAME FILE' && echo ok)"
+    check "COPY into an aliased directory" "$([ -f "$d/drive/BOMBAMAN_(2004)(TEAMBOMBA)/HELLO.TXT" ] && echo ok)"
+    check "aliases listed" "$(grep -qi 'bombam~3' "$d/screens.txt" && has_text "$d/screens.txt" 'LONGFI~1.TEX' && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# Disk BASIC on drive $6
+test_basic() { # name rom map machine slots drive description [floppy size]
+    wanted "$1" || return
+    local size=${8:-}
+    BASIC_DRIVE=$6 run_scenario "$1" "$2" "$3" "$4" "$5" 'BASIC\r\n' "$TEST/tcl/basic.tcl" "$size" "$OUT/floppy_base"
+    local d="$OUT/$1" loc
+    begin_checks "$1"
+    check "program output (LINE ONE)" "$(has_text "$d/screen_run.txt" 'LINE ONE' && echo ok)"
+    check "LOAD + LIST" "$(has_text "$d/screen_end.txt" '10 OPEN' && echo ok)"
+    if [ "$6" = A ]; then loc="$d/drive"; prog=PROG.BAS; data=DATA.TXT; else loc="$d/floppy_out"; prog=prog.bas; data=data.txt; fi
+    check "PROG.BAS saved on $6:" "$([ -f "$loc/$prog" ] && echo ok)"
+    check "DATA.TXT deleted (KILL)" "$([ ! -f "$loc/$data" ] && echo ok)"
+    end_checks "$1" "$7"
+}
+
+# JIO drive A: + floppy B:
+DOS_HYBRID='FIBTEST\r\nDIR A:/W\r\nDIR B:/W\r\nCOPY B:FLOPPY.TXT A:\r\nCOPY A:HELLO.TXT B:\r\nCOPY A:COMMAND2.COM B:X.COM\r\nCOPY B:X.COM A:Y.COM\r\nB:\r\nMD SUB\r\nCD SUB\r\nCOPY A:HELLO.TXT\r\nCD \\\r\nDIR > A:OUT.TXT\r\nA:FCBTEST\r\nA:\r\nFCBTEST\r\nDEL B:X.COM\r\nDIR B:/W\r\n'
+test_dos_hybrid() { # name rom map machine slots floppy size description
+    wanted "$1" || return
+    run_scenario "$1" "$2" "$3" "$4" "$5" "$DOS_HYBRID" "$TEST/tcl/screens.tcl" "$6" "$OUT/floppy_base" 1
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "FCB test result on both drives" "$([ "$(count_text "$d/screen_60.txt" "$FCB_OK")" -ge 2 ] && echo ok)"
+    check "open with the FIB after the last _FNEXT" "$(has_text "$d/screens.txt" "$FIB_OK" && echo ok)"
+    check "floppy -> JIO copy (FLOPPY.TXT)" "$([ -f "$d/drive/FLOPPY.TXT" ] && echo ok)"
+    check "Y.COM (JIO -> floppy -> JIO) identical" "$(cmp -s "$d/drive/Y.COM" "$d/drive/COMMAND2.COM" && echo ok)"
+    check "floppy SUB/HELLO.TXT" "$([ -f "$d/floppy_out/sub/hello.txt" ] && echo ok)"
+    check "X.COM deleted from floppy" "$([ ! -f "$d/floppy_out/x.com" ] && echo ok)"
+    check "floppy DIR redirected to JIO drive" "$(has_text "$d/drive/OUT.TXT" 'Directory of B:' && echo ok)"
+    end_checks "$1" "$7"
+}
+
+# RAMDISK (_RAMD): H: served by the server, MSX reset (RESET destroys the RAM disk)
+RAMDISK='RAMDISK\r\nRAMDISK 32K\r\nRAMDISK\r\nCOPY A:COMMAND2.COM H:\r\nCOPY A:HELLO.TXT H:\r\nMD H:SUB\r\nCOPY A:HELLO.TXT H:SUB\r\nCOPY H:COMMAND2.COM A:Z.COM\r\nDIR H: > A:RAM1.TXT\r\nH:\r\nA:FCBTEST\r\nA:\r\nCOPY A:COMMAND2.COM H:FULL.COM > A:FULL.TXT\r\n'
+RAMDISK_FLOPPY='COPY H:SUB\\HELLO.TXT B:RAM.TXT\r\n'
+RAMDISK_END='RAMDISK 0 /D\r\nDIR H: > A:RAM3.TXT\r\nRAMDISK 16K\r\nCOPY A:HELLO.TXT H:\r\n'
+test_ramdisk() { # name rom map machine slots description [floppy size]
+    wanted "$1" || return
+    local autoexec="$RAMDISK$RAMDISK_END"
+    [ -n "${7:-}" ] && autoexec="$RAMDISK$RAMDISK_FLOPPY$RAMDISK_END"
+    FIRST_TIME=50 SECOND_TIME=20 REBOOT_AUTOEXEC='RAMDISK > A:RAM2.TXT\r\nDIR H:\r\n' \
+        run_scenario "$1" "$2" "$3" "$4" "$5" "$autoexec" "$TEST/tcl/reboot.tcl" "${7:-}" "$OUT/floppy_base" 1
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "RAMDISK 32K creates H:" "$(has_text "$d/screens.txt" 'RAM disk is 32K' && echo ok)"
+    check "H: listed with its label" "$(has_text "$d/drive/RAM1.TXT" 'RAM DISK' && has_text "$d/drive/RAM1.TXT" 'COMMAND2' && has_text "$d/drive/RAM1.TXT" 'SUB' && echo ok)"
+    check "free space of the RAM disk" "$(has_text "$d/drive/RAM1.TXT" '7K free' && echo ok)"
+    check "Z.COM (JIO -> H: -> JIO) identical" "$(cmp -s "$d/drive/Z.COM" "$d/drive/COMMAND2.COM" && echo ok)"
+    check "FCB functions on H:" "$(has_text "$d/screens.txt" "$FCB_OK" && echo ok)"
+    check "disk full on H:" "$(grep -qi 'disk full' "$d/drive/FULL.TXT" "$d/screens.txt" 2> /dev/null && echo ok)"
+    [ -n "${7:-}" ] && check "H: -> floppy copy" "$([ -f "$d/floppy_out/ram.txt" ] && echo ok)"
+    check "RAMDISK 0 /D destroys H:" "$(! has_text "$d/drive/RAM3.TXT" 'COMMAND2' && echo ok)"
+    check "RAM disk destroyed by the MSX reset" "$(has_text "$d/drive/RAM2.TXT" 'does not exist' && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# No server ([ESC] at boot): the floppy is A:, MSX-DOS 2 boots from it
+test_noserver() { # name rom map machine floppy size description
+    wanted "$1" || return
+    rm -rf "$OUT/floppy_dos"; mkdir -p "$OUT/floppy_dos"
+    cp "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/FCBTEST.COM "$OUT/floppy_dos/"
+    cp "$OUT/base/hello.txt" "$OUT/floppy_dos/HELLO.TXT"
+    printf 'VER\r\nFCBTEST\r\nRAMDISK 32K > RAMD.TXT\r\nDIR/W\r\n' > "$OUT/floppy_dos/AUTOEXEC.BAT"
+    run_scenario "$1" "$2" "$3" "$4" "-carta $2" 'DIR\r\n' "$TEST/tcl/screens.tcl" "$5" "$OUT/floppy_dos" 0
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "no request to the server" "$([ ! -s "$d/server.log" ] && echo ok)"
+    check "MSX-DOS 2 booted from the floppy" "$(has_text "$d/screen_60.txt" 'COMMAND2.COM version' && echo ok)"
+    check "FCB test result" "$(has_text "$d/screen_60.txt" "$FCB_OK" && echo ok)"
+    check "RAMDISK without server: not enough memory" "$(grep -qi 'not enough memory' "$d/floppy_out/ramd.txt" 2> /dev/null && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# Hybrid ROM taking over from a MSX-DOS 2 cartridge in slot 1
+test_takeover_hybrid() { # name rom map machine floppy size description
+    wanted "$1" || return
+    run_scenario "$1" "$2" "$3" "$4" "-ext msxdos2 -cartb $2" 'VER\r\nDIR B:/W\r\nCOPY A:HELLO.TXT B:\r\nTYPE B:HELLO.TXT\r\n' "$TEST/tcl/screens.tcl" "$5" "$OUT/floppy_base" 1
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "floppy listed" "$(has_text "$d/screen_60.txt" 'FLOPPY  .TXT' && echo ok)"
+    check "file copied to the floppy and typed" "$(has_text "$d/screen_60.txt" 'Hello from the JIO server!' && [ -f "$d/floppy_out/hello.txt" ] && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# ------------------------------------------------------------------------------
+# Main
+# ------------------------------------------------------------------------------
+command -v openmsx > /dev/null || { echo "openmsx not found"; exit 1; }
+command -v z88dk-z80asm > /dev/null || { echo "z88dk not found"; exit 1; }
+
+echo "Build:"
+prepare_files
+if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then build_rom dos2 p0_kernel.asm "-DJIO"; fi
+if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then build_rom dos2h p0_hybrid.asm "-DJIO -DHYBRID"; fi
+
+J="$OUT/jio_dos2.rom";  JM="$OUT/obj_dos2/jio_dos2.map"
+H="$OUT/jio_dos2h.rom"; HM="$OUT/obj_dos2h/jio_dos2h.map"
+
+if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
+    echo "JIO only ROM:"
+    test_dos_jio   jio_nms8255  "$J" "$JM" Philips_NMS_8255  "-carta $J"             "NMS 8255, DOS commands and FCB functions"
+    test_dos_jio   jio_vg8235   "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, DOS commands and FCB functions"
+    test_dos_jio   jio_turbor   "$J" "$JM" Panasonic_FS-A1ST "-carta $J"             "turbo R, DOS commands and FCB functions"
+    test_dos_jio   jio_takeover "$J" "$JM" Philips_NMS_8255  "-ext msxdos2 -cartb $J" "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
+    test_basic     jio_basic    "$J" "$JM" Philips_VG_8235   "-carta $J" A           "VG-8235, Disk BASIC"
+    test_ramdisk   jio_ramdisk  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, RAMDISK (H: on the server), MSX reset"
+    test_longnames jio_longnames "$J" "$JM" Philips_VG_8235  "-carta $J"             "VG-8235, long host names and 8.3 aliases"
+fi
+
+if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then
+    echo "Hybrid ROM (JIO drive A: + floppy B:):"
+    test_dos_hybrid      hyb_vg8235      "$H" "$HM" Philips_VG_8235   "-carta $H" 360 "VG-8235 (360 KB drive), both drives"
+    test_dos_hybrid      hyb_nms8255     "$H" "$HM" Philips_NMS_8255  "-carta $H" 720 "NMS 8255 (720 KB drive), both drives"
+    test_dos_hybrid      hyb_turbor      "$H" "$HM" Panasonic_FS-A1ST "-carta $H" 720 "turbo R, both drives"
+    test_noserver        hyb_noserver    "$H" "$HM" Philips_VG_8235   360 "VG-8235, no server: boots from the floppy"
+    test_basic           hyb_basic_jio   "$H" "$HM" Philips_VG_8235   "-carta $H" A "VG-8235, Disk BASIC on the JIO drive" 360
+    test_basic           hyb_basic_flop  "$H" "$HM" Philips_VG_8235   "-carta $H" B "VG-8235, Disk BASIC on the floppy" 360
+    test_longnames       hyb_longnames   "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, long host names and 8.3 aliases"
+    test_ramdisk         hyb_ramdisk     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
+    test_takeover_hybrid hyb_takeover    "$H" "$HM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
+fi
+
+echo
+echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"
+[ "$FAILED" = 0 ]

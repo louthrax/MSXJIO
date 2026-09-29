@@ -7,6 +7,8 @@
 #include <QListWidgetItem>
 #include <QSettings>
 #include <QDirIterator>
+#include <QMap>
+#include <QTemporaryDir>
 
 #include "ByteReader.h"
 #include "Interface.h"
@@ -92,37 +94,59 @@ private:
     void		vUpdateLights();
     void        vUpdateDrivePathsTexts();
 
-    void vUpdateFIB(tdFileInfoBlock *_poFIB);
-
-
+    // BDOS functions served to the JIO kernel (MainWindow_BDOS.cpp)
     QString         szGetFIBDescription(tdFileInfoBlock &_roFIB);
     QString         szGetFileHandleDescription(unsigned char _ucFileHandle);
 
+    void            vResetNFS();
     unsigned char   ucAddFile(QFile * _poFile);
+    bool            bIsDriveServed(unsigned char _ucDrive);
+    bool            bIsRamDrive(unsigned char _ucDrive);
+    void            vDestroyRamDisk();
+    qint64          iRamDiskFree();
+    QString         szRootDir(unsigned char _ucDrive);
+    unsigned char   ucResolvePath(QString _szMSXPath, QString &_rszHostPath, unsigned char _ucDefaultDrive = 0xFF);
+    QString         szRelativePath(unsigned char _ucDrive, const QString &_szHostPath);
+    unsigned char   ucGetTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char &_rucDrive, QString &_rszHostPath);
+    unsigned char   ucGetFindTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char &_rucDrive, QString &_rszDirectory, QString &_rszItem);
+    unsigned char   ucGetHandlePath(unsigned char _ucFileHandle, QString &_rszPath);
+    unsigned char   ucGetAttributes(const QString &_szHostPath);
+    void            vFillFIB(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive);
+    void            vSetFindEntry(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive);
+    unsigned char   ucDelete(unsigned char _ucDrive, const QString &_szPath);
+    unsigned char   ucNewPath(unsigned char _ucDrive, const QString &_szPath, const QString &_szNew, bool _bMove, QString &_rszNewPath);
+    void            vAttributes(unsigned char _ucError, const QString &_szPath, unsigned char _ucSet, unsigned char _ucNewAttributes);
+    void            vDateTime(unsigned char _ucError, const QString &_szPath, QFile *_poFile, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate);
+    void            vAnswerHandle(unsigned char _ucError, QFile *_poFile);
+    void            vBDOSAnswer(const void *_pvData, unsigned int _uiSize);
+    void            vBDOSData(const void *_pvData, unsigned int _uiSize);
+    void            vBDOSError(unsigned char _ucError);
+
+    void            vDOS_SELECT_DISK(unsigned char _ucDiskToSelect);
+    void            vDOS_GET_LOGIN_VECTOR();
+    unsigned char   ucLoginVector();
+    void            vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments);
+    void            vDOS_GET_ALLOCATION_INFORMATION(unsigned char _ucDrive);
+    void            vDOS_FIND_FIRST_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucSearchAttributes);
+    void            vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB);
+    void            vDOS_FIND_NEW_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucAttributes, const char *_acTemplate);
+    void            vDOS_OPEN_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode);
+    void            vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode, unsigned char _ucAttributes);
     void            vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle);
     void            vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize);
-    void            vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize, char * _pcData);
-    void            vDOS_FIND_FIRST_ENTRY(unsigned char _ucSearchAttributes, unsigned _ucPhysicalDrive, QString _szDirectory, tdFileInfoBlock &_roFIB);
-    void            vDOS_FIND_NEW_ENTRY(unsigned char _ucSearchAttributes, unsigned _ucPhysicalDrive, QString _szDirectory, tdFileInfoBlock &_roFIB);
-    void            vDOS_OPEN_FILE_HANDLE(unsigned char _ucOpenMode, QString _szDirectory);
-    void            vDOS_CHANGE_CURRENT_DIRECTORY(unsigned _ucPhysicalDrive, QString _szDirectory);
-    void            vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB);
-    void            vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, int _iOffset);
+    void            vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QByteArray &_racData);
+    void            vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, qint32 _iOffset);
+    void            vDOS_DELETE_FILE_OR_SUBDIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath);
+    void            vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szNew, bool _bMove);
+    void            vDOS_GET_SET_FILE_ATTRIBUTES(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned char _ucNewAttributes);
+    void            vDOS_GET_SET_FILE_DATE_AND_TIME(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate);
+    void            vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle);
+    void            vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, const QString &_szNew, bool _bMove);
+    void            vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned char _ucNewAttributes);
+    void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate);
     void            vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber);
-    void            vDOS_CREATE_FILE_HANDLE(QString _szPath, unsigned char _ucOpenMode, unsigned char _ucAttributes);
-    void            vDOS_GET_WHOLE_PATH_STRING(unsigned char _ucPhysicalDrive, QString szDirectory);
-    void            vDOS_DELETE_FILE_OR_SUBDIRECTORY(QString _szPath);
-    void            vDOS_GET_SET_FILE_ATTRIBUTES(QString _szPath, unsigned char _ucSetAttributes, unsigned char _ucNewAttributes);
-    void            vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(QString _szPath, unsigned char ucGetOrSet, unsigned short int uiNewDate, unsigned short int uiNewTime);
-    void            vDOS_SELECT_DISK(unsigned char _ucDiskToSelect);
-    void            vDOS_OPEN_FILE_FCB(tdFileControlBlock & _roFCB);
-    void            vDOS_CLOSE_FILE_FCB(tdFileControlBlock & _roFCB);
-    void            vDOS_RANDOM_BLOCK_READ_FCB(tdFileControlBlock & _roFCB);
-
-    void            vResetNFS();
-
-    unsigned char   BDOSToQt(QString & _roString);
-    void            QtToBDOS(QString & _roString);
+    void            vDOS_CHANGE_CURRENT_DIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath);
+    void            vDOS_GET_WHOLE_PATH_STRING();
 
 #ifdef Q_OS_ANDROID
     void        vRequestAndroidPermissionsAndSetInterface(QObject *parent);
@@ -168,6 +192,11 @@ private:
     QString                         m_szBDOSRootDir[8] = { "", "", "", "", "", "", "", "" };
     QString                         m_szBDOSCurrentDir[8] = { "", "", "", "", "", "", "", "" };
     unsigned char                   m_ucCurrentPhysicalDrive = 0;
+    QMap<quint32, QString>          m_oFindEntries;         // FIB find id -> host path of entry found
+    quint32                         m_uiNextFindId = 0;
+    QString                         m_szWholePath;          // whole path of last entry found (_WPATH)
+    QTemporaryDir                   *m_poRamDisk = nullptr;  // RAM disk H: (_RAMD), temporary directory
+    unsigned char                   m_ucRamDiskSegments = 0; // RAM disk size (16 KB segments, 0 = no RAM disk)
 };
 
 #endif

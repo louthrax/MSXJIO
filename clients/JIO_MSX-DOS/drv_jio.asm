@@ -47,7 +47,9 @@ IFDEF DRV_IPL
         PUBLIC	DSKFMT
         PUBLIC	MTOFF
         PUBLIC	OEMSTA
+IF (IDEDOS1 || HYBRID)
         PUBLIC	DEFDPB
+ENDIF
 	PUBLIC	MYSIZE
         PUBLIC	SECLEN
         PUBLIC	BOOTMBR
@@ -143,15 +145,51 @@ DRIVES_Retry:
 
         call	PrintString
 
+IFDEF HYBRID
+        ; number of JIO drives = highest drive served by the server (BDOS _LOGIN)
+DRIVES_Login:
+        ld	a,7
+        call	SNSMAT
+        and	4
+        jr	z,DRIVES_NoJIO		; [ESC]: no JIO drive
+        ld	de,LoginCmd
+        ld	bc,6
+        di
+        call	vJIOTransmit
+        ld	de,PART_BUF
+        ld	bc,1
+        call	bJIOReceive
+        or	a
+        jr	z,DRIVES_Login		; time-out: retry
+        ld	a,(PART_BUF)
+        ld	b,0
+DRIVES_Count:
+        or	a
+        jr	z,DRIVES_Set
+        inc	b
+        srl	a
+        jr	DRIVES_Count
+DRIVES_NoJIO:
+        ld	b,0
+DRIVES_Set:
+        ld	(ix+W_DRIVES),b
+ENDIF
+
 DRIVES_Exit:
-        ld	a,(ix+W_DRIVES)
 IFDEF IDEDOS1
+        ld	a,(ix+W_DRIVES)
         or	a
         jr	nz,r206
         inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
-ENDIF
         ld	l,a
+ELSE
+IFDEF HYBRID
+        ld	l,(ix+W_DRIVES)		; JIO drives (0 = none), the other interfaces have the local drives
+ELSE
+        ld	l,1			; DOS 2: drives are served by the server, see RFS_INIT in the kernel
+ENDIF
+ENDIF
         pop     de
         pop     bc
         pop     af
@@ -164,7 +202,9 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-INIENV:	call	GETWRK			; HL and IX point to work buffer
+INIENV:
+IFDEF IDEDOS1
+	call	GETWRK			; HL and IX point to work buffer
         xor	a
         or	(ix+W_DRIVES)		; number of drives 0?
         ret	z
@@ -194,6 +234,7 @@ TestInterface:	ld	a,(hl)
         add	a,b
         ld	(ix+W_BOOTDRV),a	; Set boot drive
 ENDIF
+ENDIF
         ret
 
 ; ------------------------------------------
@@ -220,12 +261,10 @@ choice_txt:	db	$00
 ; MTOFF - Motors off not implemented
 ; ------------------------------------------
 DSKFMT:
-        IFDEF IDEDOS1
-                ; This routine will be called by DOS1 only
                 ; Error $0c = Bad parameter
                 ld	a,$0c
                 scf
-        ENDIF
+                ret
 SUBRET:
 MTOFF:		ret
 
@@ -235,6 +274,7 @@ MTOFF:		ret
 OEMSTA:		scf
                 ret
 
+IF (IDEDOS1 || HYBRID)
 ; ------------------------------------------
 ; Default DPB pattern (DOS 1)
 ; ------------------------------------------
@@ -253,6 +293,7 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
                 db	$03		; +10 FATSIZ	Sectors per FAT
                 dw	$0007		; +11 FIRDIR	First directory sector
                 dw	$0000		; +12 FATPTR	FAT pointer
+ENDIF
 
 ; ------------------------------------------
 ; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
@@ -374,6 +415,10 @@ PrintMsg:	ex      (sp),hl
                 ex      (sp),hl
                 ret
 
+IFDEF HYBRID
+LoginCmd:	db	"JIO",0,22,18h		; COMMAND_BDOS, _LOGIN
+ENDIF
+
 PrintString:	ld      a,(hl)
                 inc     hl
                 and     a
@@ -381,12 +426,6 @@ PrintString:	ld      a,(hl)
                 rst	$18			; print character
                 jr      PrintString
 
-; Print CR+LF
-PrintCRLF:	ld	a,$0d
-                rst	$18
-                ld	a,$0a
-                rst	$18
-                ret
 
 ; ------------------------------------------------------------------------------
 ENDIF ; DRV_IPL
@@ -437,6 +476,13 @@ INCLUDE	"crt.asm"
 ;********************************************************************************************************************************
 
 DSKIO:
+IFNDEF IDEDOS1
+        ; DOS 2: files are served by the JIO kernel, there are no sectors.
+        ; Another (FAT) kernel using this drive gets a "not ready" error, B = sectors not transferred.
+        ld	a,2
+        scf
+        ret
+ELSE
         di
 
         push	hl
@@ -513,6 +559,7 @@ ENDIF
         ret     c
         ld      b,0
         ret
+ENDIF
 
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
@@ -532,6 +579,11 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
+IFNDEF IDEDOS1
+        ld	a,2			; DOS 2: no sectors, "not ready" error (see DSKIO)
+        scf
+        ret
+ELSE
         di
         ld	b,a			; save drive
 	push	bc
@@ -599,6 +651,7 @@ GetDriveMask:
 	ret
 
 masks:	db	0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
+ENDIF
 
 ;********************************************************************************************************************************
 

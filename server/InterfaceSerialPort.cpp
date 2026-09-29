@@ -2,6 +2,11 @@
 #include <QDebug>
 #include <QSerialPortInfo>
 
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+#endif
+
 #include "InterfaceSerialPort.h"
 
 /*
@@ -113,12 +118,42 @@ void InterfaceSerialPort::vConnectDevice(const QString &_roID)
     m_poSerialPort->setFlowControl(QSerialPort::NoFlowControl);
 
     if (m_poSerialPort->open(QIODevice::ReadWrite))
+    {
+        vSetLowLatency();
         emit deviceConnected();
+    }
     else
     {
         delete m_poSerialPort;
         m_poSerialPort = nullptr;
     }
+}
+
+/*
+ =======================================================================================================================
+    USB serial adapters (FTDI) keep the received bytes up to 16 ms before passing them on: every BDOS call waits for
+    this delay. ASYNC_LOW_LATENCY sets their latency timer to 1 ms (as "setserial low_latency", no root access needed).
+ =======================================================================================================================
+ */
+void InterfaceSerialPort::vSetLowLatency()
+{
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    struct serial_struct oSerial;
+    int iHandle = m_poSerialPort->handle();
+
+    if ((ioctl(iHandle, TIOCGSERIAL, &oSerial) == 0))
+    {
+        oSerial.flags |= ASYNC_LOW_LATENCY;
+
+        if (ioctl(iHandle, TIOCSSERIAL, &oSerial) == 0)
+        {
+            emit log(eLogInfo, "Serial port set to low latency\n");
+            return;
+        }
+    }
+
+    emit log(eLogWarning, "Could not set the serial port to low latency\n");
+#endif
 }
 
 /*

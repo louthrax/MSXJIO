@@ -86,7 +86,8 @@ quint16 MainWindow::uiTransmit
 }
 
 
-#define vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC)      \
+// ASCIIZ path, or FIB (first byte = 0FFH)
+#define vReceivePathOrFIB(oFIB, szPath, uiCRC)                       \
 do                                                                   \
 {                                                                    \
     unsigned char _ucChar;                                           \
@@ -95,9 +96,8 @@ do                                                                   \
     vReceive(&_ucChar, sizeof(_ucChar), 0, (uiCRC));                 \
     if (_ucChar == 0xFF)                                             \
     {                                                                \
+        (oFIB).m_ucFF = 0xFF;                                        \
         vReceive((oFIB).m_acFileName, sizeof(oFIB) - 1, 0, (uiCRC)); \
-        szPath = QFileInfo(*oFIB.m_poFile).absoluteFilePath();       \
-        ucPhysicalDrive = (oFIB).m_ucDrive ? (oFIB).m_ucDrive - 1 : m_ucCurrentPhysicalDrive; \
     }                                                                \
     else                                                             \
     {                                                                \
@@ -106,7 +106,6 @@ do                                                                   \
             (szPath) += static_cast<char>(_ucChar);                  \
             vReceive(&_ucChar, sizeof(_ucChar), 0, (uiCRC));         \
         }                                                            \
-        ucPhysicalDrive = BDOSToQt(szPath);                          \
     }                                                                \
 }                                                                    \
 while (0)
@@ -161,7 +160,7 @@ QString MainWindow::szGetServerInfo()
 QString MainWindow::szGetFIBDescription(tdFileInfoBlock &_roFIB)
 {
     if (_roFIB.m_ucFF == 0xFF)
-        return QString(_roFIB.m_acFileName) + " | " + QString(_roFIB.m_poFile ? _roFIB.m_poFile->fileName(): "**NULL**");
+        return QString(_roFIB.m_acFileName) + " | " + m_oFindEntries.value(_roFIB.m_uiFindId, "**NULL**");
     else
         return "";
 }
@@ -338,29 +337,19 @@ Task MainWindow::oParser()
         {
             unsigned char         ucFunction;
             unsigned char         ucFileHandle;
-            unsigned char         ucSearchAttributes;
-            unsigned char         ucAttributes;
-            unsigned char         ucOpenMode;
-            unsigned char         ucDriveNumber;
-            unsigned char         ucMethodCode;
-            unsigned char         ucGetOrSet;
-            unsigned char         ucPhysicalDrive;
-            unsigned char         ucNewAttributes;
-            unsigned char         ucDiskToSelect;
-            int                   iSignedOffset;
-            unsigned short int    uiSize;
-            unsigned short int    uiNewTime;
-            unsigned short int    uiNewDate;
-            char*                 pcData;
-
+            unsigned char         ucByte1;
+            unsigned char         ucByte2;
+            unsigned short int    uiWord1;
+            unsigned short int    uiWord2;
+            qint32                iOffset;
             tdFileInfoBlock       oFIB;
-            tdFileControlBlock    oFCB;
             QString               szPath;
-            QString               szWildcard;
+            QString               szString;
+            QByteArray            acData;
+            char                  acTemplate[14];
 
             vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
-            if (ucFunction != 0xFF)
-                vLog(eLogBDOS, "%s\n", tdFunctionToString((tdFunction)ucFunction));
+            vLog(eLogBDOS, "%s\n", tdFunctionToString((tdFunction)ucFunction));
 
             switch(ucFunction)
             {
@@ -368,206 +357,178 @@ Task MainWindow::oParser()
                 vResetNFS();
                 break;
 
+            case DOS_SELECT_DISK:
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Drive %c:\n", 'A' + ucByte1);
+                vDOS_SELECT_DISK(ucByte1);
+                break;
+
+            case DOS_GET_LOGIN_VECTOR:
+                vDOS_GET_LOGIN_VECTOR();
+                break;
+
+            case DOS_CREATE_OR_DESTROY_RAMDISK:
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Segments %02Xh\n", ucByte1);
+                vDOS_CREATE_OR_DESTROY_RAMDISK(ucByte1);
+                break;
+
+            case DOS_GET_ALLOCATION_INFORMATION:
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vDOS_GET_ALLOCATION_INFORMATION(ucByte1);
+                break;
+
             case DOS_FIND_FIRST_ENTRY:
-               vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-               if (oFIB.m_ucFF == 0xFF)
-               {
-                   vReceiveString(szWildcard, uiCRC);
-                   szPath += "/" + szWildcard;
-               }
-               else
-                   szWildcard.clear();
-               vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
-
-               vLog(eLogBDOSDetails, "ucSearchAttributes %d\n", ucSearchAttributes);
-               vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-               vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
-               vDOS_FIND_FIRST_ENTRY(ucSearchAttributes, ucPhysicalDrive, szPath, oFIB);
-
-               vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-               break;
-
             case DOS_FIND_NEW_ENTRY:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-                vReceive(&ucSearchAttributes, sizeof(ucSearchAttributes), 0, uiCRC);
-                vReceive(oFIB.m_acFileName, 13, 0, uiCRC);
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                szString.clear();
                 if (oFIB.m_ucFF == 0xFF)
-                {
-                    vReceiveString(szWildcard, uiCRC);
-                    szPath += "/" + szWildcard;
-                }
+                    vReceiveString(szString, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s | Name %s | Attributes %02Xh\n",
+                     qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), qPrintable(szString), ucByte1);
+
+                if (ucFunction == DOS_FIND_FIRST_ENTRY)
+                    vDOS_FIND_FIRST_ENTRY(oFIB, szPath, szString, ucByte1);
                 else
-                    szWildcard.clear();
-
-                vLog(eLogBDOSDetails, "ucSearchAttributes %d\n", ucSearchAttributes);
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
-                vDOS_FIND_NEW_ENTRY(ucSearchAttributes, ucPhysicalDrive, szPath, oFIB);
-
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
+                {
+                    memset(acTemplate, 0, sizeof(acTemplate));
+                    vReceive(acTemplate, 13, 0, uiCRC);
+                    vDOS_FIND_NEW_ENTRY(oFIB, szPath, szString, ucByte1, acTemplate);
+                }
                 break;
 
             case DOS_FIND_NEXT_ENTRY:
                 vReceive(&oFIB, sizeof(oFIB), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
+                vLog(eLogBDOSDetails, "FIB %s\n", qPrintable(szGetFIBDescription(oFIB)));
                 vDOS_FIND_NEXT_ENTRY(oFIB);
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-                break;
-
-            case DOS_CHANGE_CURRENT_DIRECTORY:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-
-                vDOS_CHANGE_CURRENT_DIRECTORY(ucPhysicalDrive, szPath);
                 break;
 
             case DOS_OPEN_FILE_HANDLE:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-                vReceive(&ucOpenMode, sizeof(ucOpenMode), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucOpenMode %d\n", ucOpenMode);
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
-                vDOS_OPEN_FILE_HANDLE(ucOpenMode, szPath);
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s | Mode %02Xh\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), ucByte1);
+                vDOS_OPEN_FILE_HANDLE(oFIB, szPath, ucByte1);
                 break;
 
-            case DOS_READ_FROM_FILE_HANDLE:
-                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
-                vReceive(&uiSize, sizeof(uiSize), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucFileHandle %s\n", szGetFileHandleDescription(ucFileHandle).toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "uiSize %d\n", uiSize);
-
-                vDOS_READ_FROM_FILE_HANDLE(ucFileHandle, uiSize);
-                break;
-
-            case DOS_WRITE_TO_FILE_HANDLE:
-                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
-                vReceive(&uiSize, sizeof(uiSize), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucFileHandle %s\n", szGetFileHandleDescription(ucFileHandle).toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "uiSize %d\n", uiSize);
-
-                pcData = uiSize ? (char *) malloc(uiSize) : NULL;
-                vReceive(pcData, uiSize, ucFlags, uiCRC);
-                vDOS_WRITE_TO_FILE_HANDLE(ucFileHandle, uiSize, pcData);
-                if (pcData)
-                    free(pcData);
+            case DOS_CREATE_FILE_HANDLE:
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | Mode %02Xh | Attributes %02Xh\n", qPrintable(szPath), ucByte1, ucByte2);
+                vDOS_CREATE_FILE_HANDLE(oFIB, szPath, ucByte1, ucByte2);
                 break;
 
             case DOS_CLOSE_FILE_HANDLE:
                 vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucFileHandle %s\n", szGetFileHandleDescription(ucFileHandle).toLocal8Bit().constData());
-
+                vLog(eLogBDOSDetails, "Handle %s\n", qPrintable(szGetFileHandleDescription(ucFileHandle)));
                 vDOS_CLOSE_FILE_HANDLE(ucFileHandle);
+                break;
+
+            case DOS_READ_FROM_FILE_HANDLE:
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | Size %d\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), uiWord1);
+                vDOS_READ_FROM_FILE_HANDLE(ucFileHandle, uiWord1);
+                break;
+
+            case DOS_WRITE_TO_FILE_HANDLE:
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | Size %d\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), uiWord1);
+                acData.resize(uiWord1);
+                if (uiWord1)
+                    vReceive(acData.data(), uiWord1, 0, uiCRC);
+                vDOS_WRITE_TO_FILE_HANDLE(ucFileHandle, acData);
                 break;
 
             case DOS_MOVE_FILE_HANDLE_POINTER:
                 vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
-                vReceive(&ucMethodCode, sizeof(ucMethodCode), 0, uiCRC);
-                vReceive(&iSignedOffset, sizeof(iSignedOffset), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucFileHandle %s\n", szGetFileHandleDescription(ucFileHandle).toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "ucMethodCode %d\n", ucMethodCode);
-                vLog(eLogBDOSDetails, "iSignedOffset %d\n", iSignedOffset);
-
-                vDOS_MOVE_FILE_HANDLE_POINTER(ucFileHandle, ucMethodCode, iSignedOffset);
-                break;
-
-            case DOS_GET_CURRENT_DIRECTORY:
-                vReceive(&ucDriveNumber, sizeof(ucDriveNumber), 0, uiCRC);
-                vDOS_GET_CURRENT_DIRECTORY(ucDriveNumber);
-                break;
-
-            case DOS_CREATE_FILE_HANDLE:
-                vReceiveString(szPath, uiCRC);
-                vReceive(&ucOpenMode, sizeof(ucOpenMode), 0, uiCRC);
-                vReceive(&ucAttributes, sizeof(ucAttributes), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "ucOpenMode %d\n", ucOpenMode);
-                vLog(eLogBDOSDetails, "ucAttributes %d\n", ucAttributes);
-
-                vDOS_CREATE_FILE_HANDLE(szPath, ucOpenMode, ucAttributes);
-                break;
-
-            case DOS_GET_WHOLE_PATH_STRING:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
-                vDOS_GET_WHOLE_PATH_STRING(ucPhysicalDrive, szPath);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&iOffset, sizeof(iOffset), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | Method %d | Offset %d\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), ucByte1, iOffset);
+                vDOS_MOVE_FILE_HANDLE_POINTER(ucFileHandle, ucByte1, iOffset);
                 break;
 
             case DOS_DELETE_FILE_OR_SUBDIRECTORY:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)));
+                vDOS_DELETE_FILE_OR_SUBDIRECTORY(oFIB, szPath);
+                break;
 
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
-
-                vDOS_DELETE_FILE_OR_SUBDIRECTORY(szPath);
+            case DOS_RENAME_FILE_OR_SUBDIRECTORY:
+            case DOS_MOVE_FILE_OR_SUBDIRECTORY:
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vReceiveString(szString, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s | New %s\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), qPrintable(szString));
+                vDOS_RENAME_OR_MOVE(oFIB, szPath, szString, ucFunction == DOS_MOVE_FILE_OR_SUBDIRECTORY);
                 break;
 
             case DOS_GET_SET_FILE_ATTRIBUTES:
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-                vReceive(&ucGetOrSet, sizeof(ucGetOrSet), 0, uiCRC);
-                vReceive(&ucNewAttributes, sizeof(ucNewAttributes), 0, uiCRC);
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s | Set %d | Attributes %02Xh\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), ucByte1, ucByte2);
+                vDOS_GET_SET_FILE_ATTRIBUTES(oFIB, szPath, ucByte1, ucByte2);
+                break;
 
-                vLog(eLogBDOSDetails, "szPath %s\n", szPath.toLocal8Bit().constData());
-                vLog(eLogBDOSDetails, "oFIB %s\n", szGetFIBDescription(oFIB).toLocal8Bit().constData());
+            case DOS_GET_SET_FILE_DATE_AND_TIME:
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
+                vReceive(&uiWord2, sizeof(uiWord2), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s | Set %d\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), ucByte1);
+                vDOS_GET_SET_FILE_DATE_AND_TIME(oFIB, szPath, ucByte1, uiWord1, uiWord2);
+                break;
 
-                vDOS_GET_SET_FILE_ATTRIBUTES(szPath, ucGetOrSet, ucNewAttributes);
+            case DOS_DELETE_FILE_HANDLE:
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s\n", qPrintable(szGetFileHandleDescription(ucFileHandle)));
+                vDOS_DELETE_FILE_HANDLE(ucFileHandle);
+                break;
+
+            case DOS_RENAME_FILE_HANDLE:
+            case DOS_MOVE_FILE_HANDLE:
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vReceiveString(szString, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | New %s\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), qPrintable(szString));
+                vDOS_RENAME_OR_MOVE_FILE_HANDLE(ucFileHandle, szString, ucFunction == DOS_MOVE_FILE_HANDLE);
+                break;
+
+            case DOS_GET_SET_FILE_HANDLE_ATTRIBUTES:
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | Set %d | Attributes %02Xh\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), ucByte1, ucByte2);
+                vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(ucFileHandle, ucByte1, ucByte2);
                 break;
 
             case DOS_GET_SET_FILE_HANDLE_DATE_AND_TIME:
-                vReceive(&ucGetOrSet, sizeof(ucGetOrSet), 0, uiCRC);
-                vReceive(&uiNewDate, sizeof(uiNewDate), 0, uiCRC);
-                vReceivePathOrFIB(ucPhysicalDrive, szPath, oFIB, uiCRC);
-                vReceive(&uiNewTime, sizeof(uiNewTime), 0, uiCRC);
-                vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(szPath, ucGetOrSet, uiNewDate, uiNewTime);
+                vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
+                vReceive(&uiWord2, sizeof(uiWord2), 0, uiCRC);
+                vLog(eLogBDOSDetails, "Handle %s | Set %d\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), ucByte1);
+                vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(ucFileHandle, ucByte1, uiWord1, uiWord2);
                 break;
 
-            case DOS_SELECT_DISK:
-                vReceive(&ucDiskToSelect, sizeof(ucDiskToSelect), 0, uiCRC);
-
-                vLog(eLogBDOSDetails, "ucDiskToSelect %d\n", ucDiskToSelect);
-
-                vDOS_SELECT_DISK(ucDiskToSelect);
+            case DOS_GET_CURRENT_DIRECTORY:
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vDOS_GET_CURRENT_DIRECTORY(ucByte1);
                 break;
 
-
-            case DOS_OPEN_FILE_FCB:
-                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
-                vDOS_OPEN_FILE_FCB(oFCB);
+            case DOS_CHANGE_CURRENT_DIRECTORY:
+                vReceivePathOrFIB(oFIB, szPath, uiCRC);
+                vLog(eLogBDOSDetails, "Path %s | FIB %s\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)));
+                vDOS_CHANGE_CURRENT_DIRECTORY(oFIB, szPath);
                 break;
 
-            case DOS_CLOSE_FILE_FCB:
-                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
-                vDOS_CLOSE_FILE_FCB(oFCB);
+            case DOS_GET_WHOLE_PATH_STRING:
+                vDOS_GET_WHOLE_PATH_STRING();
                 break;
 
-            case DOS_RANDOM_BLOCK_READ_FCB:
-                vReceive(&oFCB, sizeof(oFCB), 0, uiCRC);
-
-                vDOS_RANDOM_BLOCK_READ_FCB(oFCB);
-                break;
-
-            case 0xFF:
-                vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
-                if ((ucFunction != DOS_CONSOLE_OUTPUT) &&
-                    (ucFunction != DOS_CONSOLE_INPUT_WITHOUT_ECHO) &&
-                    (ucFunction != DOS_CONSOLE_STATUS) &&
-                    (ucFunction != DOS_CHECK_CHARACTER))
-                {
-                    vLog(eLogWarning, "%s\n", tdFunctionToString((tdFunction)ucFunction));
-                }
+            default:
+                vLog(eLogWarning, "Unsupported BDOS function %02Xh\n", ucFunction);
                 break;
             }
         }
@@ -993,6 +954,7 @@ MainWindow::MainWindow() :
     m_poUI->fileEjectDriveG_PushButton->setToolTip("Do not serve drive G:.");
     m_poUI->fileEjectDriveH_PushButton->setToolTip("Do not serve drive H:.");
 
+
     m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
     m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
@@ -1036,6 +998,7 @@ MainWindow::~MainWindow()
     vSaveSettings();
     delete m_poSettings;
     delete m_poInterface;
+    delete m_poRamDisk;         // removes the RAM disk directory
     delete m_poUI;
 }
 

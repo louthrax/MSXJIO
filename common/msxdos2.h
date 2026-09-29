@@ -211,6 +211,7 @@ enum {
 
 PACK_PUSH
 
+/* File Info Block, as transferred between the JIO kernel and the server (50 bytes) */
 typedef struct
 {
     unsigned char      m_ucFF;					    /*      0 - Always 0FFh */
@@ -218,58 +219,22 @@ typedef struct
     unsigned char      m_cAttributes;			    /*     14 - File attributes byte */
     unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
     unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
-    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
+    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster (always 0) */
     unsigned int       m_ulFileSize; 			    /* 21..24 - File size */
     unsigned char      m_ucDrive; 				    /*     25 - Logical drive */
-    QFile *            m_poFile;
-    char               m_acRegExp[13];
-    unsigned char      m_ucResult;
+    unsigned char      m_aucClient[6];              /* 26..31 - Reserved for the kernel (device info), always 0 */
+    unsigned int       m_uiFindId;                  /* 32..35 - Server find entry */
+    char               m_acRegExp[13];              /* 36..48 - Search mask */
+    unsigned char      m_ucResult;                  /*     49 - Error code */
 }
 tdFileInfoBlock;
 
-
-typedef struct
-{
-    unsigned char m_ucDriverNumber;
-    char          m_acFileName[8];
-    char          m_acFileNameExtension[3];
-    unsigned char m_ucExtentNumber;
-    unsigned char m_ucFileAttributes;
-
-    union
-    {
-        struct
-        {
-            unsigned char m_ucExtentHigh;
-            unsigned char m_ucRecordCount;
-        } cpm;
-
-        struct
-        {
-            unsigned short int m_uiRecordSize;
-        } dos;
-    } u;
-
-    unsigned int  m_ulFileSize;
-    unsigned int  m_ulVolumeID;
-
-    unsigned char ucNewFileHandle;
-    unsigned char m_ucResult;
-    unsigned short int m_uiNumberOfRecords;
-    unsigned short int m_uiDTA;
-    unsigned char m_acPadding[2];
-
-    unsigned char m_ucCurrentRecordWithinExtent;
-    unsigned int  m_ulRandomRecordNumber;
-}
-tdFileControlBlock;
-
 PACK_POP
 
-static_assert(sizeof(tdFileControlBlock) == 37);
-static_assert(sizeof(tdFileInfoBlock) == 48);
+static_assert(sizeof(tdFileInfoBlock) == 50);
 
 #else
+/* File Info Block, as transferred between the JIO kernel and the server (50 bytes) */
 typedef struct
 {
     unsigned char      m_ucFF;					    /*      0 - Always 0FFh */
@@ -277,12 +242,13 @@ typedef struct
     unsigned char      m_cAttributes;			    /*     14 - File attributes byte */
     unsigned short int m_uiLastModificationTime;	/* 15..16 - Time of last modification */
     unsigned short int m_uiLastModificationDate;	/* 17..18 - Date of last modification */
-    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster */
+    unsigned short int m_uiStartCluster;			/* 19..20 - Start cluster (always 0) */
     unsigned long      m_ulFileSize; 			    /* 21..24 - File size */
     unsigned char      m_ucDrive; 				    /*     25 - Logical drive */
-    unsigned char      m_acQtFile[8];
-    char               m_acRegExp[13];
-    unsigned char      m_ucResult;
+    unsigned char      m_aucClient[6];              /* 26..31 - Reserved for the kernel (device info), always 0 */
+    unsigned long      m_uiFindId;                  /* 32..35 - Server find entry */
+    char               m_acRegExp[13];              /* 36..48 - Search mask */
+    unsigned char      m_ucResult;                  /*     49 - Error code */
 }
 tdFileInfoBlock;
 
