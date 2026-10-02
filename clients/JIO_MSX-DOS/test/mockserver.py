@@ -11,6 +11,8 @@ _RAMD creates the RAM disk H: in a temporary directory (destroyed at RESET, remo
 MOCK_IMAGE (environment): disk image mode, the disk image (no partitions) is served with the
 COMMAND_DRIVE_* commands (sectors, CRC checked both ways) and no drive is served by COMMAND_BDOS.
 
+MOCK_DRIVE (environment): drive letter of the served directory (default A).
+
 MOCK_DATE (environment): answer of COMMAND_DATE_TIME ("YYYY-MM-DD HH:MM:SS", default: now), "none" = no answer.
 
 MOCK_READONLY (environment): "Read only" button of the server, the served directories cannot be modified
@@ -18,7 +20,8 @@ MOCK_READONLY (environment): "Read only" button of the server, the served direct
 """
 import os, re, socket, struct, sys, shutil, datetime, tempfile, atexit, signal
 
-ROOTS = {0: sys.argv[1]}          # drive A: root
+# served drive (MOCK_DRIVE environment: drive letter, default A:)
+ROOTS = {ord(os.environ.get('MOCK_DRIVE', 'A').upper()) - 65: sys.argv[1]}
 IMAGE = os.environ.get('MOCK_IMAGE')  # disk image mode
 if IMAGE:
     ROOTS.clear()
@@ -631,6 +634,7 @@ class Server:
             LOG.write('ATTR %s set=%d attr=%02X -> %02X\n' % (p, st, na, self.attributes(p) if e == E_OK else 0))
             return [bytes([e, self.attributes(p) if e == E_OK else 0])]
         if func in (0x51, 0x56):
+            f = None
             if func == 0x51:
                 path, fib = r.path_or_fib()
                 e, d, p = self.target(path, fib)
@@ -638,11 +642,17 @@ class Server:
                 h = r.byte()
                 f = self.files.get(h)
                 e, p = (E_OK, f.name) if f else (E_IHAND, None)
-            st, _, _ = r.byte(), r.word(), r.word()
+            st, nt, nd = r.byte(), r.word(), r.word()
             if e == E_OK and not os.path.exists(p):
                 e = E_NOFIL
             if e == E_OK and st and self.wprot(p):
                 e = E_WPROT
+            if e == E_OK and st and not os.path.isdir(p):
+                if f is not None and func == 0x56:
+                    f.flush()
+                m = datetime.datetime(1980 + (nd >> 9), (nd >> 5) & 15, nd & 31, nt >> 11, (nt >> 5) & 63, (nt & 31) * 2)
+                os.utime(p, (os.stat(p).st_atime, m.timestamp()))
+                LOG.write('FTIME %s set %s\n' % (p, m))
             t, dt = dos_datetime(os.stat(p).st_mtime) if e == E_OK else (0, 0)
             return [struct.pack('<BHH', e, t, dt)]
         if func in (0x52, 0x53, 0x54):

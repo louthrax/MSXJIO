@@ -58,6 +58,8 @@ make_bridge() { # map output
 
 # Address of a routine of JIOTIME.COM (map file)
 tool_addr() { grep -E "^$1 " "$TOOL_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
+# Offset of a routine in the resident driver of JIO.COM (symbol file)
+nfs_offset() { grep -E "^$1 " "$NFS_SYM" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
 
 prepare_files() {
     rm -rf "$OUT/base" "$OUT/floppy_base"
@@ -67,6 +69,15 @@ prepare_files() {
     rm -rf "$OUT/obj_jiotime"
     ( cd "$SRC/../../tools/JIOTIME" && z88dk-z80asm -b -m -O"$OUT/obj_jiotime" -o=JIOTIME.COM jiotime.asm && cp "$OUT/obj_jiotime/JIOTIME.COM" "$OUT/base/" ) || { echo "Build of JIOTIME.COM failed"; exit 1; }
     TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
+    ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
+    # JIO.COM (clients/JIO_NFS), built in a copy (its make script writes next to the sources)
+    rm -rf "$OUT/nfs"
+    mkdir -p "$OUT/nfs/clients"
+    cp -r "$SRC/../../common" "$OUT/nfs/"
+    cp -r "$SRC/../JIO_NFS" "$OUT/nfs/clients/"
+    rm -rf "$OUT/nfs/clients/JIO_NFS/Tmp"
+    ( cd "$OUT/nfs/clients/JIO_NFS" && sed '/^openmsx/d' 0_Make.sh | bash > build.log 2>&1 && cp Tmp/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
+    NFS_SYM="$OUT/nfs/clients/JIO_NFS/Tmp/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
@@ -105,10 +116,11 @@ run_scenario() {
         [ -n "${IMAGE_SETUP:-}" ] && $IMAGE_SETUP "$image"
     fi
 
-    MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
+    MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} MOCK_DRIVE=${JIO_DRIVE:-A} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
     mp=$!
     sleep 1
     TOOL_TX=$(tool_addr vJIOTransmit) TOOL_RX=$(tool_addr bJIOReceive) \
+    NFS_TX=${NFS:+$(nfs_offset vJIOTransmit)} NFS_RX=${NFS:+$(nfs_offset bJIOReceive)} \
     JIO_DRIVES=$njio JIO_HANDSHAKE=$handshake SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
         -script bridge.tcl -script "$script" > openmsx.log 2>&1
     rc=$?
@@ -387,6 +399,31 @@ test_jiotime() { # name rom map machine slots description [mock date]
     end_checks "$1" "$6"
 }
 
+# JIO.COM (clients/JIO_NFS) on the original MSX-DOS 2 (cartridge, no JIO ROM): boot from the floppy A:, the
+# directory of the server is drive D: (JIO +D). JIO.COM ends with a warm restart (MSXDOS2.SYS and COMMAND2.COM
+# reloaded, the batch file is not continued): the commands are in NFSTEST.BAT, typed at the prompt.
+# Not tested: redirection to the JIO drive (_DUP of a file handle of the server is not supported by JIO.COM).
+NFS_CMDS='D:\r\nDIR /W\r\nTYPE HELLO.TXT\r\nA:FCBREAD\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nCOPY HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDIR /W\r\n'
+test_nfs() { # name machine "slots" description
+    wanted "$1" || return
+    rm -rf "$OUT/floppy_nfs"; mkdir -p "$OUT/floppy_nfs"
+    cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/FCBREAD.COM "$OUT/floppy_nfs/"
+    printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
+    printf "$NFS_CMDS" > "$OUT/floppy_nfs/NFSTEST.BAT"
+    TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D run_scenario "$1" "$J" "$JM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "DIR of the JIO drive D:" "$(has_text "$d/screens.txt" 'COMMAND2.COM' && has_text "$d/screens.txt" 'FCBTEST .COM' && echo ok)"
+    check "TYPE on D:" "$(has_text "$d/screens.txt" 'Hello from the JIO server!' && echo ok)"
+    check "FCB open, block reads, close (FCBREAD)" "$(grep -A1 'FCBREAD: 00 00 0C 00 05 00 ' "$d/screens.txt" | tr -d ' \n' | grep -q 'Hellofromthe' && echo ok)"
+    check "X.COM identical to COMMAND2.COM" "$(cmp -s "$d/drive/X.COM" "$OUT/base/COMMAND2.COM" && echo ok)"
+    check "date of the copy set (_HFTIME)" "$(t1=$(stat -c %Y "$d/drive/X.COM"); t2=$(stat -c %Y "$OUT/base/COMMAND2.COM"); [ $((t1 - t2)) -ge -2 ] && [ $((t1 - t2)) -le 2 ] && echo ok)"
+    check "SUB/HELLO.TXT copied" "$([ -f "$d/drive/SUB/HELLO.TXT" ] && echo ok)"
+    check "REN and MOVE (SUB/R2.TXT)" "$([ ! -e "$d/drive/R1.TXT" ] && [ ! -e "$d/drive/R2.TXT" ] && [ -f "$d/drive/SUB/R2.TXT" ] && echo ok)"
+    check "ATTRIB +R (host file read only)" "$([ -f "$d/drive/SUB/R2.TXT" ] && [ ! -w "$d/drive/SUB/R2.TXT" ] && echo ok)"
+    end_checks "$1" "$4"
+}
+
 # Hybrid ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -426,6 +463,8 @@ if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
     test_jiotime   jio_jiotime  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, JIOTIME.COM sets the date and time"
     test_jiotime   jio_jiotime_tr "$J" "$JM" Panasonic_FS-A1ST "-carta $J"           "turbo R, JIOTIME.COM sets the date and time (Z80 mode)"
     test_jiotime   jio_jiotime_none "$J" "$JM" Philips_VG_8235 "-carta $J"           "VG-8235, JIOTIME.COM without answer of the server" none
+    test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"                      "NMS 8255, JIO.COM (JIO_NFS) on the original MSX-DOS 2, drive D:"
+    test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                                  "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
 fi
 
 if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then

@@ -1,0 +1,72 @@
+; FCB block read test (JIO_NFS): _FOPEN, _RDBLK twice (12 then 5 records of 1 byte), _FCLOSE on HELLO.TXT
+; of the current drive. Expected: "FCBREAD: 00 0C 00 05 00 Hello from the JI"
+BDOS	EQU	5
+	ORG	100H
+	LD	DE,MSG
+	LD	C,9
+	CALL	BDOS
+	LD	DE,FCB
+	LD	C,0FH		; _FOPEN
+	CALL	BDOS
+	CALL	HEX
+	LD	HL,1
+	LD	(FCB+0EH),HL	; record size = 1
+	LD	HL,0
+	LD	(FCB+21H),HL	; random record = 0
+	LD	(FCB+23H),HL
+	LD	DE,BUF
+	LD	C,1AH		; _SETDTA
+	CALL	BDOS
+	LD	DE,FCB
+	LD	HL,12
+	LD	C,27H		; _RDBLK
+	CALL	BDOS
+	PUSH	HL
+	CALL	HEX
+	POP	HL
+	LD	A,L
+	CALL	HEX
+	LD	DE,BUF+12
+	LD	C,1AH		; _SETDTA
+	CALL	BDOS
+	LD	DE,FCB
+	LD	HL,5
+	LD	C,27H		; _RDBLK at random record 12
+	CALL	BDOS
+	PUSH	HL
+	CALL	HEX
+	POP	HL
+	LD	A,L
+	CALL	HEX
+	LD	DE,FCB
+	LD	C,10H		; _FCLOSE
+	CALL	BDOS
+	CALL	HEX
+	LD	A,'$'
+	LD	(BUF+17),A
+	LD	DE,BUF
+	LD	C,9
+	JP	BDOS
+HEX:	PUSH	AF
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	CALL	NIB
+	POP	AF
+	CALL	NIB
+	LD	E,' '
+	LD	C,2
+	JP	BDOS
+NIB:	AND	0FH
+	ADD	A,'0'
+	CP	'9'+1
+	JR	C,NIB1
+	ADD	A,7
+NIB1:	LD	E,A
+	LD	C,2
+	JP	BDOS
+MSG:	DEFB	"FCBREAD: $"
+FCB:	DEFB	0,"HELLO   TXT"
+	DEFS	25,0
+BUF:	DEFS	32,0

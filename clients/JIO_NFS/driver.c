@@ -28,6 +28,7 @@ typedef unsigned int size_t;
 #define BCi g_aoRegisters.i.bc
 #define DEi g_aoRegisters.i.de
 #define HLi g_aoRegisters.i.hl
+#define IXi g_aoRegisters.i.ix
 
 #define FIB ((tdFileInfoBlock *) g_aoRegisters.p.ix)
 #define FCB ((tdFileControlBlock *) g_aoRegisters.p.de)
@@ -89,6 +90,7 @@ bool                   g_bResult = 0;
 const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
 unsigned char          g_ucCurrentDisk = 0;
 unsigned char          g_bHasTurbo = false;
+bool                   g_bLastFindHandled = false;  // last _FFIRST/_FNEXT/_FNEW on a JIO drive (for _WPATH)
 
 /*
  =======================================================================================================================
@@ -348,7 +350,9 @@ bool bIsPathOrFIBHandled_DE()
  */
 static void vDOS_FIND_FIRST_ENTRY()
 {
-    if (bIsPathOrFIBHandled_DE())
+    g_bLastFindHandled = bIsPathOrFIBHandled_DE();
+
+    if (g_bLastFindHandled)
     {
         vTransmitPathOrFIB(true);
         vJIOTransmit(&B, sizeof(B));
@@ -365,7 +369,9 @@ static void vDOS_FIND_FIRST_ENTRY()
  */
 static void vDOS_FIND_NEW_ENTRY()
 {
-    if (bIsPathOrFIBHandled_DE())
+    g_bLastFindHandled = bIsPathOrFIBHandled_DE();
+
+    if (g_bLastFindHandled)
     {
         vTransmitPathOrFIB(true);
         vJIOTransmit(&B, sizeof(B));
@@ -382,7 +388,9 @@ static void vDOS_FIND_NEW_ENTRY()
  */
 static void vDOS_FIND_NEXT_ENTRY()
 {
-    if (bIsPathOrFIBHandled(IX))
+    g_bLastFindHandled = bIsPathOrFIBHandled(IX);
+
+    if (g_bLastFindHandled)
     {
         vSendCommonHeader();
         vJIOTransmit(FIB, sizeof(*FIB));
@@ -398,13 +406,17 @@ static void vDOS_FIND_NEXT_ENTRY()
  */
 static void vDOS_GET_ALLOCATION_INFORMATION()
 {
+    unsigned char aucAnswer[5];             // sectors per cluster (0 = invalid drive), total clusters, free clusters
+
     if (bIsLogicalDriveHandled(E))
     {
         vSendCommonHeader();
-        A = 2;
+        vJIOTransmit(&E, sizeof(E));
+        vReceive(aucAnswer, sizeof(aucAnswer));
+        A = aucAnswer[0];
         BCi = 512;
-        DEi = 60000;
-        HLi = 30000;
+        DEi = *((unsigned int *) (aucAnswer + 1));
+        HLi = *((unsigned int *) (aucAnswer + 3));
     }
 }
 
@@ -548,7 +560,7 @@ static void vDOS_CREATE_FILE_HANDLE()
  */
 static void vDOS_ENSURE_FILE_HANDLE()
 {
-    vSendCommonHeader();
+    g_bResult = true;                       // answered here, nothing sent to the server
     A = 0;
 }
 
@@ -558,9 +570,10 @@ static void vDOS_ENSURE_FILE_HANDLE()
  */
 static void vDOS_GET_WHOLE_PATH_STRING()
 {
-    if (bIsPathOrFIBHandled_DE())
+    // No parameter: whole path of the last entry found (on a JIO drive)
+    if (g_bLastFindHandled)
     {
-        vTransmitPathOrFIB(false);
+        vSendCommonHeader();
         vReceive(&A, sizeof(A) + sizeof(HL));
         vReceive(DE, H);
         HLi = DEi + L;
@@ -599,13 +612,105 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
  =======================================================================================================================
  =======================================================================================================================
  */
+static void vDateTimeAnswer()
+{
+    unsigned char aucAnswer[5];             // error, time, date
+
+    vReceive(aucAnswer, sizeof(aucAnswer));
+    A = aucAnswer[0];
+    DEi = *((unsigned int *) (aucAnswer + 1));
+    HLi = *((unsigned int *) (aucAnswer + 3));
+}
+
 static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
 {
     if (B >= START_HANDLE)
     {
         vSendCommonHeader();
-        vJIOTransmit(&A, sizeof(A) + sizeof(HL) + sizeof(DE) + sizeof(IX));
-        vReceive(&A, sizeof(A) + sizeof(HL) + sizeof(DE));
+        vJIOTransmit(&B, sizeof(B));
+        vJIOTransmit(&A, sizeof(A));
+        vJIOTransmit(&IXi, sizeof(IXi));    // new time
+        vJIOTransmit(&HLi, sizeof(HLi));    // new date
+        vDateTimeAnswer();
+    }
+}
+
+/*
+ =======================================================================================================================
+    Function $51 _FTIME: path or FIB, set, time (IX), date (HL)
+ =======================================================================================================================
+ */
+static void vDOS_GET_SET_FILE_DATE_AND_TIME()
+{
+    if (bIsPathOrFIBHandled_DE())
+    {
+        vTransmitPathOrFIB(false);
+        vJIOTransmit(&A, sizeof(A));
+        vJIOTransmit(&IXi, sizeof(IXi));    // new time
+        vJIOTransmit(&HLi, sizeof(HLi));    // new date
+        vDateTimeAnswer();
+    }
+}
+
+/*
+ =======================================================================================================================
+    Function $4E _RENAME, $4F _MOVE: path or FIB, new name or path (HL)
+ =======================================================================================================================
+ */
+static void vDOS_RENAME_OR_MOVE()
+{
+    if (bIsPathOrFIBHandled_DE())
+    {
+        vTransmitPathOrFIB(false);
+        vTransmitString(HL);
+        vReceive(&A, sizeof(A));
+    }
+}
+
+/*
+ =======================================================================================================================
+    Function $52 _HDELETE
+ =======================================================================================================================
+ */
+static void vDOS_DELETE_FILE_HANDLE()
+{
+    if (B >= START_HANDLE)
+    {
+        vSendCommonHeader();
+        vJIOTransmit(&B, sizeof(B));
+        vReceive(&A, sizeof(A));
+    }
+}
+
+/*
+ =======================================================================================================================
+    Function $53 _HRENAME, $54 _HMOVE: file handle, new name or path (HL)
+ =======================================================================================================================
+ */
+static void vDOS_RENAME_OR_MOVE_FILE_HANDLE()
+{
+    if (B >= START_HANDLE)
+    {
+        vSendCommonHeader();
+        vJIOTransmit(&B, sizeof(B));
+        vTransmitString(HL);
+        vReceive(&A, sizeof(A));
+    }
+}
+
+/*
+ =======================================================================================================================
+    Function $55 _HATTR: file handle, set, attributes (L)
+ =======================================================================================================================
+ */
+static void vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES()
+{
+    if (B >= START_HANDLE)
+    {
+        vSendCommonHeader();
+        vJIOTransmit(&B, sizeof(B));
+        vJIOTransmit(&A, sizeof(A) + sizeof(L));
+        vReceive(&A, sizeof(A) + sizeof(L));
     }
 }
 
@@ -622,32 +727,173 @@ static void vDOS_SET_DISK_TRANSFER_ADDRESS()
  =======================================================================================================================
  =======================================================================================================================
  */
-static void vDOS_GENERIC_FCB_HANDLER()
-{
-    vSendCommonHeader();
-    vJIOTransmit(DE, sizeof(tdFileControlBlock));
-    vReceive(DE, sizeof(tdFileControlBlock));
+/*
+    FCB functions (MSX-DOS 1): the server has no FCB function, they use its file handle functions.
+    The file handle of the server is kept in the FCB (byte 18h).
+    Results as the kernel gives them to the FCB functions layer of the disk ROM, which then sets A = L, B = H
+    (and HL = DE for the block functions): result in L, number of records in DE.
+ */
 
-    A = L = ((tdFileControlBlock*)DE)->m_ucResult;
+// Send the common header with another function than the one called
+static void vSendFunction(unsigned char _ucFunction)
+{
+    g_oCommonHeader.m_ucFunction = _ucFunction;
+    vSendCommonHeader();
+}
+
+// _ulValue * _uiFactor (no library routine: the library does not use the calling convention of the driver)
+static unsigned long ulMultiply(unsigned long _ulValue, unsigned int _uiFactor)
+{
+    unsigned long ulResult = 0;
+
+    while (_uiFactor)
+    {
+        if (_uiFactor & 1)
+            ulResult += _ulValue;
+        _ulValue += _ulValue;
+        _uiFactor >>= 1;
+    }
+
+    return ulResult;
+}
+
+// Function $4A _SEEK, returns the new file pointer
+static unsigned long ulSeek(unsigned char _ucHandle, unsigned char _ucMethod, unsigned long _ulOffset)
+{
+    unsigned char aucAnswer[5];             // error, new file pointer
+
+    vSendFunction(0x4A);
+    vJIOTransmit(&_ucHandle, sizeof(_ucHandle));
+    vJIOTransmit(&_ucMethod, sizeof(_ucMethod));
+    vJIOTransmit(&_ulOffset, sizeof(_ulOffset));
+    vReceive(aucAnswer, sizeof(aucAnswer));
+
+    return *((unsigned long *) (aucAnswer + 1));
 }
 
 /*
  =======================================================================================================================
+    Function $0F _FOPEN
+ =======================================================================================================================
+ */
+static void vDOS_OPEN_FILE_FCB()
+{
+    tdFileControlBlock  *poFCB = FCB;
+    char                acPath[15];         // "D:NAME.EXT"
+    char                *pcPath = acPath;
+    unsigned char       aucAnswer[2];       // error, file handle
+    unsigned char       ucMode = 0;
+    unsigned char       i;
+
+    if (!bIsLogicalDriveHandled(poFCB->m_ucDriverNumber))
+        return;
+
+    if (poFCB->m_ucDriverNumber)
+    {
+        *pcPath++ = 'A' - 1 + poFCB->m_ucDriverNumber;
+        *pcPath++ = ':';
+    }
+    for (i = 0; (i < 8) && (poFCB->m_acFileName[i] != ' '); i++)
+        *pcPath++ = poFCB->m_acFileName[i];
+    if (poFCB->m_acFileNameExtension[0] != ' ')
+    {
+        *pcPath++ = '.';
+        for (i = 0; (i < 3) && (poFCB->m_acFileNameExtension[i] != ' '); i++)
+            *pcPath++ = poFCB->m_acFileNameExtension[i];
+    }
+    *pcPath = 0;
+
+    vSendFunction(0x43);                    // _OPEN
+    vTransmitString(acPath);
+    vJIOTransmit(&ucMode, sizeof(ucMode));
+    vReceive(aucAnswer, sizeof(aucAnswer));
+
+    if (aucAnswer[0])
+    {
+        A = L = 0xFF;
+        return;
+    }
+
+    poFCB->ucNewFileHandle = aucAnswer[1];
+    poFCB->m_ulFileSize = ulSeek(aucAnswer[1], 2, 0);
+    ulSeek(aucAnswer[1], 0, 0);
+    poFCB->m_ucExtentNumber = 0;
+    poFCB->u.dos.m_uiRecordSize = 128;
+    poFCB->m_ucCurrentRecordWithinExtent = 0;
+    A = L = 0;
+}
+
+/*
+ =======================================================================================================================
+    Function $10 _FCLOSE
+ =======================================================================================================================
+ */
+static void vDOS_CLOSE_FILE_FCB()
+{
+    unsigned char ucError;
+
+    if (!bIsLogicalDriveHandled(FCB->m_ucDriverNumber))
+        return;
+
+    vSendFunction(0x45);                    // _CLOSE
+    vJIOTransmit(&FCB->ucNewFileHandle, sizeof(FCB->ucNewFileHandle));
+    vReceive(&ucError, sizeof(ucError));
+    A = L = ucError ? 0xFF : 0;
+}
+
+/*
+ =======================================================================================================================
+    Function $27 _RDBLK: HL records of the record size at the random record, to the disk transfer address.
+    A last incomplete record is filled with zeros.
  =======================================================================================================================
  */
 static void vDOS_RANDOM_BLOCK_READ_FCB()
 {
-    vSendCommonHeader();
-    ((tdFileControlBlock*)DE)->m_uiNumberOfRecords = HL;
-    ((tdFileControlBlock*)DE)->m_uiDTA = g_pcDiskTransferAddress;
-    vJIOTransmit(DE, sizeof(tdFileControlBlock));
+    tdFileControlBlock  *poFCB = FCB;
+    unsigned int        uiRecordSize;
+    unsigned long       ulRecord;
+    unsigned long       ulBytes;
+    unsigned int        uiSize;
+    unsigned int        uiLeft;
+    unsigned int        uiRecords;
+    unsigned char       *pucFill;
+    unsigned char       aucAnswer[3];       // error, size read
 
-    vReceive(DE, sizeof(tdFileControlBlock));
-    HL = DE = ((tdFileControlBlock*)DE)->m_uiNumberOfRecords;
-    if (HL)
-         vReceive(g_pcDiskTransferAddress, (unsigned int)HL);
+    if (!bIsLogicalDriveHandled(poFCB->m_ucDriverNumber))
+        return;
 
-    A = ((tdFileControlBlock*)DE)->m_ucResult;
+    uiRecordSize = poFCB->u.dos.m_uiRecordSize ? poFCB->u.dos.m_uiRecordSize : 128;
+    ulRecord = poFCB->m_ulRandomRecordNumber;
+    if (uiRecordSize >= 64)
+        ulRecord &= 0xFFFFFF;               // 3 bytes random record number
+
+    ulSeek(poFCB->ucNewFileHandle, 0, ulMultiply(ulRecord, uiRecordSize));
+
+    ulBytes = ulMultiply(HLi, uiRecordSize);
+    uiSize = (ulBytes > 0xFFFF) ? 0xFFFF : (unsigned int) ulBytes;
+
+    vSendFunction(0x48);                    // _READ
+    vJIOTransmit(&poFCB->ucNewFileHandle, sizeof(poFCB->ucNewFileHandle));
+    vJIOTransmit(&uiSize, sizeof(uiSize));
+    vReceive(aucAnswer, sizeof(aucAnswer));
+    uiSize = *((unsigned int *) (aucAnswer + 1));
+    if (uiSize)
+        vReceive(g_pcDiskTransferAddress, uiSize);
+
+    // records read, the last incomplete one is filled with zeros
+    uiRecords = 0;
+    for (uiLeft = uiSize; uiLeft >= uiRecordSize; uiLeft -= uiRecordSize)
+        uiRecords++;
+    if (uiLeft)
+    {
+        uiRecords++;
+        for (pucFill = g_pcDiskTransferAddress + uiSize; uiLeft < uiRecordSize; uiLeft++)
+            *pucFill++ = 0;
+    }
+
+    poFCB->m_ulRandomRecordNumber = ulRecord + uiRecords;
+    A = L = (uiRecords == HLi) ? 0 : 1;
+    DEi = uiRecords;
 }
 
 /*
@@ -674,7 +920,7 @@ static void vDOS_SELECT_DISK()
  */
 static void vDOS_GET_PREVIOUS_ERROR_CODE()
 {
-    vSendCommonHeader();
+    g_bResult = true;                       // answered here, nothing sent to the server
     A = 0;
     B = g_ucPreviousErrorCode;
 }
@@ -685,7 +931,7 @@ static void vDOS_GET_PREVIOUS_ERROR_CODE()
  */
 static void vDOS_GET_LOGIN_VECTOR()
 {
-    vSendCommonHeader();
+    g_bResult = true;                       // answered here, nothing sent to the server
     H = 0;
     L = 15;
 }
@@ -696,7 +942,7 @@ static void vDOS_GET_LOGIN_VECTOR()
  */
 static void vDOS_GET_CURRENT_DRIVE()
 {
-    vSendCommonHeader();
+    g_bResult = true;                       // answered here, nothing sent to the server
 
     L = A = g_ucCurrentDisk;
 }
@@ -748,8 +994,8 @@ typedef struct
 static const tdDosDispatchEntry g_aDosHandlers[] =
 {
     { 0x0E, vDOS_SELECT_DISK },
-    { 0x0F, vDOS_GENERIC_FCB_HANDLER }, // DOS_OPEN_FILE_FCB
-    { 0x10, vDOS_GENERIC_FCB_HANDLER }, // DOS_CLOSE_FILE_FCB
+    { 0x0F, vDOS_OPEN_FILE_FCB },
+    { 0x10, vDOS_CLOSE_FILE_FCB },
     { 0x18, vDOS_GET_LOGIN_VECTOR },
     { 0x19, vDOS_GET_CURRENT_DRIVE },
     { 0x1A, vDOS_SET_DISK_TRANSFER_ADDRESS },
@@ -768,7 +1014,14 @@ static const tdDosDispatchEntry g_aDosHandlers[] =
     { 0x49, vDOS_WRITE_TO_FILE_HANDLE },
     { 0x4A, vDOS_MOVE_FILE_HANDLE_POINTER },
     { 0x4D, vDOS_DELETE_FILE_OR_SUBDIRECTORY },
+    { 0x4E, vDOS_RENAME_OR_MOVE },
+    { 0x4F, vDOS_RENAME_OR_MOVE },
     { 0x50, vDOS_GET_SET_FILE_ATTRIBUTES },
+    { 0x51, vDOS_GET_SET_FILE_DATE_AND_TIME },
+    { 0x52, vDOS_DELETE_FILE_HANDLE },
+    { 0x53, vDOS_RENAME_OR_MOVE_FILE_HANDLE },
+    { 0x54, vDOS_RENAME_OR_MOVE_FILE_HANDLE },
+    { 0x55, vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES },
     { 0x56, vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME },
     { 0x59, vDOS_GET_CURRENT_DIRECTORY },
     { 0x5A, vDOS_CHANGE_CURRENT_DIRECTORY },
