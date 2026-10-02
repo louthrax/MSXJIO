@@ -94,6 +94,7 @@ private:
     void		vSetServeMode(tdServeMode _eServeMode);
 
     void		vLog(tdLogType _eLogType, QString fmt, ...);
+    void		vLogBDOSFunction(unsigned char _ucFunction, bool _bModify);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
     void		vSaveSettings();
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
@@ -181,6 +182,7 @@ private:
     bool                            m_bAutoRetry;
     bool                            m_bReadOnly;
     bool                            m_bSlowTx;
+    bool                            m_bLogModify = false;   // BDOS function being logged modifies the served directories
 
     bool                            m_bLastButtonClickedIsConnect = false;
     bool                            m_bConnectedOnce = false;

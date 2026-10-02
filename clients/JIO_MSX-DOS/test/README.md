@@ -52,6 +52,7 @@ only tested on real hardware.
 | `jio_renmove`, `hyb_renmove` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and, with the hybrid ROM, on the floppy B: |
 | `hyb_takeover` | hybrid | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the hybrid ROM takes over, copy to the floppy |
 | `jio_readonly`, `hyb_readonly` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: (and floppy B:) writable |
+| `hyb_bootsector` | hybrid | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
 | `hyb_image` | hybrid | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
 
 ## Results

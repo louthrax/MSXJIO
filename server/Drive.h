@@ -32,7 +32,6 @@ public:
 
     QString         oMediaPath();
     qint64          iMediaSize();
-    QString         oMediaLastModified();
 
     tdMediaType     eMediaType();
     unsigned int    uiPartitionCount();

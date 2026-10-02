@@ -165,9 +165,8 @@ QString MainWindow::szGetServerInfo()
     {
         oText = QString::asprintf
             (
-                "\r\nDrive :\r\n%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
+                "\r\nDrive :\r\n%s\r\nFlags : %s\r\nFile  : %s\r\n",
                 qPrintable(m_oDrive.szDescription()),
-                qPrintable(m_oDrive.oMediaLastModified()),
                 qPrintable(oFlags),
                 qPrintable(m_oDrive.oMediaPath())
                 );
@@ -308,6 +307,52 @@ const char *tdFunctionToString(tdFunction func)
 
 /*
  =======================================================================================================================
+    BDOS functions modifying the served directories (logged in orange). The functions that get or set (attributes,
+    date and time, RAM disk) are logged when their parameters are received.
+ =======================================================================================================================
+ */
+static bool bIsModifyFunction(unsigned char _ucFunction)
+{
+    switch(_ucFunction)
+    {
+    case DOS_FIND_NEW_ENTRY:
+    case DOS_CREATE_FILE_HANDLE:
+    case DOS_WRITE_TO_FILE_HANDLE:
+    case DOS_DELETE_FILE_OR_SUBDIRECTORY:
+    case DOS_RENAME_FILE_OR_SUBDIRECTORY:
+    case DOS_MOVE_FILE_OR_SUBDIRECTORY:
+    case DOS_DELETE_FILE_HANDLE:
+    case DOS_RENAME_FILE_HANDLE:
+    case DOS_MOVE_FILE_HANDLE:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool bIsGetSetFunction(unsigned char _ucFunction)
+{
+    switch(_ucFunction)
+    {
+    case DOS_GET_SET_FILE_ATTRIBUTES:
+    case DOS_GET_SET_FILE_DATE_AND_TIME:
+    case DOS_GET_SET_FILE_HANDLE_ATTRIBUTES:
+    case DOS_GET_SET_FILE_HANDLE_DATE_AND_TIME:
+    case DOS_CREATE_OR_DESTROY_RAMDISK:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void MainWindow::vLogBDOSFunction(unsigned char _ucFunction, bool _bModify)
+{
+    m_bLogModify = _bModify;
+    vLog(_bModify ? eLogBDOSModify : eLogBDOS, "%s\n", tdFunctionToString((tdFunction) _ucFunction));
+}
+
+/*
+ =======================================================================================================================
  =======================================================================================================================
  */
 Task MainWindow::oParser()
@@ -373,7 +418,8 @@ Task MainWindow::oParser()
             char                  acTemplate[14];
 
             vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
-            vLog(eLogBDOS, "%s\n", tdFunctionToString((tdFunction)ucFunction));
+            if (!bIsGetSetFunction(ucFunction))
+                vLogBDOSFunction(ucFunction, bIsModifyFunction(ucFunction));
 
             switch(ucFunction)
             {
@@ -393,6 +439,7 @@ Task MainWindow::oParser()
 
             case DOS_CREATE_OR_DESTROY_RAMDISK:
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
+                vLogBDOSFunction(ucFunction, ucByte1 != 0xFF);      // FFh = get size
                 vLog(eLogBDOSDetails, "Segments %02Xh\n", ucByte1);
                 vDOS_CREATE_OR_DESTROY_RAMDISK(ucByte1);
                 break;
@@ -492,6 +539,7 @@ Task MainWindow::oParser()
                 vReceivePathOrFIB(oFIB, szPath, uiCRC);
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
                 vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);
+                vLogBDOSFunction(ucFunction, ucByte1 != 0);
                 vLog(eLogBDOSDetails, "Path %s | FIB %s | Set %d | Attributes %02Xh\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), ucByte1, ucByte2);
                 vDOS_GET_SET_FILE_ATTRIBUTES(oFIB, szPath, ucByte1, ucByte2);
                 break;
@@ -501,6 +549,7 @@ Task MainWindow::oParser()
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
                 vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
                 vReceive(&uiWord2, sizeof(uiWord2), 0, uiCRC);
+                vLogBDOSFunction(ucFunction, ucByte1 != 0);
                 vLog(eLogBDOSDetails, "Path %s | FIB %s | Set %d\n", qPrintable(szPath), qPrintable(szGetFIBDescription(oFIB)), ucByte1);
                 vDOS_GET_SET_FILE_DATE_AND_TIME(oFIB, szPath, ucByte1, uiWord1, uiWord2);
                 break;
@@ -523,6 +572,7 @@ Task MainWindow::oParser()
                 vReceive(&ucFileHandle, sizeof(ucFileHandle), 0, uiCRC);
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
                 vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);
+                vLogBDOSFunction(ucFunction, ucByte1 != 0);
                 vLog(eLogBDOSDetails, "Handle %s | Set %d | Attributes %02Xh\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), ucByte1, ucByte2);
                 vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(ucFileHandle, ucByte1, ucByte2);
                 break;
@@ -532,6 +582,7 @@ Task MainWindow::oParser()
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
                 vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);
                 vReceive(&uiWord2, sizeof(uiWord2), 0, uiCRC);
+                vLogBDOSFunction(ucFunction, ucByte1 != 0);
                 vLog(eLogBDOSDetails, "Handle %s | Set %d\n", qPrintable(szGetFileHandleDescription(ucFileHandle)), ucByte1);
                 vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(ucFileHandle, ucByte1, uiWord1, uiWord2);
                 break;
@@ -1732,9 +1783,14 @@ void MainWindow::vLog(tdLogType _eLogType, QString fmt, ...)
     case eLogWarning:	  oFormat.setForeground(QColor(192,  64,  64)); break;
     case eLogError:		  oFormat.setBackground(QColor(255,   0,   0)); break;
     case eLogRead:		  oFormat.setForeground(QColor(  0, 192,   0)); break;
-    case eLogWrite:		  oFormat.setForeground(QColor(255, 128, 128)); break;
+    // orange: modifications of the disk image (sectors written) or of the served directories
+    case eLogWrite:		  oFormat.setForeground(QColor(230, 110,   0)); break;
     case eLogBDOS:		  oFormat.setForeground(QColor(  0,   0, 192)); break;
-    case eLogBDOSDetails: oFormat.setForeground(QColor( 90,  90, 192)); message = "  " + message; break;
+    case eLogBDOSModify:  oFormat.setForeground(QColor(230, 110,   0)); break;
+    case eLogBDOSDetails:
+        oFormat.setForeground(m_bLogModify ? QColor(225, 150,  70) : QColor( 90,  90, 192));
+        message = "  " + message;
+        break;
     case eLogConnected:   oFormat.setForeground(QColor(128, 128, 255)); break;
     }
 

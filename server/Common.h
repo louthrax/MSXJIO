@@ -9,6 +9,7 @@ typedef enum {
     eLogRead,
     eLogWrite,
     eLogBDOS,
+    eLogBDOSModify,         // BDOS function modifying the served directories
     eLogBDOSDetails
 } tdLogType;
 
