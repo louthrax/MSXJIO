@@ -26,7 +26,8 @@ W_FLAGS		equ	$3
 W_COMMAND	equ	$4
 W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
 W_DSKCHG	equ	$6	; Partition changed flags
-MYSIZE		equ	$7
+W_RFS		equ	$7	; Hybrid: not 0 if the server serves directories (files served by the kernel, no sectors)
+MYSIZE		equ	$8
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -49,6 +50,9 @@ IFDEF DRV_IPL
         PUBLIC	OEMSTA
 IF (IDEDOS1 || HYBRID)
         PUBLIC	DEFDPB
+ENDIF
+IFDEF HYBRID
+        PUBLIC	W_RFS
 ENDIF
 	PUBLIC	MYSIZE
         PUBLIC	SECLEN
@@ -146,7 +150,9 @@ DRIVES_Retry:
         call	PrintString
 
 IFDEF HYBRID
-        ; number of JIO drives = highest drive served by the server (BDOS _LOGIN)
+        ; Directories served (BDOS _LOGIN not 0): number of JIO drives = highest drive served,
+        ; the files are served by the kernel (rfs.asm).
+        ; Disk image served (_LOGIN = 0): JIO drives = partitions of the image, local FAT drives (DSKIO).
 DRIVES_Login:
         ld	a,7
         call	SNSMAT
@@ -162,6 +168,9 @@ DRIVES_Login:
         or	a
         jr	z,DRIVES_Login		; time-out: retry
         ld	a,(PART_BUF)
+        or	a
+        jr	z,DRIVES_Exit		; disk image: W_DRIVES = partitions (COMMAND_DRIVE_INFO)
+        ld	(ix+W_RFS),a
         ld	b,0
 DRIVES_Count:
         or	a
@@ -185,7 +194,7 @@ r206:
         ld	l,a
 ELSE
 IFDEF HYBRID
-        ld	l,(ix+W_DRIVES)		; JIO drives (0 = none), the other interfaces have the local drives
+        ld	l,(ix+W_DRIVES)		; JIO drives (0 = none), plus the local drives of the other interfaces
 ELSE
         ld	l,1			; DOS 2: drives are served by the server, see RFS_INIT in the kernel
 ENDIF
@@ -476,9 +485,10 @@ INCLUDE	"crt.asm"
 ;********************************************************************************************************************************
 
 DSKIO:
-IFNDEF IDEDOS1
+IF !(IDEDOS1 || HYBRID)
         ; DOS 2: files are served by the JIO kernel, there are no sectors.
         ; Another (FAT) kernel using this drive gets a "not ready" error, B = sectors not transferred.
+DSKIO_NotReady:
         ld	a,2
         scf
         ret
@@ -492,6 +502,11 @@ ELSE
         pop	af
         pop	bc
         pop	hl
+IFDEF HYBRID
+        inc	(ix+W_RFS)		; directories served: no sectors (carry flag kept)
+        dec	(ix+W_RFS)
+        jr	nz,DSKIO_NotReady
+ENDIF
 
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
@@ -559,6 +574,13 @@ ENDIF
         ret     c
         ld      b,0
         ret
+
+IFDEF HYBRID
+DSKIO_NotReady:
+        ld	a,2
+        scf
+        ret
+ENDIF
 ENDIF
 
 ;********************************************************************************************************************************
@@ -579,16 +601,23 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
-IFNDEF IDEDOS1
-        ld	a,2			; DOS 2: no sectors, "not ready" error (see DSKIO)
-        scf
-        ret
+IF !(IDEDOS1 || HYBRID)
+        jr	DSKIO_NotReady		; DOS 2: no sectors, "not ready" error (see DSKIO)
 ELSE
         di
         ld	b,a			; save drive
 	push	bc
 	push	hl
         call	GETWRK
+IFDEF HYBRID
+        ld	a,(ix+W_RFS)
+        or	a
+        jr	z,DSKCHG_Image
+        pop	hl
+        pop	bc
+        jr	DSKIO_NotReady		; directories served: no sectors (see DSKIO)
+DSKCHG_Image:
+ENDIF
         ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
         call	DoCommand
 	pop	hl

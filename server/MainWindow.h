@@ -29,6 +29,11 @@ typedef enum {
     eCStateDisconnected
 } tdConnectionState;
 
+typedef enum {
+    eServeDiskImage,        // sectors of a disk image (COMMAND_DRIVE_*)
+    eServeDirectories,      // host directories as drives A: to H: (COMMAND_BDOS)
+} tdServeMode;
+
 #define TRANSMIT_DELAY_NORMAL		3
 #define TRANSMIT_DELAY_ACKNOWLEDGE	7
 
@@ -86,6 +91,7 @@ private:
 
     void		vSetInterface(tdInterface _eInterface);
     void		vSetState(tdConnectionState _eCState);
+    void		vSetServeMode(tdServeMode _eServeMode);
 
     void		vLog(tdLogType _eLogType, QString fmt, ...);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
@@ -101,6 +107,7 @@ private:
     void            vResetNFS();
     unsigned char   ucAddFile(QFile * _poFile);
     bool            bIsDriveServed(unsigned char _ucDrive);
+    bool            bIsWriteProtected(const QString &_szHostPath);
     bool            bIsRamDrive(unsigned char _ucDrive);
     void            vDestroyRamDisk();
     qint64          iRamDiskFree();
@@ -183,6 +190,7 @@ private:
     quint64                         m_uiReceiveErrors = 0;
     quint64                         m_uiTransmitErrors = 0;
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
+    tdServeMode                     m_eServeMode = eServeDiskImage;
     QString                         m_oSelectedSerialID;
     QString                         m_oSelectedBlueToothID;
     QString                         &roSelectedID();

@@ -60,6 +60,7 @@
 		EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
 	IFDEF HYBRID
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
+		EXTERN	W_RFS		; Offset in the driver work area: not 0 if the server serves directories
 	ENDIF
 
 		; Additional symbol defined by the ide driver module
@@ -671,9 +672,18 @@ J4ABB:		CALL    C4BE8			; initialize DiskBASIC
 		JP      CALBAS			; start DiskBASIC
 
 ; Note: boot logic is different then original rom
-; Mod: no boot sector, MSXDOS2.SYS is loaded from the first drive served by the JIO server
+; Mod: no boot sector when the server serves directories, MSXDOS2.SYS is loaded from the first drive served by the
+; JIO server. Hybrid ROM with local drives only (disk image served or no server): boot loader of the boot sector, as
+; the original rom (self-booting disks).
 J4AC1:		LD      HL,J4B1B
 		PUSH    HL			; start DiskBASIC when failed
+	IFDEF HYBRID
+		CALL	C_RFS			; directories served ?
+		JR	NZ,J4AC2		; yep, no boot sector
+		CALL    C694A			; get valid boot loader
+		CALL	NZ,C4AFB		; found, execute boot loader with flag = BASIC (Cx reset by C694A)
+J4AC2:
+	ENDIF
 		LD      HL,(BOTTOM)
 		LD      DE,BOT32K
 		RST    	R_DCOMPR		; at least 32 Kb RAM ?
@@ -693,7 +703,19 @@ J4ADF:		LD      SP,TMPSTK		; switch to temporary stack
 		LD      A,0FFH
 		LD      (DOSFLG),A		; MSXDOS environment = enabled
 		POP     AF			; restore drive id
+	IFDEF HYBRID
+		CALL    C68B3			; prepare for MSXDOS, try to start MSXDOS2
+		CALL	C_RFS			; directories served ?
+		RET	NZ			; yep, start DiskBASIC
+		CALL    C694A			; get valid boot loader
+		RET     Z			; no valid boot loader, start DiskBASIC
+		LD      A,0C3H			; page 1 support = enabled
+		CALL    C4C18			; update page 1 support
+		SCF     			; boot loader flag = MSXDOS
+		JP	C4AFB			; start boot loader
+	ELSE
 		JP	C68B3			; try to start MSXDOS2, if it fails start DiskBASIC
+	ENDIF
 
 I4B07:		DEFB	"RUN\"\\AUTOEXEC.BAS"
 I4B18:		DEFB    0
@@ -4486,6 +4508,81 @@ I6930:		DEFW	RDSLT,SRDSLT
 		DEFW	CALLF,SCALLF
 		DEFW	KEYINT,SIRQ
 		DEFW	0
+
+	IFDEF HYBRID
+; Subroutine start boot loader
+C4AFB:		LD      HL,DISKVE		; address BDOS diskerror handler pointer
+		LD      DE,SDOSON		; enable DOS kernel subroutine
+		LD      A,(NOTFIR)		; cold boot flag
+		JP      0C01EH			; (rem: JSC01E)	start boot loader (if boot loader returns, start DiskBASIC)
+
+; Subroutine directories served by the server ?
+; Output: Zx reset if the JIO drives are served as directories (no sectors)
+C_RFS:		CALL	GETWRK			; IX = work area of the JIO driver
+		LD	A,(IX+W_RFS)
+		OR	A
+		RET
+
+; Subroutine get valid boot loader
+; Note: DOSV231 changes not implemented
+C694A:		LD      HL,I6A02		; on BDOS disk error warm boot (start DiskBASIC)
+		LD      (DISKVE),HL		; install BDOS disk error handler
+		LD      HL,I6A04		; ignore BDOS abort
+		LD      (BREAKV),HL		; install BDOS abort handler
+		LD      DE,(SSECBUF)
+		LD      C,1AH			; function = set disk transfer address
+		CALL    C69F5			; execute BDOS function (return orginal error code when aborted)
+		LD      C,1			; drive id = 1
+		LD      DE,DRVTBL
+J6964:		PUSH    BC			; store drive id
+		PUSH    DE			; store pointer in DRVTBL
+		LD      L,C
+		DEC     L			; to drive id
+		LD      H,1			; number of sectors = 1
+		LD      DE,0			; sector number = 0
+		LD      C,2FH			; function = absolute sector read
+		CALL    C69F5			; execute BDOS function (return orginal error code when aborted)
+		POP     DE			; restore pointer in DRVTBL
+		POP     BC			; restore drive id
+		JR      NZ,J6980		; error, no valid boot loader
+		LD      HL,(SSECBUF)
+		LD      A,(HL)
+		OR      02H
+		CP      0EBH			; x86 JMP instruction ?
+		JR      Z,J698A			; yep, update default drive and copy boot loader
+J6980:		LD      A,(DE)
+		ADD     A,C
+		LD      C,A			; update drive id
+		INC     DE
+		INC     DE
+		LD      A,(DE)
+		AND     A			; more disk interfaces ?
+		JR      NZ,J6964		; yep, next disk interface
+		RET
+
+J698A:
+	IFDEF FAT16
+		; add additional test for extended boot signature: FAT16 / MS-DOS boot sector
+		; if it exists then there is no valid MSX bootloader
+		LD	A,C			; save drive id
+		LD	BC,0026H
+		ADD	HL,BC
+		LD	C,A			; restore drive id
+		LD	A,(HL)
+		AND	0FEH			; EBS can be 28H or 29H
+		CP	28H			; EBS?
+		JR	Z,J6980			; Z=yes
+	ENDIF
+		LD      A,C
+		LD      (CUR_DRV),A		; update current drive
+		LD      HL,(SSECBUF)
+		LD      DE,BOT16K
+		LD      BC,256
+		LDIR
+		OR      A
+		RET
+
+	ENDIF
 
 ; Subroutine try to start MSXDOS2
 C699B:		LD      (CUR_DRV),A		; update current drive

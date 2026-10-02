@@ -217,7 +217,28 @@ QList<DiskPartition> extractDiskPartitions(QFile &file)
 	{
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 		QList<DiskPartition>	entries = parsePartitionTable(mbr);
+		const quint64			iFileSectors = file.size() / 512;
 		/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+		// Sector 0 of a floppy image (boot sector) is not a partition table: its entries are not valid (e.g. filled
+		// with FFh), the image is then not partitioned.
+		for(int i = 0; i < 4; ++i)
+		{
+			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+			const quint8	ucBootFlag = static_cast<quint8>(mbr[446 + i * 16]);
+			/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+			if((ucBootFlag != 0x00) && (ucBootFlag != 0x80)) entries.clear();
+		}
+
+		for(const DiskPartition & entry : entries)
+		{
+			if((entry.startSector == 0) || (entry.startSector + entry.sectorCount > iFileSectors))
+			{
+				entries.clear();
+				break;
+			}
+		}
 
 		for(const DiskPartition & entry : entries)
 		{

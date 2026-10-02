@@ -13,6 +13,7 @@ No rights can be derived from this publication.
 - Commands can include an optional CRC.
 - Responses depend on the command and are typically data blocks or acknowledgments.
 - Data is transferred over a serial interface.
+- The server serves either a disk image (commands `0x10` to `0x13`) or host directories as drives A: to H: (command `0x16`), depending on the mode selected on the server. The commands of the other mode get no data: in directories mode, COMMAND DRIVE INFO reports 0 partitions and the sectors cannot be read or written; in disk image mode, no drive is served by COMMAND BDOS (_LOGIN answers `0x00`).
 
 ## Packet structure
 
@@ -180,6 +181,7 @@ Notes:
 - Paths without a drive use the drive selected by _SELDSK. Relative paths use the current directory of the drive (_CHDIR).
 - Device names (CON, AUX, PRN, LST, NUL) and the FCB functions (MSX-DOS 1) are handled by the client, using the functions above.
 - A _READ or _WRITE never crosses a 16 KB page boundary of the client memory.
+- When the server is read only, the functions that would modify a served directory (_FNEW, _CREATE, _WRITE, _DELETE, _RENAME, _MOVE, _ATTR and _FTIME with set, and the handle versions) answer `0xF8` (.WPROT, write protected disk). Files are opened read only on the host. The RAM disk H: stays writable.
   
   
 #### 0xNN — COMMAND DRIVE REPORT [NN]

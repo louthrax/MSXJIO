@@ -133,21 +133,45 @@ QString MainWindow::szGetServerInfo()
     QString oFlags;
     /*~~~~~~~~~~~*/
 
-    if(m_bRxCRC) oFlags += "RxCRC ";
-    if(m_bTxCRC) oFlags += "TxCRC ";
-    if(m_bTimeout) oFlags += "Timeout ";
-    if(m_bAutoRetry) oFlags += "AutoRetry ";
-    if(m_bReadOnly | m_oDrive.bIsMediaWriteProtected()) oFlags += "ReadOnly ";
-    if(m_bSlowTx) oFlags += "SlowTx";
+    // only "Read only" is used for the files of the served directories (COMMAND_BDOS)
+    bool bImage = m_eServeMode == eServeDiskImage;
 
-    oText = QString::asprintf
-        (
-            "\r\nDrive :\r\n%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
-            qPrintable(m_oDrive.szDescription()),
-            qPrintable(m_oDrive.oMediaLastModified()),
-            qPrintable(oFlags),
-            qPrintable(m_oDrive.oMediaPath())
-            );
+    if(m_bRxCRC && bImage) oFlags += "RxCRC ";
+    if(m_bTxCRC && bImage) oFlags += "TxCRC ";
+    if(m_bTimeout && bImage) oFlags += "Timeout ";
+    if(m_bAutoRetry && bImage) oFlags += "AutoRetry ";
+    if(m_bReadOnly || (bImage && m_oDrive.bIsMediaWriteProtected())) oFlags += "ReadOnly ";
+    if(m_bSlowTx && bImage) oFlags += "SlowTx";
+
+    if(m_eServeMode == eServeDirectories)
+    {
+        /*~~~~~~~~~~~~~*/
+        QString oDrives;
+        /*~~~~~~~~~~~~~*/
+
+        for(int i = 0; i < 8; i++)
+        {
+            if(bIsDriveServed(i)) oDrives += QString("%1: %2\r\n").arg(QChar('A' + i)).arg(szRootDir(i));
+        }
+
+        oText = QString::asprintf
+            (
+                "\r\nDirectories :\r\n%s\r\nFlags : %s\r\n",
+                qPrintable(oDrives.isEmpty() ? "None\r\n" : oDrives),
+                qPrintable(oFlags)
+                );
+    }
+    else
+    {
+        oText = QString::asprintf
+            (
+                "\r\nDrive :\r\n%s\r\nDate  : %s\r\nFlags : %s\r\nFile  : %s\r\n",
+                qPrintable(m_oDrive.szDescription()),
+                qPrintable(m_oDrive.oMediaLastModified()),
+                qPrintable(oFlags),
+                qPrintable(m_oDrive.oMediaPath())
+                );
+    }
 
     return oText;
 }
@@ -581,8 +605,9 @@ Task MainWindow::oParser()
                     (m_bTimeout   ? FLAG_TIMEOUT : 0)      |
                     (m_bAutoRetry ? FLAG_AUTO_RETRY : 0) |
                     (m_bSlowTx    ? FLAG_SLOW_TX : 0);
-                quint8		W_DRIVES = m_oDrive.uiPartitionCount();
-                quint8		W_BOOTDRV = m_oDrive.uiFirstActivePartition();
+                bool        bImage = m_eServeMode == eServeDiskImage;
+                quint8		W_DRIVES = bImage ? m_oDrive.uiPartitionCount() : 0;
+                quint8		W_BOOTDRV = bImage ? m_oDrive.uiFirstActivePartition() : 0;
                 QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
                 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -612,6 +637,7 @@ Task MainWindow::oParser()
             ucPartition = oHeader.m_uiSector >> 24;
 
             uiSector = oHeader.m_uiSector & 0xFFFFFF;
+            if(uiSector & 0x800000) uiSector &= 0xFFFF;     // bits 16-23 = media descriptor (DOS 2), not a sector
 
             vLog
                 (
@@ -638,9 +664,11 @@ Task MainWindow::oParser()
                 QByteArray	oFileData;
                 /*~~~~~~~~~~~~~~~~~~*/
 
-                if(uiSector & 0x800000) uiSector &= 0xFFFF;
-
-                if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
+                if(m_eServeMode != eServeDiskImage)
+                {
+                    vLog(eLogError, "No disk image served (directories mode) !\n");
+                }
+                else if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
                     uiTransmit
                         (
                             oFileData.constData(),
@@ -678,6 +706,7 @@ Task MainWindow::oParser()
             vReceive(&oHeader, sizeof(oHeader), ucFlags, uiCRC);
             ucPartition = oHeader.m_uiSector >> 24;
             uiSector = oHeader.m_uiSector & 0xFFFFFF;
+            if(uiSector & 0x800000) uiSector &= 0xFFFF;     // bits 16-23 = media descriptor (DOS 2), not a sector
 
             vLog
                 (
@@ -704,9 +733,12 @@ Task MainWindow::oParser()
 
             if(bCRCOK)
             {
-                if(uiSector & 0x800000) uiSector &= 0xFFFF;
-
-                if(m_bReadOnly)
+                if(m_eServeMode != eServeDiskImage)
+                {
+                    vLog(eLogError, "No disk image served (directories mode) !\n");
+                    uiAcknowledge = DRIVE_ANSWER_WRITE_FAILED;
+                }
+                else if(m_bReadOnly)
                 {
                     uiAcknowledge = DRIVE_ANSWER_WRITE_PROTECTED;
                 }
@@ -833,6 +865,8 @@ MainWindow::MainWindow() :
     connect(m_poUI->USBButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->TxCRC, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->RxCRC, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->serveImageButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->serveDirectoriesButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
 
     connect(m_poUI->fileEjectDriveA_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->fileEjectDriveB_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
@@ -894,6 +928,7 @@ MainWindow::MainWindow() :
     m_bTimeout = m_poSettings->value("Timeout", false).toBool();
     m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
     m_bSlowTx = m_poSettings->value("SlowTx", false).toBool();
+    m_eServeMode = (tdServeMode) m_poSettings->value("ServeMode", eServeDiskImage).toInt();
 
     m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
     m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
@@ -921,6 +956,14 @@ MainWindow::MainWindow() :
     poGroup->setExclusive(true);
     poGroup->addButton(m_poUI->USBButton);
     poGroup->addButton(m_poUI->bluetoothButton);
+
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    QButtonGroup	*poServeModeGroup = new QButtonGroup(this);
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    poServeModeGroup->setExclusive(true);
+    poServeModeGroup->addButton(m_poUI->serveImageButton);
+    poServeModeGroup->addButton(m_poUI->serveDirectoriesButton);
 
     m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
     m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
@@ -955,6 +998,8 @@ MainWindow::MainWindow() :
     m_poUI->fileEjectDriveH_PushButton->setToolTip("Do not serve drive H:.");
 
 
+    m_poUI->serveImageButton->setToolTip("Serve a disk image (floppy, or hard disk with partitions).\nUsed by the JIO MSX-DOS 1 and MSX-DOS 2 ROMs reading sectors.\nApplied at MSX startup.");
+    m_poUI->serveDirectoriesButton->setToolTip("Serve host directories as drives A: to H:.\nUsed by the JIO MSX-DOS 2 ROMs with remote file system.\nApplied at MSX startup.");
     m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
     m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
@@ -971,13 +1016,14 @@ MainWindow::MainWindow() :
     m_poUI->TxCRC->setToolTip("Enable CRC for outgoing data to the MSX.\nApplied at MSX startup.");
     m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.");
     m_poUI->timeout->setToolTip("If enabled, abort the command after a timeout.\nIf disabled, wait indefinitely for a response.");
-    m_poUI->readOnly->setToolTip("Prevent writes to the disk image.");
+    m_poUI->readOnly->setToolTip("Prevent writes to the disk image, or to the served directories\n(the RAM disk H: stays writable).");
     m_poUI->fileEjectPushButton->setToolTip("Eject disk image.");
     m_poUI->logWidget->setToolTip("Server log.");
 
     vSetState(m_eConnectionState);
 
     vUpdateDrivePathsTexts();
+    vSetServeMode(m_eServeMode);
 
 #ifdef Q_OS_ANDROID
     vRequestAndroidPermissionsAndSetInterface(this);
@@ -1196,6 +1242,7 @@ void MainWindow::vSaveSettings()
     m_poSettings->setValue("Timeout", m_bTimeout);
     m_poSettings->setValue("ReadOnly", m_bReadOnly);
     m_poSettings->setValue("SlowTx", m_bSlowTx);
+    m_poSettings->setValue("ServeMode", m_eServeMode);
 
     m_poSettings->setValue("DrivePathA", m_szBDOSRootDir[0]);
     m_poSettings->setValue("DrivePathB", m_szBDOSRootDir[1]);
@@ -1405,6 +1452,22 @@ void MainWindow::onButtonClicked()
         m_bReadOnly = ((QPushButton *) poSender)->isChecked();
     else if(poSender == m_poUI->slowTx)
         m_bSlowTx = ((QPushButton *) poSender)->isChecked();
+    else if(poSender == m_poUI->serveImageButton)
+    {
+        if(m_eServeMode != eServeDiskImage)
+        {
+            vSetServeMode(eServeDiskImage);
+            vLog(eLogInfo, "Serving disk image\n");
+        }
+    }
+    else if(poSender == m_poUI->serveDirectoriesButton)
+    {
+        if(m_eServeMode != eServeDirectories)
+        {
+            vSetServeMode(eServeDirectories);
+            vLog(eLogInfo, "Serving directories\n");
+        }
+    }
     else if(poSender == m_poUI->unlockPushButton)
     {
         if(m_poUI->unlockPushButton->isChecked())
@@ -1592,6 +1655,53 @@ void MainWindow::vSetState(tdConnectionState _eCState)
         m_poUI->unlockPushButton->setEnabled(false);
         break;
     }
+}
+
+/*
+ =======================================================================================================================
+    Disk image or directories: only the controls of the selected mode are shown, the other mode is not served.
+ =======================================================================================================================
+ */
+void MainWindow::vSetServeMode(tdServeMode _eServeMode)
+{
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    bool			bImage = _eServeMode == eServeDiskImage;
+    QList<QWidget*> oImageWidgets =
+    {
+        m_poUI->iconMediaType, m_poUI->imagePathLineEdit, m_poUI->fileSelectPushButton, m_poUI->fileEjectPushButton
+    };
+    QList<QWidget*> oDirectoriesWidgets =
+    {
+        m_poUI->label_DriveA, m_poUI->directoryPathLineEdit_DriveA, m_poUI->fileSelectDriveA_PushButton, m_poUI->fileEjectDriveA_PushButton,
+        m_poUI->label_DriveB, m_poUI->directoryPathLineEdit_DriveB, m_poUI->fileSelectDriveB_PushButton, m_poUI->fileEjectDriveB_PushButton,
+        m_poUI->label_DriveC, m_poUI->directoryPathLineEdit_DriveC, m_poUI->fileSelectDriveC_PushButton, m_poUI->fileEjectDriveC_PushButton,
+        m_poUI->label_DriveD, m_poUI->directoryPathLineEdit_DriveD, m_poUI->fileSelectDriveD_PushButton, m_poUI->fileEjectDriveD_PushButton,
+        m_poUI->label_DriveE, m_poUI->directoryPathLineEdit_DriveE, m_poUI->fileSelectDriveE_PushButton, m_poUI->fileEjectDriveE_PushButton,
+        m_poUI->label_DriveF, m_poUI->directoryPathLineEdit_DriveF, m_poUI->fileSelectDriveF_PushButton, m_poUI->fileEjectDriveF_PushButton,
+        m_poUI->label_DriveG, m_poUI->directoryPathLineEdit_DriveG, m_poUI->fileSelectDriveG_PushButton, m_poUI->fileEjectDriveG_PushButton,
+        m_poUI->label_DriveH, m_poUI->directoryPathLineEdit_DriveH, m_poUI->fileSelectDriveH_PushButton, m_poUI->fileEjectDriveH_PushButton
+    };
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    m_eServeMode = _eServeMode;
+
+    for(QWidget *poWidget : oImageWidgets) poWidget->setVisible(bImage);
+    for(QWidget *poWidget : oDirectoriesWidgets) poWidget->setVisible(!bImage);
+
+    m_poUI->serveImageButton->setChecked(bImage);
+    m_poUI->serveDirectoriesButton->setChecked(!bImage);
+
+    // CRC, retry, timeout and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings are
+    // kept. "Read only" is used in both modes.
+    m_poUI->RxCRC->setEnabled(bImage);
+    m_poUI->TxCRC->setEnabled(bImage);
+    m_poUI->autoRetry->setEnabled(bImage);
+    m_poUI->timeout->setEnabled(bImage);
+    m_poUI->slowTx->setEnabled(bImage);
+
+    // the files opened on the served directories are closed, the MSX sees a disk change
+    vResetNFS();
+    m_bDiskChanged = true;
 }
 
 /*

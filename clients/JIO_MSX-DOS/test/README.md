@@ -19,13 +19,16 @@ Needs `openmsx` (with the system ROMs of the machines used), `z88dk` and `python
 
 - The ROMs are assembled into `out/` (without the IAR compiler step: `drv_jio_c.asm` is used as is).
 - `tcl/bridge.tcl.in` is turned into `bridge.tcl` with the addresses of the ROM map file. In openMSX it
-  intercepts the two serial routines of the kernel (`RFS_TX`, `J_RX1`) and forwards the bytes to
-  `mockserver.py` over TCP. The "waiting for server" handshake of the ROM is skipped; `JIO_DRIVES`
-  sets the number of JIO drives it reports (hybrid ROM, 0 simulates [ESC]).
+  intercepts the serial routines of the kernel (`RFS_TX`, `J_RX1`) and of the driver (`vJIOTransmit`,
+  `bJIOReceive`) and forwards the bytes to `mockserver.py` over TCP. The "waiting for server"
+  handshake of the ROM is skipped; `JIO_DRIVES` sets the number of JIO drives it reports (hybrid ROM,
+  0 simulates [ESC]). With `JIO_HANDSHAKE` (disk image scenario), the handshake is not skipped.
 - `mockserver.py` implements the `COMMAND_BDOS` file functions of the protocol
   (see `msxjio_protocol_specification.md`) on a host directory, served as drive A:. It follows the
   behavior of the C++ server, it is not the C++ server: server changes must still be tested with the
   real server. `_RAMD` creates the RAM disk H: in a temporary directory, like the C++ server.
+  With `MOCK_IMAGE`, it serves a disk image instead (`COMMAND_DRIVE_*` commands, no drive served by
+  `COMMAND_BDOS`), like the C++ server in disk image mode.
 - `AUTOEXEC.BAT` of drive A: runs the DOS commands of the scenario, screens are dumped with
   `get_screen`. Floppy images are created and read back with the openMSX disk manipulator.
 - `fcbtest/fcbtest.asm` tests the MSX-DOS 1 FCB functions (open, sequential read and write, block
@@ -48,6 +51,8 @@ only tested on real hardware.
 | `jio_longnames`, `hyb_longnames` | JIO only, hybrid | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
 | `jio_renmove`, `hyb_renmove` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and, with the hybrid ROM, on the floppy B: |
 | `hyb_takeover` | hybrid | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the hybrid ROM takes over, copy to the floppy |
+| `jio_readonly`, `hyb_readonly` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: (and floppy B:) writable |
+| `hyb_image` | hybrid | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
 
 ## Results
 

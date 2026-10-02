@@ -167,7 +167,25 @@ qint64 MainWindow::iRamDiskFree()
  */
 bool MainWindow::bIsDriveServed(unsigned char _ucDrive)
 {
-    return (_ucDrive < 8) && !szRootDir(_ucDrive).isEmpty() && QFileInfo(szRootDir(_ucDrive)).isDir();
+    // no drive is served when a disk image is served
+    return (m_eServeMode == eServeDirectories) && (_ucDrive < 8) && !szRootDir(_ucDrive).isEmpty() && QFileInfo(szRootDir(_ucDrive)).isDir();
+}
+
+/*
+ =======================================================================================================================
+    "Read only" button: the served directories cannot be modified (error .WPROT, as a write protected disk).
+    Checked before each modification of the host file system. The RAM disk H: (temporary directory) stays writable.
+ =======================================================================================================================
+ */
+bool MainWindow::bIsWriteProtected(const QString &_szHostPath)
+{
+    if (!m_bReadOnly)
+        return false;
+
+    if (m_poRamDisk && QFileInfo(_szHostPath).absoluteFilePath().startsWith(m_poRamDisk->path() + "/"))
+        return false;
+
+    return true;
 }
 
 /*
@@ -450,7 +468,9 @@ void MainWindow::vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments)
         vDestroyRamDisk();
     else if (_ucSegments != 0xFF)
     {
-        if (m_ucRamDiskSegments || bIsDriveServed(7))
+        if (m_eServeMode != eServeDirectories)
+            s.ucError = DOS_ERR_NORAM;  // a disk image is served
+        else if (m_ucRamDiskSegments || bIsDriveServed(7))
             s.ucError = DOS_ERR_RAMDX;  // RAM disk exists, or H: is a served directory
         else
         {
@@ -707,6 +727,9 @@ void MainWindow::vDOS_FIND_NEW_ENTRY(tdFileInfoBlock &_roFIB, const QString &_sz
                 ucError = DOS_ERR_FILEX;
         }
 
+        if ((ucError == DOS_ERR_OK) && !((_ucAttributes & ATTRIBUTE_DIRECTORY) && QFileInfo(szPath).isDir()) && bIsWriteProtected(szPath))
+            ucError = DOS_ERR_WPROT;
+
         if (ucError == DOS_ERR_OK)
         {
             if (_ucAttributes & ATTRIBUTE_DIRECTORY)
@@ -814,8 +837,14 @@ void MainWindow::vDOS_OPEN_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QStr
         {
             poFile = new QFile(szPath);
 
+            // Write protected: opened read-only on the host, _WRITE answers .WPROT
+            if (bIsWriteProtected(szPath))
+            {
+                if (!poFile->open(QIODevice::ReadOnly))
+                    ucError = DOS_ERR_FILRO;
+            }
             // A read-only file opened for read and write is opened read-only
-            if (!poFile->open(eOpenMode(_ucOpenMode)) && ((_ucOpenMode & 0x02) || !poFile->open(QIODevice::ReadOnly)))
+            else if (!poFile->open(eOpenMode(_ucOpenMode)) && ((_ucOpenMode & 0x02) || !poFile->open(QIODevice::ReadOnly)))
                 ucError = DOS_ERR_FILRO;
         }
     }
@@ -854,11 +883,15 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QS
         {
             if (oInfo.exists())
                 ucError = oInfo.isDir() ? DOS_ERR_DIRX : DOS_ERR_FILEX;
+            else if (bIsWriteProtected(szPath))
+                ucError = DOS_ERR_WPROT;
             else if (!QDir().mkdir(szPath))
                 ucError = DOS_ERR_DKFUL;
         }
         else if (oInfo.isDir())
             ucError = DOS_ERR_DIRX;
+        else if (bIsWriteProtected(szPath))
+            ucError = DOS_ERR_WPROT;
         else
         {
             poFile = new QFile(szPath);
@@ -949,6 +982,8 @@ void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QB
         s.ucError = DOS_ERR_IHAND;
     else if (!poFile->isOpen())
         s.ucError = DOS_ERR_HDEAD;
+    else if (bIsWriteProtected(poFile->fileName()))
+        s.ucError = DOS_ERR_WPROT;
     else if (!poFile->isWritable())
         s.ucError = DOS_ERR_ACCV;
     else
@@ -1041,6 +1076,9 @@ unsigned char MainWindow::ucDelete(unsigned char _ucDrive, const QString &_szPat
 
     if (szRelativePath(_ucDrive, _szPath).isEmpty())
         return DOS_ERR_IPATH;
+
+    if (bIsWriteProtected(_szPath))
+        return DOS_ERR_WPROT;
 
     if (oInfo.isDir())
     {
@@ -1151,6 +1189,9 @@ void MainWindow::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QStrin
     if (ucError == DOS_ERR_OK)
         ucError = ucNewPath(ucDrive, szPath, _szNew, _bMove, szNewPath);
 
+    if ((ucError == DOS_ERR_OK) && bIsWriteProtected(szPath))
+        ucError = DOS_ERR_WPROT;
+
     if (ucError == DOS_ERR_OK)
     {
         vLog(eLogBDOSDetails, "%s -> %s\n", qPrintable(szPath), qPrintable(szNewPath));
@@ -1180,6 +1221,9 @@ void MainWindow::vAttributes(unsigned char _ucError, const QString &_szPath, uns
 
     if ((s.ucError == DOS_ERR_OK) && !QFileInfo::exists(_szPath))
         s.ucError = DOS_ERR_NOFIL;
+
+    if ((s.ucError == DOS_ERR_OK) && _ucSet && bIsWriteProtected(_szPath))
+        s.ucError = DOS_ERR_WPROT;
 
     if (s.ucError == DOS_ERR_OK)
     {
@@ -1224,6 +1268,9 @@ void MainWindow::vDateTime(unsigned char _ucError, const QString &_szPath, QFile
 
     if ((s.ucError == DOS_ERR_OK) && !QFileInfo::exists(_szPath))
         s.ucError = DOS_ERR_NOFIL;
+
+    if ((s.ucError == DOS_ERR_OK) && _ucSet && bIsWriteProtected(_szPath))
+        s.ucError = DOS_ERR_WPROT;
 
     if (s.ucError == DOS_ERR_OK)
     {
@@ -1310,6 +1357,9 @@ void MainWindow::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
     QString         szPath;
     unsigned char   ucError = ucGetHandlePath(_ucFileHandle, szPath);
 
+    if ((ucError == DOS_ERR_OK) && bIsWriteProtected(szPath))
+        ucError = DOS_ERR_WPROT;
+
     if ((ucError == DOS_ERR_OK) && !QFileInfo(szPath).isWritable())
         ucError = DOS_ERR_FILRO;    // read-only attribute
 
@@ -1343,6 +1393,9 @@ void MainWindow::vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, co
 
     if (ucError == DOS_ERR_OK)
         ucError = ucNewPath(ucDrive, szPath, _szNew, _bMove, szNewPath);
+
+    if ((ucError == DOS_ERR_OK) && bIsWriteProtected(szPath))
+        ucError = DOS_ERR_WPROT;
 
     if (ucError == DOS_ERR_OK)
     {

@@ -7,10 +7,19 @@ The openMSX Tcl bridge sends:
 and receives for 'R': status byte (1 = data follows, 0 = time-out) + data.
 
 _RAMD creates the RAM disk H: in a temporary directory (destroyed at RESET, removed at exit).
+
+MOCK_IMAGE (environment): disk image mode, the disk image (no partitions) is served with the
+COMMAND_DRIVE_* commands (sectors, CRC checked both ways) and no drive is served by COMMAND_BDOS.
+
+MOCK_READONLY (environment): "Read only" button of the server, the served directories cannot be modified
+(error .WPROT), the RAM disk stays writable.
 """
 import os, re, socket, struct, sys, shutil, datetime, tempfile, atexit, signal
 
 ROOTS = {0: sys.argv[1]}          # drive A: root
+IMAGE = os.environ.get('MOCK_IMAGE')  # disk image mode
+if IMAGE:
+    ROOTS.clear()
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 9876
 LOG = open(sys.argv[3] if len(sys.argv) > 3 else '/dev/stdout', 'w', buffering=1)
 RAM = 7                           # RAM disk drive (H:)
@@ -23,10 +32,62 @@ E_OK, E_IDRV, E_NOFIL, E_NODIR, E_DUPF, E_DIRNE = 0, 0xDB, 0xD7, 0xD6, 0xD3, 0xD
 E_DIRX, E_FILEX, E_IHAND = 0xCC, 0xCB, 0xC3
 E_FILRO = 0xD1
 E_DKFUL, E_RAMDX, E_NORAM = 0xD4, 0xBC, 0xDE
+E_WPROT = 0xF8
+READONLY = bool(os.environ.get('MOCK_READONLY'))
 
 
 class Incomplete(Exception):
     pass
+
+
+FLAG_RX_CRC, FLAG_TX_CRC = 1, 2
+CMD_READ, CMD_WRITE, CMD_INFO, CMD_CHANGED = 16, 17, 18, 19
+REPORTS = {1: 'write protected', 3: 'drive not ready', 5: 'CRC error', 11: 'write fault'}
+
+
+def crc16(data, crc=0):
+    """CRC-16-CCITT XModem"""
+    for b in data:
+        crc ^= b << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if crc & 0x8000 else crc << 1
+            crc &= 0xFFFF
+    return crc
+
+
+def drive_command(r, flags, cmd):
+    """COMMAND_DRIVE_* on the disk image. The CRC covers the packet from the signature."""
+    def check_crc():
+        if flags & FLAG_TX_CRC:
+            computed = crc16(r.buf[:r.pos])
+            received = r.word()
+            if computed != received:
+                LOG.write('*** command CRC %04X, computed %04X\n' % (received, computed))
+
+    def answer(data):
+        return [data] + ([struct.pack('<H', crc16(data))] if flags & FLAG_RX_CRC else [])
+
+    if cmd in (CMD_READ, CMD_WRITE):
+        sector, count, address = struct.unpack('<IBH', r.take(7))
+        part, sector = sector >> 24, sector & 0xFFFFFF
+        if sector & 0x800000:
+            sector &= 0xFFFF
+        data = r.take(count * 512) if cmd == CMD_WRITE else b''
+        check_crc()
+        LOG.write('%s P%d %d x %d\n' % ('READ' if cmd == CMD_READ else 'WRITE', part, sector, count))
+        with open(IMAGE, 'r+b') as f:
+            f.seek(sector * 512)
+            if cmd == CMD_READ:
+                return answer((f.read(count * 512) + b'\0' * count * 512)[:count * 512])
+            f.write(data)
+        return [struct.pack('<H', 0x1111)]      # DRIVE_ANSWER_WRITE_OK
+    check_crc()
+    if cmd == CMD_INFO:
+        LOG.write('INFO\n')
+        info = b'\r\nMock disk image\r\n'
+        return answer((bytes([FLAG_RX_CRC | FLAG_TX_CRC, 1, 0]) + info + b'\0' * 512)[:512])
+    LOG.write('DISK CHANGED\n')
+    return [struct.pack('<H', 0x5555)]          # DRIVE_ANSWER_DISK_UNCHANGED
 
 
 class Reader:
@@ -170,6 +231,10 @@ class Server:
     def on_ram(self, f):
         return self.ram_segs and os.path.abspath(f.name).startswith(ROOTS[RAM] + '/')
 
+    def wprot(self, p):
+        """write protected host path ("Read only", the RAM disk stays writable)"""
+        return READONLY and not (self.ram_segs and os.path.abspath(p).startswith(ROOTS[RAM] + '/'))
+
     def served(self, d):
         return d in ROOTS and os.path.isdir(ROOTS[d])
 
@@ -299,6 +364,8 @@ class Server:
         return E_OK, d, p, item
 
     def rename_or_move(self, d, p, new, move):
+        if self.wprot(p):
+            return E_WPROT
         if move:
             dd, ndir = self.resolve(new, d)
             np = os.path.join(ndir, os.path.basename(p)) if ndir and os.path.isdir(ndir) else None
@@ -384,7 +451,10 @@ class Server:
                             e = E_OK if attrs & 0x10 else E_DIRX
                         elif attrs & 0x10:
                             e = E_FILEX
-                    if e == E_OK:
+                    if e == E_OK and not (attrs & 0x10 and os.path.isdir(p)) and self.wprot(p):
+                        e = E_WPROT
+                        out = self.empty_fib(e)
+                    elif e == E_OK:
                         if attrs & 0x10:
                             os.makedirs(p, exist_ok=True)
                         else:
@@ -426,7 +496,7 @@ class Server:
                         e = E_DIRX
                     else:
                         try:
-                            f = open(p, 'rb' if mode & 1 else 'r+b')
+                            f = open(p, 'rb' if mode & 1 or self.wprot(p) else 'r+b')
                         except OSError:
                             f = open(p, 'rb')
                         h = self.add_file(f) or 0xFF
@@ -438,10 +508,14 @@ class Server:
                     elif attrs & 0x10:
                         if os.path.exists(p):
                             e = E_DIRX if os.path.isdir(p) else E_FILEX
+                        elif self.wprot(p):
+                            e = E_WPROT
                         else:
                             os.mkdir(p)
                     elif os.path.isdir(p):
                         e = E_DIRX
+                    elif self.wprot(p):
+                        e = E_WPROT
                     else:
                         h = self.add_file(open(p, 'w+b')) or 0xFF
             LOG.write('  -> %02X handle %02X\n' % (e, h))
@@ -468,6 +542,8 @@ class Server:
             LOG.write('WRITE %02X %d\n' % (h, n))
             if not f:
                 return [struct.pack('<BH', E_IHAND, 0)]
+            if self.wprot(f.name):
+                return [struct.pack('<BH', E_WPROT, 0)]
             if self.on_ram(f):
                 pos, size = f.tell(), os.path.getsize(f.name)
                 old = (size + 511) // 512
@@ -513,6 +589,8 @@ class Server:
             if e == E_OK:
                 if not os.path.exists(p):
                     e = E_NOFIL
+                elif self.wprot(p):
+                    e = E_WPROT
                 elif os.path.isdir(p):
                     try:
                         os.rmdir(p)
@@ -542,6 +620,8 @@ class Server:
             st, na = r.byte(), r.byte()
             if e == E_OK and not os.path.exists(p):
                 e = E_NOFIL
+            if e == E_OK and st and self.wprot(p):
+                e = E_WPROT
             if e == E_OK and st and not os.path.isdir(p):
                 mode = os.stat(p).st_mode
                 os.chmod(p, (mode & ~0o222) if na & 1 else (mode | 0o200))
@@ -555,9 +635,11 @@ class Server:
                 h = r.byte()
                 f = self.files.get(h)
                 e, p = (E_OK, f.name) if f else (E_IHAND, None)
-            r.byte(), r.word(), r.word()
+            st, _, _ = r.byte(), r.word(), r.word()
             if e == E_OK and not os.path.exists(p):
                 e = E_NOFIL
+            if e == E_OK and st and self.wprot(p):
+                e = E_WPROT
             t, dt = dos_datetime(os.stat(p).st_mtime) if e == E_OK else (0, 0)
             return [struct.pack('<BHH', e, t, dt)]
         if func in (0x52, 0x53, 0x54):
@@ -569,6 +651,8 @@ class Server:
                 return [bytes([E_IHAND])]
             p = f.name
             if func == 0x52:
+                if self.wprot(p):
+                    return [bytes([E_WPROT])]
                 if not os.access(p, os.W_OK):
                     return [bytes([E_FILRO])]
                 f.close()
@@ -638,13 +722,20 @@ def main():
                     r = Reader(stream)
                     try:
                         r.take(3)
-                        r.byte()
+                        flags = r.byte()
                         cmd = r.byte()
-                        if cmd != 22:
+                        if IMAGE and CMD_READ <= cmd <= CMD_CHANGED:
+                            out = drive_command(r, flags, cmd)
+                        elif cmd in REPORTS:
+                            LOG.write('*** report: %s\n' % REPORTS[cmd])
+                            stream = stream[r.pos:]
+                            continue
+                        elif cmd != 22:
                             LOG.write('*** non BDOS command %d\n' % cmd)
                             stream = stream[r.pos:]
                             continue
-                        out = srv.command(r)
+                        else:
+                            out = srv.command(r)
                     except Incomplete:
                         break
                     stream = stream[r.pos:]

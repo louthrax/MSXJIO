@@ -52,7 +52,7 @@ build_rom() { # name kernel defines
 make_bridge() { # map output
     local a
     a() { grep -E "^$1 " "$2" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
-    sed -e "s/@RFS_TX@/$(a RFS_TX "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g" \
+    sed -e "s/@RFS_TX@/$(a RFS_TX "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g; s/@vJIOTransmit@/$(a vJIOTransmit "$1")/g; s/@bJIOReceive@/$(a bJIOReceive "$1")/g" \
         "$TEST/tcl/bridge.tcl.in" > "$2"
 }
 
@@ -70,6 +70,9 @@ prepare_files() {
 # Scenario
 # ------------------------------------------------------------------------------
 # run_scenario name rom map machine "slots" autoexec script [floppy size] [floppy files dir] [jio drives] [screen times]
+# IMAGE_MODE (environment): the files of the JIO drive are put in a 720 KB disk image (jio.dsk) served by
+# the mock server in disk image mode, the handshake of the driver is not skipped. Files read back: image_out/
+# IMAGE_SETUP (environment): command run on jio.dsk after its creation
 run_scenario() {
     local name=$1 rom=$2 map=$3 machine=$4 slots=$5 autoexec=$6 script=$7
     local fsize=${8:-} ffiles=${9:-} njio=${10:-1} times=${11:-"15 30 45 60"}
@@ -88,10 +91,18 @@ run_scenario() {
         disk="-diska floppy.dsk"
     fi
 
-    python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
+    local image="" handshake=""
+    if [ -n "${IMAGE_MODE:-}" ]; then
+        DISK_FILE=jio.dsk FLOPPY_SIZE=720 FLOPPY_FILES="$dir/drive" timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/mkdisk.tcl" > /dev/null 2>&1
+        image="$dir/jio.dsk"
+        handshake=1
+        [ -n "${IMAGE_SETUP:-}" ] && $IMAGE_SETUP "$image"
+    fi
+
+    MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
     mp=$!
     sleep 1
-    JIO_DRIVES=$njio SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
+    JIO_DRIVES=$njio JIO_HANDSHAKE=$handshake SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
         -script bridge.tcl -script "$script" > openmsx.log 2>&1
     rc=$?
     kill $mp 2> /dev/null
@@ -100,6 +111,10 @@ run_scenario() {
     if [ -n "$fsize" ]; then
         mkdir -p floppy_out
         timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/rddisk.tcl" > /dev/null 2>&1
+    fi
+    if [ -n "$image" ]; then
+        mkdir -p image_out
+        DISK_FILE=jio.dsk DISK_OUT=image_out timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/rddisk.tcl" > /dev/null 2>&1
     fi
     cat screen_*.txt > screens.txt 2> /dev/null
     echo "$rc" > exit_code
@@ -138,6 +153,9 @@ wanted() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
 FCB_OK='RENAME/DEL/DEL: 00 00 FF'
 FIB_OK='00 D7 00 00 FIBTEST: Hello'
 FNEW_OK='00 CC FF 00 FNEW DIRX'
+# FIBTEST on a FAT drive: result of the original MSX-DOS 2 kernel (floppy)
+FIB_FAT='00 D7 00 C7 FIBTEST:'
+FNEW_FAT='00 CC FF CA FNEW DIRX'
 
 # JIO drive only: DOS commands, big copy, redirection, FCB functions
 DOS_JIO='VER\r\nFIBTEST\r\nCOPY COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nDIR > \\OUT.TXT\r\nCD \\\r\nFCBTEST\r\nDIR /W\r\n'
@@ -275,6 +293,75 @@ test_noserver() { # name rom map machine floppy size description
     end_checks "$1" "$6"
 }
 
+# Server in disk image mode: the JIO drive A: is a disk image (sectors, local FAT12 drive of the hybrid kernel)
+DOS_IMAGE='VER\r\nFIBTEST\r\nDIR A:/W\r\nCOPY B:FLOPPY.TXT A:\r\nCOPY A:HELLO.TXT B:\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nDIR > OUT.TXT\r\nFCBTEST\r\nRAMDISK 32K > RAMD.TXT\r\nDIR /W\r\n'
+test_image_hybrid() { # name rom map machine slots floppy size description
+    wanted "$1" || return
+    IMAGE_MODE=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$DOS_IMAGE" "$TEST/tcl/screens.tcl" "$6" "$OUT/floppy_base" 1
+    local d="$OUT/$1" i="$OUT/$1/image_out"
+    begin_checks "$1"
+    check "handshake: drive info, no drive served by BDOS" "$(has_text "$d/server.log" 'INFO' && has_text "$d/server.log" 'LOGIN 00' && echo ok)"
+    check "only drive commands, RESET and LOGIN" "$( ! grep -qvE '^(RESET|LOGIN 00|INFO|DISK CHANGED|(READ|WRITE) P[0-9])' "$d/server.log" && echo ok)"
+    check "sectors written to the image" "$(grep -q '^WRITE P0' "$d/server.log" && echo ok)"
+    check "FCB test result" "$(has_text "$d/screen_60.txt" "$FCB_OK" && echo ok)"
+    check "FIBTEST as the original MSX-DOS 2 on a FAT drive" "$(has_text "$d/screens.txt" "$FIB_FAT" && has_text "$d/screens.txt" "$FNEW_FAT" && echo ok)"
+    check "X.COM identical to COMMAND2.COM (image)" "$(cmp -s "$i/x.com" "$OUT/base/COMMAND2.COM" && echo ok)"
+    check "floppy -> image copy (FLOPPY.TXT)" "$([ -f "$i/floppy.txt" ] && echo ok)"
+    check "image -> floppy copy (HELLO.TXT)" "$(cmp -s "$d/floppy_out/hello.txt" "$OUT/base/hello.txt" && echo ok)"
+    check "SUB/HELLO.TXT on the image" "$([ -f "$i/sub/hello.txt" ] && echo ok)"
+    check "redirected DIR on the image (OUT.TXT)" "$(has_text "$i/out.txt" 'Directory of A:' && echo ok)"
+    check "RAMDISK without directories served: not enough memory" "$(grep -qi 'not enough memory' "$i/ramd.txt" 2> /dev/null && echo ok)"
+    end_checks "$1" "$7"
+}
+
+# "Read only" server: every modification of the JIO drive is refused (.WPROT), reading works, the RAM disk H:
+# (and the floppy B: of the hybrid ROM) stay writable
+READONLY='COPY HELLO.TXT X.TXT\r\nMD SUB\r\nDEL HELLO.TXT\r\nREN HELLO.TXT Y.TXT\r\nATTRIB +R HELLO.TXT\r\nTYPE HELLO.TXT\r\nRAMDISK 32K\r\nCOPY HELLO.TXT H:\r\nDIR H:\r\n'
+READONLY_FLOPPY='COPY HELLO.TXT B:\r\nDIR B:\r\n'
+test_readonly() { # name rom map machine slots description [floppy size]
+    wanted "$1" || return
+    local cmds="$READONLY"
+    [ -n "${7:-}" ] && cmds="$READONLY$READONLY_FLOPPY"
+    READ_ONLY=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/screens.tcl" "${7:-}" "$OUT/floppy_base" 1 "10 20 30 40 50 60"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "nothing created on the host (X.TXT, SUB)" "$([ ! -e "$d/drive/X.TXT" ] && [ ! -e "$d/drive/SUB" ] && echo ok)"
+    check "HELLO.TXT not deleted nor renamed, still writable" "$([ -w "$d/drive/hello.txt" ] && [ ! -e "$d/drive/Y.TXT" ] && echo ok)"
+    check "write protected errors shown" "$([ "$(grep -ci 'write protected' "$d/screen_60.txt")" -ge 4 ] && echo ok)"
+    check "reading works (TYPE)" "$(has_text "$d/screen_60.txt" 'Hello from the JIO server!' && echo ok)"
+    check "RAM disk H: writable" "$(grep -qE 'HELLO +TXT' "$d/screen_60.txt" && echo ok)"
+    [ -n "${7:-}" ] && check "floppy B: writable" "$(cmp -s "$d/floppy_out/hello.txt" "$OUT/base/hello.txt" && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# Self-booting disk image (game disk): the boot loader of the boot sector (C01EH) is started at boot, it prints
+# GAME STARTED with CHPUT and loops forever (MSX-DOS 2 is not started)
+setup_bootloader() { # disk image
+    python3 - "$1" <<'PY'
+import sys
+code = bytes([0x21, 0x2B, 0xC0,          # C01E: LD HL,C02B (message)
+              0x7E,                      # C021: LD A,(HL)
+              0xB7,                      #       OR A
+              0x28, 0xFE,                #       JR Z,$ (end of message: loop forever)
+              0xCD, 0xA2, 0x00,          #       CALL CHPUT
+              0x23,                      #       INC HL
+              0x18, 0xF6]) + b'GAME STARTED\0'  # JR C021
+with open(sys.argv[1], 'r+b') as f:
+    f.seek(0x1E)
+    f.write(code)
+PY
+}
+test_bootloader_hybrid() { # name rom map machine slots description
+    wanted "$1" || return
+    IMAGE_MODE=1 IMAGE_SETUP=setup_bootloader run_scenario "$1" "$2" "$3" "$4" "$5" 'VER\r\n' "$TEST/tcl/screens.tcl" "" "" 1 "20"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "boot loader started (GAME STARTED)" "$(has_text "$d/screen_20.txt" 'GAME STARTED' && echo ok)"
+    check "boot sector read (sector 0)" "$(grep -q '^READ P0 0 x 1' "$d/server.log" && echo ok)"
+    check "MSX-DOS 2 not started" "$( ! has_text "$d/screen_20.txt" 'MSX-DOS' && echo ok)"
+    end_checks "$1" "$6"
+}
+
 # Hybrid ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -310,6 +397,7 @@ if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
     test_ramdisk   jio_ramdisk  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, RAMDISK (H: on the server), MSX reset"
     test_renmove   jio_renmove  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, REN, MOVE, ATTRIB"
     test_longnames jio_longnames "$J" "$JM" Philips_VG_8235  "-carta $J"             "VG-8235, long host names and 8.3 aliases"
+    test_readonly  jio_readonly "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, read only server"
 fi
 
 if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then
@@ -324,6 +412,9 @@ if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then
     test_longnames       hyb_longnames   "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, long host names and 8.3 aliases"
     test_ramdisk         hyb_ramdisk     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
     test_takeover_hybrid hyb_takeover    "$H" "$HM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
+    test_readonly        hyb_readonly    "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, read only server, floppy B: writable" 360
+    test_bootloader_hybrid hyb_bootsector "$H" "$HM" Philips_VG_8235 "-carta $H" "VG-8235, disk image mode: self-booting image (boot loader of the boot sector)"
+    test_image_hybrid    hyb_image       "$H" "$HM" Philips_VG_8235   "-carta $H" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
 fi
 
 echo

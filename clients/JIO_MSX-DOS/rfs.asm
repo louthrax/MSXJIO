@@ -15,6 +15,9 @@
 ; the kernel. The X_ functions route each call to the JIO (R_) or local (F_)
 ; implementation. The FCB functions use the kernel file handle functions and
 ; work on both kinds of drives.
+; When the server serves a disk image (_LOGIN = 0 at RFS_INIT), there is no JIO
+; drive: the partitions of the image are local drives (FAT12, sectors read and
+; written by DSKIO of the driver).
 ;
 ; This file is included in p0_kernel.asm or p0_hybrid.asm (page 0 code segment, kernel RAM).
 ; The communication variables are also located in the code segment, so they
@@ -108,7 +111,18 @@ J_RI6:		LD	(RFS_NJIO),A
 		RET	Z			; no JIO drive (no server)
 		LD	A,RFS_RESET		; reset server state (no answer)
 		CALL	RFS_CMD
-		JR	RFS_END
+		CALL	RFS_END
+		LD	A,18H			; get drives served
+		CALL	RFS_CMD
+		LD	HL,RFS_BUF
+		LD	BC,1
+		CALL	RFS_RX
+		CALL	RFS_END
+		LD	A,(RFS_BUF)
+		OR	A
+		RET	NZ			; directories served
+		LD	(RFS_NJIO),A		; disk image served: the JIO drives are local drives (sectors, see DSKIO)
+		RET
 	ELSE
 		LD	A,RFS_RESET		; reset server state (no answer)
 		CALL	RFS_CMD
@@ -2530,7 +2544,10 @@ RFS_ISJIOD:	CALL	C3606			; A = physical drive (1 = first), HL = DPB entry
 		CP	(HL)
 		RET
 
-J_IJ3:		LD	A,(HL)
+J_IJ3:		LD	A,(RFS_NJIO)
+		OR	A
+		RET	Z			; no JIO drive: H: is a local drive
+		LD	A,(HL)
 		INC	HL
 		OR	(HL)
 		RET	Z
