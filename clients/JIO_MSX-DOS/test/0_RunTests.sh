@@ -58,8 +58,8 @@ make_bridge() { # map output
 
 # Address of a routine of JIOTIME.COM (map file)
 tool_addr() { grep -E "^$1 " "$TOOL_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
-# Offset of a routine in the resident driver of JIO.COM (symbol file)
-nfs_offset() { grep -E "^$1 " "$NFS_SYM" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
+# Offset of a routine in the resident stub or driver of JIO.COM (map or symbol file)
+nfs_offset() { grep -E "^$1 " "$NFS_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
 
 prepare_files() {
     rm -rf "$OUT/base" "$OUT/floppy_base"
@@ -70,6 +70,7 @@ prepare_files() {
     ( cd "$SRC/../../tools/JIOTIME" && z88dk-z80asm -b -m -O"$OUT/obj_jiotime" -o=JIOTIME.COM jiotime.asm && cp "$OUT/obj_jiotime/JIOTIME.COM" "$OUT/base/" ) || { echo "Build of JIOTIME.COM failed"; exit 1; }
     TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
     ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
+    ( cd "$TEST/p2test" && z88dk-z80asm -b -o="$OUT/base/P2TEST.COM" p2test.asm && rm -f "$OUT"/base/*.o p2test.o ) || { echo "Build of P2TEST.COM failed"; exit 1; }
     # JIO.COM (clients/JIO_NFS), built in a copy (its make script writes next to the sources)
     rm -rf "$OUT/nfs"
     mkdir -p "$OUT/nfs/clients"
@@ -77,7 +78,9 @@ prepare_files() {
     cp -r "$SRC/../JIO_NFS" "$OUT/nfs/clients/"
     rm -rf "$OUT/nfs/clients/JIO_NFS/Tmp"
     ( cd "$OUT/nfs/clients/JIO_NFS" && sed '/^openmsx/d' 0_Make.sh | bash > build.log 2>&1 && cp Tmp/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
-    NFS_SYM="$OUT/nfs/clients/JIO_NFS/Tmp/driver.sym"
+    # serial routines: in the resident stub (driver in a mapper segment) or in the resident driver
+    NFS_MAP="$OUT/nfs/clients/JIO_NFS/Tmp/stub.map"
+    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/Tmp/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
@@ -403,11 +406,11 @@ test_jiotime() { # name rom map machine slots description [mock date]
 # directory of the server is drive D: (JIO +D). JIO.COM ends with a warm restart (MSXDOS2.SYS and COMMAND2.COM
 # reloaded, the batch file is not continued): the commands are in NFSTEST.BAT, typed at the prompt.
 # Not tested: redirection to the JIO drive (_DUP of a file handle of the server is not supported by JIO.COM).
-NFS_CMDS='D:\r\nDIR /W\r\nTYPE HELLO.TXT\r\nA:FCBREAD\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nCOPY HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDIR /W\r\n'
+NFS_CMDS='D:\r\nDIR /W\r\nTYPE HELLO.TXT\r\nA:FCBREAD\r\nA:P2TEST\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nCOPY HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDIR /W\r\n'
 test_nfs() { # name machine "slots" description
     wanted "$1" || return
     rm -rf "$OUT/floppy_nfs"; mkdir -p "$OUT/floppy_nfs"
-    cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/FCBREAD.COM "$OUT/floppy_nfs/"
+    cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/FCBREAD.COM "$OUT"/base/P2TEST.COM "$OUT/floppy_nfs/"
     printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
     printf "$NFS_CMDS" > "$OUT/floppy_nfs/NFSTEST.BAT"
     TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D run_scenario "$1" "$J" "$JM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
@@ -416,6 +419,7 @@ test_nfs() { # name machine "slots" description
     check "DIR of the JIO drive D:" "$(has_text "$d/screens.txt" 'COMMAND2.COM' && has_text "$d/screens.txt" 'FCBTEST .COM' && echo ok)"
     check "TYPE on D:" "$(has_text "$d/screens.txt" 'Hello from the JIO server!' && echo ok)"
     check "FCB open, block reads, close (FCBREAD)" "$(grep -A1 'FCBREAD: 00 00 0C 00 05 00 ' "$d/screens.txt" | tr -d ' \n' | grep -q 'Hellofromthe' && echo ok)"
+    check "parameters and buffers in page 2 (P2TEST)" "$(grep -A2 'P2TEST: ' "$d/screens.txt" | tr -d ' \n' | grep -q 'P2TEST:00HELLO.TXT00Hello00000004from00\[\]' && echo ok)"
     check "X.COM identical to COMMAND2.COM" "$(cmp -s "$d/drive/X.COM" "$OUT/base/COMMAND2.COM" && echo ok)"
     check "date of the copy set (_HFTIME)" "$(t1=$(stat -c %Y "$d/drive/X.COM"); t2=$(stat -c %Y "$OUT/base/COMMAND2.COM"); [ $((t1 - t2)) -ge -2 ] && [ $((t1 - t2)) -le 2 ] && echo ok)"
     check "SUB/HELLO.TXT copied" "$([ -f "$d/drive/SUB/HELLO.TXT" ] && echo ok)"

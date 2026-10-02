@@ -33,25 +33,7 @@ clients/JIO_MSX-DOS/obj/jio_dos1__.bin
 
 clients/JIO_MSX-DOS/rdate.inc
 
-clients/JIO_NFS/Tmp/disk.dsk
-
-clients/JIO_NFS/Tmp/driver
-
-clients/JIO_NFS/Tmp/driver.c.asm
-
-clients/JIO_NFS/Tmp/driver.h
-
-clients/JIO_NFS/Tmp/driver.reloc
-
-clients/JIO_NFS/Tmp/driver.sym
-
-clients/JIO_NFS/Tmp/JIO.COM
-
-clients/JIO_NFS/Tmp/jumper
-
-clients/JIO_NFS/Tmp/jumper.reloc
-
-clients/JIO_NFS/Tmp/main.c.asm
+clients/JIO_NFS/Tmp/
 
 tools/JIOTIME/obj/
 

@@ -199,6 +199,17 @@ Notes:
 | Second    | 1 byte      | Second (0-59)                |
   
   
+#### 0x18 — COMMAND LOG
+
+**Description:** Text sent by the MSX, shown in the log of the server (debugging of the clients). Served in both modes.  
+**Payload:**
+| Field     | Size        | Description                  |
+|:----------|:------------|:-----------------------------|
+| Text      | variable    | ASCIIZ string (max 64 characters shown) |
+
+**Response:** none
+  
+  
 #### 0xNN — COMMAND DRIVE REPORT [NN]
 
 **Description:** Report a disk i/o result to the server  

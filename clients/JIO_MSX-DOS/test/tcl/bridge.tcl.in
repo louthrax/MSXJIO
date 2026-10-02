@@ -91,8 +91,8 @@ if {[info exists ::env(TOOL_TX)] && $::env(TOOL_TX) ne ""} {
     debug set_bp $::env(TOOL_RX) "\[sig $::env(TOOL_RX) {0xD5 0x11 0x00 0x00 0x2B}\]" { rfs_rx }
 }
 
-# Resident driver of JIO.COM (clients/JIO_NFS), copied to HIMSAV (F349H) when installed: the serial routines
-# are intercepted when the BDOS hook (F37AH) is written. NFS_TX, NFS_RX (environment): offsets in the driver.
+# Resident stub of JIO.COM (clients/JIO_NFS), copied to HIMSAV (F349H) when installed: the serial routines
+# are intercepted when the BDOS hook (F37AH) is written. NFS_TX, NFS_RX (environment): offsets in the stub.
 set nfs_done 0
 if {[info exists ::env(NFS_TX)] && $::env(NFS_TX) ne ""} {
     debug set_watchpoint write_mem 0xF37A {} {

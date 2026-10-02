@@ -634,6 +634,18 @@ Task MainWindow::oParser()
             }
             break;
 
+        case COMMAND_LOG:
+        {
+            /*~~~~~~~~~~~~~~~~~~~*/
+            QString szText;
+            /*~~~~~~~~~~~~~~~~~~~*/
+
+            // ASCIIZ text of the MSX (debugging), no answer
+            vReceiveString(szText, uiCRC);
+            vLog(eLogClient, "MSX: %s\n", qPrintable(szText.left(64)));
+        }
+        break;
+
         case COMMAND_DATE_TIME:
         {
             /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -1835,6 +1847,7 @@ void MainWindow::vLog(tdLogType _eLogType, QString fmt, ...)
         message = "  " + message;
         break;
     case eLogConnected:   oFormat.setForeground(QColor(128, 128, 255)); break;
+    case eLogClient:      oFormat.setForeground(QColor(  0, 140, 140)); break;
     }
 
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/

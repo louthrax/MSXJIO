@@ -1,10 +1,16 @@
 
 #include "driver.h"
+#include "stub.h"
 
 extern char driver_start;
 extern char driver_end;
 extern char driver_reloc_start;
 extern char driver_reloc_end;
+
+extern char stub_start;
+extern char stub_end;
+extern char stub_reloc_start;
+extern char stub_reloc_end;
 
 extern char jumper_start;
 extern char jumper_end;
@@ -17,7 +23,9 @@ typedef unsigned char bool;
 
 int     main(int argc, char **argv);
 void	cputs(const char *str);
+void    vError(const char * _szErrorMessage, int _iErrorCode);
 __at (0xF349) char * HIMSAV;
+
 
 /*
  =======================================================================================================================
@@ -108,6 +116,46 @@ char * jumper_target = (char*)0x8100;
 unsigned char g_aucDrivesToChange [8] = { 0 };
 bool *g_pbHandledDrives = 0;
 int    g_iResult = 0;
+unsigned char *g_pucMapper = 0;             // mapper support routines (jump table)
+unsigned char g_ucDriverSegment = 0;
+bool g_bVerbose = false;                    // V option: steps of the install
+
+/*
+ =======================================================================================================================
+    Verbose output (V option): BDOS _CONOUT, the strings are not changed (puts ends them with a '$')
+ =======================================================================================================================
+ */
+void vPutChar(char _cChar) __naked
+{
+    _cChar;
+__asm
+        ld      e,a
+        ld      c,2
+        jp      5
+__endasm;
+}
+
+void vPrint(const char *_szText)
+{
+    while (*_szText)
+        vPutChar(*_szText++);
+}
+
+void vVerbose(const char *_szLabel, unsigned int _uiValue, unsigned char _ucDigits)
+{
+    if (!g_bVerbose)
+        return;
+    vPrint(_szLabel);
+    while (_ucDigits--)
+        vPutChar("0123456789ABCDEF"[(_uiValue >> (_ucDigits * 4)) & 15]);
+    vPrint("\r\n");
+}
+
+void vVerboseText(const char *_szText)
+{
+    if (g_bVerbose)
+        vPrint(_szText);
+}
 
 /*
  =======================================================================================================================
@@ -217,19 +265,18 @@ void vRelocate(char * _pcCodeStart, unsigned int * _puiRelocationStart, unsigned
  =======================================================================================================================
  =======================================================================================================================
  */
+// HIMSAV lowered by the size of the stub. The stack is not moved: the memory below HIMSAV is still the resident part
+// of MSX-DOS until it is restarted (a stack there overwrites it), the stack of JIO.COM is in the TPA.
 void vReserveMemory() __naked
 {
 __asm
-        pop     bc
         ld      hl,(_HIMSAV)
-        ld      de,_driver_end
+        ld      de,_stub_end
         or      a
         sbc     hl,de
-        ld      de,_driver_start
+        ld      de,_stub_start
         add     hl,de
         ld      (_HIMSAV),hl
-        ld      sp,hl
-        push    bc
         ret
 __endasm;
 }
@@ -238,26 +285,137 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-void vInstall()
+/*
+ =======================================================================================================================
+    Mapper support routines (MSX-DOS 2): jump table, 0 if not available
+ =======================================================================================================================
+ */
+// IX (frame pointer of the C code) and IY kept: EXTBIO or ALL_SEG change IX on Nextor 2.1.0 alpha 2
+unsigned char *pucMapperTable() __naked
 {
-    memcopy(jumper_target, &jumper_start, &jumper_end - &jumper_start);
-    vRelocate(jumper_target, &jumper_reloc_start, (&jumper_reloc_end - &jumper_reloc_start) >> 1);
+__asm
+        push    ix
+        push    iy
+        xor     a
+        ld      hl,0
+        ld      de,0x0402
+        call    0xFFCA      ; EXTBIO
+        pop     iy
+        pop     ix
+        ex      de,hl
+        ret
+__endasm;
+}
 
-    memcopy(HIMSAV, &driver_start, &driver_end - &driver_start);
-    vRelocate(HIMSAV, &driver_reloc_start, (&driver_reloc_end - &driver_reloc_start) >> 1);
+// ALL_SEG: system segment of the primary mapper (low byte) and its slot (high byte), 0xFFFF if none is free
+// (IX and IY kept)
+unsigned int uiAllocateSegment() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      hl,(_g_pucMapper)
+        ld      de,allseg_ret
+        push    de
+        ld      a,1         ; system segment (not freed when the program ends)
+        ld      b,0         ; primary mapper
+        jp      (hl)
+allseg_ret:
+        pop     iy
+        pop     ix
+        ld      d,b
+        ld      e,a
+        ret     nc
+        ld      de,0xFFFF
+        ret
+__endasm;
+}
 
-    HIMSAV[driver_Hook_OriginalAddress + 0] = *((unsigned char*)0xF37B);
-    HIMSAV[driver_Hook_OriginalAddress + 1] = *((unsigned char*)0xF37C);
+unsigned char ucGetP2() __naked
+{
+__asm
+        ld      hl,(_g_pucMapper)
+        ld      de,0x27     ; GET_P2
+        add     hl,de
+        jp      (hl)
+__endasm;
+}
 
-    *((unsigned char*)0xF37A) = (unsigned char)0xC3;
-    *((unsigned int*)0xF37B) = HIMSAV + driver_Hook;
-    g_pbHandledDrives = HIMSAV + driver__g_bHandledDrives;
+void vPutP2(unsigned char _ucSegment) __naked
+{
+    _ucSegment;
+__asm
+        ld      hl,(_g_pucMapper)
+        ld      de,0x24     ; PUT_P2
+        add     hl,de
+        jp      (hl)
+__endasm;
 }
 
 /*
  =======================================================================================================================
+    The driver is copied to a system segment of the mapper (at DRIVER_BASE, page 2), only the stub (stub.asm) is
+    resident at HIMSAV
  =======================================================================================================================
  */
+bool bInstallDriver()
+{
+    unsigned int  uiSegment;
+    unsigned char ucTpaSegment;
+
+    g_pucMapper = pucMapperTable();
+    vVerbose("Mapper routines: ", (unsigned int) g_pucMapper, 4);
+    if (!g_pucMapper)
+    {
+        vError("No memory mapper support routines (MSX-DOS 2 needed).\r\n", 1);
+        return false;
+    }
+
+    uiSegment = uiAllocateSegment();
+    if (uiSegment == 0xFFFF)
+    {
+        vError("No free memory mapper segment.\r\n", 1);
+        return false;
+    }
+    g_ucDriverSegment = uiSegment;
+    vVerbose("Driver segment: ", g_ucDriverSegment, 2);
+    vVerbose("Driver segment slot: ", uiSegment >> 8, 2);
+
+    ucTpaSegment = ucGetP2();
+    vVerbose("TPA page 2 segment: ", ucTpaSegment, 2);
+    vPutP2(g_ucDriverSegment);
+    memcopy((char *) DRIVER_BASE, &driver_start, &driver_end - &driver_start);
+    vRelocate((char *) DRIVER_BASE, &driver_reloc_start, (&driver_reloc_end - &driver_reloc_start) >> 1);
+    vPutP2(ucTpaSegment);
+    vVerboseText("Driver copied\r\n");
+
+    return true;
+}
+
+// Jumper: restart of MSX-DOS through BASIC (CALL SYSTEM), MSX-DOS is then below HIMSAV
+void vInstallJumper()
+{
+    memcopy(jumper_target, &jumper_start, &jumper_end - &jumper_start);
+    vRelocate(jumper_target, &jumper_reloc_start, (&jumper_reloc_end - &jumper_reloc_start) >> 1);
+}
+
+// Stub at HIMSAV (memory reserved before the restart of MSX-DOS) and hook
+void vInstallStub()
+{
+    memcopy(HIMSAV, &stub_start, &stub_end - &stub_start);
+    vRelocate(HIMSAV, &stub_reloc_start, (&stub_reloc_end - &stub_reloc_start) >> 1);
+
+    HIMSAV[STUB_SEGMENT] = g_ucDriverSegment;
+    *((unsigned int*)(HIMSAV + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
+    *((unsigned int*)(HIMSAV + STUB_GET_P2 + 1)) = (unsigned int) g_pucMapper + 0x27;
+    HIMSAV[STUB_HOOK_ORIGINAL + 1] = *((unsigned char*)0xF37B);
+    HIMSAV[STUB_HOOK_ORIGINAL + 2] = *((unsigned char*)0xF37C);
+
+    *((unsigned char*)0xF37A) = (unsigned char)0xC3;
+    *((unsigned int*)0xF37B) = HIMSAV + STUB_HOOK;
+    g_pbHandledDrives = HIMSAV + STUB_DRIVES;
+}
+
 bool bCheckRFS(unsigned int * _puiBase) __naked
 {
     _puiBase;
@@ -309,10 +467,11 @@ void vApplyDriveChanges()
  */
 void vUsage(void)
 {
-    puts("\r\nUsage: RFS [+A|-A] [+B|-B] ... [S] [H]\r\n");
+    puts("\r\nUsage: RFS [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
     puts("  +<drive>   Add / handle drive (A..H)\r\n");
     puts("  -<drive>   Remove / unhandle drive (A..H)\r\n");
     puts("  S          Show currently handled drives\r\n");
+    puts("  V          Show the steps of the install\r\n");
     puts("  H          Show this help\r\n");
     puts("\r\nExamples:\r\n");
     puts("  RFS +A +B       ; install and handle drives A and B\r\n");
@@ -371,7 +530,7 @@ int main(int argc, char **argv)
 
     bInstalled = bCheckRFS(&pcBase);
 
-    g_pbHandledDrives = pcBase + driver__g_bHandledDrives;
+    g_pbHandledDrives = pcBase + STUB_DRIVES;
 
     for (int iIndex = 1; iIndex < argc; iIndex++)
     {
@@ -422,7 +581,7 @@ int main(int argc, char **argv)
                     {
                         if (g_pbHandledDrives[iIndex])
                         {
-                            acDisks[iIndex] = 'A'+iIndex;
+                            acDisks[0] = 'A' + iIndex;
                             puts(acDisks);
                         }
                     }
@@ -430,6 +589,10 @@ int main(int argc, char **argv)
                 }
                 else
                     puts("RFS not installed.\r\n");
+            }
+            else if (szArg[0] == 'V')
+            {
+                g_bVerbose = true;
             }
             else if (szArg[0] == 'H')
             {
@@ -444,19 +607,25 @@ int main(int argc, char **argv)
 
     if (!bInstalled)
     {
-        if  (bAddRequired)
+        if (bAddRequired)
         {
             puts("Installing RFS and drives...\r\n");
+            if (!bInstallDriver())
+                return g_iResult;
             vReserveMemory();
-            vInstall();
-            HIMSAV[driver__g_bHasTurbo] = bHasTurbo();
+            vVerbose("Memory reserved, HIMSAV: ", (unsigned int) HIMSAV, 4);
+            vInstallJumper();
+            vInstallStub();
+            HIMSAV[STUB_HAS_TURBO] = bHasTurbo();
+            vVerbose("Stub: ", (unsigned int) HIMSAV, 4);
+            vVerboseText("Testing the hook (RESET)...\r\n");
 __asm
   ld c,0x1D
   call 0xF37A
 __endasm;
-
-
+            vVerboseText("OK\r\n");
             vApplyDriveChanges();
+            vVerboseText("Restarting MSX-DOS...\r\n");
             vJumpTo(jumper_target);
         }
         else
@@ -492,6 +661,14 @@ _driver_end:
 _driver_reloc_start:
     INCBIN "driver.reloc"
 _driver_reloc_end:
+
+_stub_start:
+    INCBIN "stub"
+_stub_end:
+
+_stub_reloc_start:
+    INCBIN "stub.reloc"
+_stub_reloc_end:
 
 _jumper_start:
     INCBIN "jumper"

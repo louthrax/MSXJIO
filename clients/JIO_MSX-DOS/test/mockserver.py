@@ -48,6 +48,7 @@ class Incomplete(Exception):
 FLAG_RX_CRC, FLAG_TX_CRC = 1, 2
 CMD_READ, CMD_WRITE, CMD_INFO, CMD_CHANGED = 16, 17, 18, 19
 CMD_DATE_TIME = 23
+CMD_LOG = 24
 REPORTS = {1: 'write protected', 3: 'drive not ready', 5: 'CRC error', 11: 'write fault'}
 
 
@@ -739,6 +740,9 @@ def main():
                         cmd = r.byte()
                         if IMAGE and CMD_READ <= cmd <= CMD_CHANGED:
                             out = drive_command(r, flags, cmd)
+                        elif cmd == CMD_LOG:
+                            LOG.write('MSX: %s\n' % r.string())
+                            out = []
                         elif cmd == CMD_DATE_TIME:
                             date = os.environ.get('MOCK_DATE', '')
                             LOG.write('DATE TIME %s\n' % date)

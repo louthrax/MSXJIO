@@ -6,6 +6,7 @@ typedef enum {
     eLogWarning,
     eLogError,
     eLogConnected,
+    eLogClient,             // text sent by the MSX (COMMAND_LOG)
     eLogRead,
     eLogWrite,
     eLogBDOS,
