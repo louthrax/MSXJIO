@@ -11,6 +11,8 @@ _RAMD creates the RAM disk H: in a temporary directory (destroyed at RESET, remo
 MOCK_IMAGE (environment): disk image mode, the disk image (no partitions) is served with the
 COMMAND_DRIVE_* commands (sectors, CRC checked both ways) and no drive is served by COMMAND_BDOS.
 
+MOCK_DATE (environment): answer of COMMAND_DATE_TIME ("YYYY-MM-DD HH:MM:SS", default: now), "none" = no answer.
+
 MOCK_READONLY (environment): "Read only" button of the server, the served directories cannot be modified
 (error .WPROT), the RAM disk stays writable.
 """
@@ -42,6 +44,7 @@ class Incomplete(Exception):
 
 FLAG_RX_CRC, FLAG_TX_CRC = 1, 2
 CMD_READ, CMD_WRITE, CMD_INFO, CMD_CHANGED = 16, 17, 18, 19
+CMD_DATE_TIME = 23
 REPORTS = {1: 'write protected', 3: 'drive not ready', 5: 'CRC error', 11: 'write fault'}
 
 
@@ -726,6 +729,14 @@ def main():
                         cmd = r.byte()
                         if IMAGE and CMD_READ <= cmd <= CMD_CHANGED:
                             out = drive_command(r, flags, cmd)
+                        elif cmd == CMD_DATE_TIME:
+                            date = os.environ.get('MOCK_DATE', '')
+                            LOG.write('DATE TIME %s\n' % date)
+                            if date == 'none':
+                                out = []
+                            else:
+                                t = datetime.datetime.strptime(date, '%Y-%m-%d %H:%M:%S') if date else datetime.datetime.now()
+                                out = [struct.pack('<HBBBBB', t.year, t.month, t.day, t.hour, t.minute, t.second)]
                         elif cmd in REPORTS:
                             LOG.write('*** report: %s\n' % REPORTS[cmd])
                             stream = stream[r.pos:]

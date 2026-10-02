@@ -56,11 +56,17 @@ make_bridge() { # map output
         "$TEST/tcl/bridge.tcl.in" > "$2"
 }
 
+# Address of a routine of JIOTIME.COM (map file)
+tool_addr() { grep -E "^$1 " "$TOOL_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
+
 prepare_files() {
     rm -rf "$OUT/base" "$OUT/floppy_base"
     mkdir -p "$OUT/base" "$OUT/floppy_base"
     ( cd "$TEST/fcbtest" && z88dk-z80asm -b -o="$OUT/base/FCBTEST.COM" fcbtest.asm && rm -f "$OUT"/base/*.o fcbtest.o ) || { echo "Build of FCBTEST.COM failed"; exit 1; }
     ( cd "$TEST/fibtest" && z88dk-z80asm -b -o="$OUT/base/FIBTEST.COM" fibtest.asm && rm -f "$OUT"/base/*.o fibtest.o ) || { echo "Build of FIBTEST.COM failed"; exit 1; }
+    rm -rf "$OUT/obj_jiotime"
+    ( cd "$SRC/../../tools/JIOTIME" && z88dk-z80asm -b -m -O"$OUT/obj_jiotime" -o=JIOTIME.COM jiotime.asm && cp "$OUT/obj_jiotime/JIOTIME.COM" "$OUT/base/" ) || { echo "Build of JIOTIME.COM failed"; exit 1; }
+    TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
@@ -102,6 +108,7 @@ run_scenario() {
     MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
     mp=$!
     sleep 1
+    TOOL_TX=$(tool_addr vJIOTransmit) TOOL_RX=$(tool_addr bJIOReceive) \
     JIO_DRIVES=$njio JIO_HANDSHAKE=$handshake SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
         -script bridge.tcl -script "$script" > openmsx.log 2>&1
     rc=$?
@@ -362,6 +369,24 @@ test_bootloader_hybrid() { # name rom map machine slots description
     end_checks "$1" "$6"
 }
 
+# JIOTIME.COM: date and time of the MSX set from the server (MOCK_DATE), or no answer.
+# Note: the RTC (RP5C01) of openMSX 20.0 changes some months (July is read back as May, also when written directly
+# to the chip), the default date uses a month it keeps.
+test_jiotime() { # name rom map machine slots description [mock date]
+    wanted "$1" || return
+    local date=${7:-"2031-10-25 13:45:30"}
+    MOCK_DATE="$date" run_scenario "$1" "$2" "$3" "$4" "$5" 'JIOTIME\r\n' "$TEST/tcl/screens.tcl" "" "" 1 "15"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "date and time requested" "$(grep -q '^DATE TIME' "$d/server.log" && echo ok)"
+    if [ "$date" = none ]; then
+        check "no answer reported" "$(has_text "$d/screen_15.txt" 'No answer from the JIO server' && echo ok)"
+    else
+        check "MSX date and time set (read back)" "$(has_text "$d/screen_15.txt" 'Date and time set:' && has_text "$d/screen_15.txt" "${date%?}" && echo ok)"
+    fi
+    end_checks "$1" "$6"
+}
+
 # Hybrid ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -398,6 +423,9 @@ if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
     test_renmove   jio_renmove  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, REN, MOVE, ATTRIB"
     test_longnames jio_longnames "$J" "$JM" Philips_VG_8235  "-carta $J"             "VG-8235, long host names and 8.3 aliases"
     test_readonly  jio_readonly "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, read only server"
+    test_jiotime   jio_jiotime  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, JIOTIME.COM sets the date and time"
+    test_jiotime   jio_jiotime_tr "$J" "$JM" Panasonic_FS-A1ST "-carta $J"           "turbo R, JIOTIME.COM sets the date and time (Z80 mode)"
+    test_jiotime   jio_jiotime_none "$J" "$JM" Philips_VG_8235 "-carta $J"           "VG-8235, JIOTIME.COM without answer of the server" none
 fi
 
 if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then

@@ -184,6 +184,21 @@ Notes:
 - When the server is read only, the functions that would modify a served directory (_FNEW, _CREATE, _WRITE, _DELETE, _RENAME, _MOVE, _ATTR and _FTIME with set, and the handle versions) answer `0xF8` (.WPROT, write protected disk). Files are opened read only on the host. The RAM disk H: stays writable.
   
   
+#### 0x17 — COMMAND DATE TIME
+
+**Description:** Request the current date and time of the server (local time), used by the JIOTIME.COM tool to set the MSX clock. Served in both modes (disk image or directories).  
+**Payload:** none  
+**Response:**
+| Field     | Size        | Description                  |
+|:----------|:------------|:-----------------------------|
+| Year      | 2 bytes     | Year (e.g. 2026)             |
+| Month     | 1 byte      | Month (1-12)                 |
+| Day       | 1 byte      | Day of month (1-31)          |
+| Hour      | 1 byte      | Hour (0-23)                  |
+| Minute    | 1 byte      | Minute (0-59)                |
+| Second    | 1 byte      | Second (0-59)                |
+  
+  
 #### 0xNN — COMMAND DRIVE REPORT [NN]
 
 **Description:** Report a disk i/o result to the server  

@@ -11,6 +11,7 @@
 #include "ui_MainWindow.h"
 #include "InterfaceSerialPort.h"
 #include "InterfaceBluetoothSocket.h"
+#include "Pack.h"
 
 #include "../common/drv_jio.inc"
 
@@ -632,6 +633,48 @@ Task MainWindow::oParser()
                 m_bDiskChanged = false;
             }
             break;
+
+        case COMMAND_DATE_TIME:
+        {
+            /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+            QDateTime	oNow = QDateTime::currentDateTime();
+            /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+            vLog(eLogInfo, "Date and time: %s", qPrintable(oNow.toString("yyyy-MM-dd HH:mm:ss")));
+
+            bCRCOK = true;
+            if(ucFlags & FLAG_TX_CRC)
+            {
+                vReceive(&uiReceivedCRC, sizeof(uiReceivedCRC), 0, uiCRC);
+                bCRCOK = uiReceivedCRC == uiCRC;
+            }
+            vLog(eLogInfo, ucFlags & FLAG_RX_CRC ? (bCRCOK ? "✓\n" : "❌\n") : "\n");
+
+            if(bCRCOK)
+            {
+                PACK_PUSH
+                struct
+                {
+                    quint16 uiYear;
+                    quint8  ucMonth;
+                    quint8  ucDay;
+                    quint8  ucHour;
+                    quint8  ucMinute;
+                    quint8  ucSecond;
+                } s;
+                PACK_POP
+
+                s.uiYear = oNow.date().year();
+                s.ucMonth = oNow.date().month();
+                s.ucDay = oNow.date().day();
+                s.ucHour = oNow.time().hour();
+                s.ucMinute = oNow.time().minute();
+                s.ucSecond = oNow.time().second();
+
+                uiTransmit(&s, sizeof(s), ucFlags, 0, true, TRANSMIT_DELAY_ACKNOWLEDGE);
+            }
+        }
+        break;
 
         case COMMAND_DRIVE_INFO:
         {

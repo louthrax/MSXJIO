@@ -19,6 +19,7 @@
 #define RESULT_DRIVE_DISK_UNCHANGED            21
 
 #define COMMAND_BDOS                           22
+#define COMMAND_DATE_TIME                      23
 
 #define DRIVE_ANSWER_WRITE_OK                  0x1111
 #define DRIVE_ANSWER_WRITE_FAILED              0x2222

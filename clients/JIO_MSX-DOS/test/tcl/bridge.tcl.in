@@ -80,6 +80,17 @@ debug set_bp @RFS_TX@ {[sig @RFS_TX@ {0x78 0xB1 0xC8 0xD9}]} { rfs_tx }
 debug set_bp @J_RX1@ {[sig @J_RX1@ {0xD5 0x11 0x00 0x00 0x2B}]} { rfs_rx }
 debug set_bp @vJIOTransmit@ {[sig @vJIOTransmit@ {0xD9 0xC5 0xD5 0xD9}]} { drv_tx }
 debug set_bp @bJIOReceive@ {[sig @bJIOReceive@ {0x62 0x6B 0x50 0x59}]} { drv_rx }
+# Serial routines of a tool (TOOL_TX, TOOL_RX environment: addresses from its map file):
+# vJIOTransmit HL = data, DE = size, bJIOReceive HL = buffer, DE = size
+proc tool_tx {} {
+    reg bc [reg de]
+    rfs_tx
+}
+if {[info exists ::env(TOOL_TX)] && $::env(TOOL_TX) ne ""} {
+    debug set_bp $::env(TOOL_TX) "\[sig $::env(TOOL_TX) {0x42 0x4B 0xD9 0xC5}\]" { tool_tx }
+    debug set_bp $::env(TOOL_RX) "\[sig $::env(TOOL_RX) {0xD5 0x11 0x00 0x00 0x2B}\]" { rfs_rx }
+}
+
 # skipped handshake: W_DRIVES = JIO drives, W_RFS = directories served
 if {![info exists ::env(JIO_HANDSHAKE)] || $::env(JIO_HANDSHAKE) eq ""} {
     debug set_bp @DRIVES_Retry@ {[sig @DRIVES_Retry@ {0x3E 0x07 0xCD}]} {

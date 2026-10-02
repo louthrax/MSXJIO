@@ -52,3 +52,7 @@ clients/JIO_NFS/Tmp/jumper
 clients/JIO_NFS/Tmp/jumper.reloc
 
 clients/JIO_NFS/Tmp/main.c.asm
+
+tools/JIOTIME/obj/
+
+tools/JIOTIME/JIOTIME.COM
