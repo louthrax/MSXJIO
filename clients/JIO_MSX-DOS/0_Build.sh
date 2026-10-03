@@ -28,8 +28,8 @@ if [ "$IAR" = 1 ]; then
     ./clean_iar_asm.py 0_Temp/drv_jio_c.as drv_jio_c.asm
 fi
 
-date +"db \"%Y-%m-%d\"" > rdate.inc
-trap 'rm -f rdate.inc' EXIT
+# build date of the ROMs (INCLUDE "rdate.inc" in drv_jio.asm, found with -I0_Temp)
+date +"db \"%Y-%m-%d\"" > 0_Temp/rdate.inc
 
 # ROM (assembled, 16 or 32 KB) and its 64 KB versions: page 1 (4000H) of a 64 KB ROM, and for the NMS 8220
 # (16 KB ROM: at 0; 32 KB ROM: its first half at 4000H and C000H, its second half at 0 and 8000H)
@@ -41,7 +41,7 @@ build_rom() { # name size sources...
 
     rm -rf "$OBJ"
     mkdir -p "$OBJ"
-    z88dk-z80asm -b -d -l -m -O"$OBJ" -o=jio_$NAME.bin "$@"
+    z88dk-z80asm -b -d -l -m -I0_Temp -O"$OBJ" -o=jio_$NAME.bin "$@"
     z88dk-appmake +glue -b "$OBJ/jio_$NAME" --filler 0xFF --clean
     z88dk-appmake +rom -b "$OBJ/jio_${NAME}__.bin" -o "$ROM.rom" -s "$SIZE" --org 0
     z88dk-appmake +rom -b "$OBJ/jio_${NAME}__.bin" -o "${ROM}_64k.rom" -s 65536 --org 16384 --fill 0xFF

@@ -42,11 +42,11 @@ build_rom() { # name kernel defines
     rm -rf "$OUT/obj_$name"
     mkdir -p "$OUT/obj_$name"
     ( cd "$SRC" &&
-      date +"db \"%Y-%m-%d\"" > rdate.inc &&
-      z88dk-z80asm -b -d -l -m $defines -O"$OUT/obj_$name" -o=jio_$name.bin p1_main.asm p3_paging.asm drv_jio.asm "$kernel" &&
+      date +"db \"%Y-%m-%d\"" > "$OUT/obj_$name/rdate.inc" &&
+      z88dk-z80asm -b -d -l -m $defines -I"$OUT/obj_$name" -O"$OUT/obj_$name" -o=jio_$name.bin p1_main.asm p3_paging.asm drv_jio.asm "$kernel" &&
       z88dk-appmake +glue -b "$OUT/obj_$name/jio_$name" --filler 0xFF --clean > /dev/null &&
       z88dk-appmake +rom -b "$OUT/obj_$name/jio_${name}__.bin" -o "$OUT/jio_$name.rom" -s 32768 --org 0 > /dev/null
-      rc=$?; rm -f rdate.inc; exit $rc ) || { echo "Build of $name ROM failed"; exit 1; }
+    ) || { echo "Build of $name ROM failed"; exit 1; }
     awk '/^__P0_KERNEL_size/ { printf "  %s ROM: kernel %d bytes (limit 16384)\n", n, strtonum("0x" substr($3,2)) }' n="$name" "$OUT/obj_$name/jio_$name.map"
 }
 

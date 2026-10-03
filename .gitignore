@@ -9,6 +9,3 @@
 # Server: Android icons (generated from JIOServer.svg), macOS icon
 server/android/res/
 server/JIOServer.icns
-
-# JIO MSX-DOS clients: build date (generated during the build)
-clients/JIO_MSX-DOS/rdate.inc
