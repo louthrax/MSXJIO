@@ -4,7 +4,7 @@ set -euo pipefail
 # JIO ROMs: MSX-DOS 1 (dos1) and MSX-DOS 2 (dos2, JIO drives and local drives, e.g. the internal floppy drive).
 # Usage: 0_Build.sh [dos1] [dos2] [--no-iar]       (both ROMs by default)
 #   --no-iar   drv_jio_c.asm used as is (no IAR compiler step, which needs wine and iccZ80.exe)
-# ROMs in 0_Builds, intermediate files in 0_Builds/obj/JIO_MSX-DOS (repository root).
+# ROMs in 0_Builds, intermediate and generated files (IAR compiler) in 0_Temp.
 
 cd "$(dirname "$0")"
 
@@ -19,13 +19,15 @@ for ARG in "$@"; do
 done
 [ ${#ROMS[@]} -gt 0 ] || ROMS=(dos1 dos2)
 
+mkdir -p 0_Builds 0_Temp
+
 if [ "$IAR" = 1 ]; then
     export WINEDEBUG=-all
-    wine iccZ80.exe drv_jio.c -z9 -uu -a drv_jio_c.as
-    ./clean_iar_asm.py drv_jio_c.as drv_jio_c.asm
+    wine iccZ80.exe drv_jio.c -z9 -uu -a 0_Temp/drv_jio_c.as
+    mv -f drv_jio.r01 0_Temp/ 2> /dev/null || true
+    ./clean_iar_asm.py 0_Temp/drv_jio_c.as drv_jio_c.asm
 fi
 
-mkdir -p 0_Builds
 date +"db \"%Y-%m-%d\"" > rdate.inc
 trap 'rm -f rdate.inc' EXIT
 
@@ -34,7 +36,7 @@ trap 'rm -f rdate.inc' EXIT
 build_rom() { # name size sources...
     local NAME=$1 SIZE=$2
     shift 2
-    local OBJ=../../0_Builds/obj/JIO_MSX-DOS/$NAME
+    local OBJ=0_Temp/$NAME
     local ROM=0_Builds/jio_$NAME
 
     rm -rf "$OBJ"

@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-# JIO.COM in 0_Builds, intermediate files in 0_Builds/obj/JIO_NFS (repository root)
+# JIO.COM in 0_Builds, intermediate files in 0_Temp
 cd "$(dirname "$0")"
 SRC="$(pwd)"
-OBJ="$SRC/../../0_Builds/obj/JIO_NFS"
+OBJ="$SRC/0_Temp"
 mkdir -p "$OBJ" "$SRC/0_Builds"
 cd "$OBJ"
 

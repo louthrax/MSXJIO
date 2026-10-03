@@ -5,4 +5,4 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-rm -rf ./0_Builds ../../0_Builds/obj/JSM
+rm -rf ./0_Builds ./0_Temp

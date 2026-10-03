@@ -78,11 +78,11 @@ prepare_files() {
     mkdir -p "$OUT/nfs/clients"
     cp -r "$SRC/../../common" "$OUT/nfs/"
     cp -r "$SRC/../JIO_NFS" "$OUT/nfs/clients/"
-    rm -rf "$OUT/nfs/clients/JIO_NFS/0_Builds" "$OUT/nfs/0_Builds"
+    rm -rf "$OUT/nfs/clients/JIO_NFS/0_Builds" "$OUT/nfs/clients/JIO_NFS/0_Temp"
     ( cd "$OUT/nfs/clients/JIO_NFS" && bash 0_Build.sh > build.log 2>&1 && cp 0_Builds/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
     # serial routines: in the resident stub (driver in a mapper segment) or in the resident driver
-    NFS_MAP="$OUT/nfs/0_Builds/obj/JIO_NFS/stub.map"
-    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/0_Builds/obj/JIO_NFS/driver.sym"
+    NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/stub.map"
+    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"

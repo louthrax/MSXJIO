@@ -243,8 +243,8 @@ JIOServerCLI --list                                       # serial ports (and th
 
 Each project (`clients/JIO_MSX-DOS`, `clients/JIO_NFS`, `clients/JIO_TIME`, `tools/JSM`, `server`) has the same scripts:
 `0_Build.sh` (or `0_Build_<platform>.sh` for the server), `0_Clean.sh`, and `0_Run.sh` for the clients run in
-openMSX. The outputs go to the `0_Builds` folder of the project, the intermediate files of the clients and tools to
-`0_Builds/obj` at the root of the repository. At the root:
+openMSX. The outputs go to the `0_Builds` folder of the project, the intermediate and generated files of the clients
+and tools to its `0_Temp` folder. At the root:
 
 ```
 ./0_Build_All.sh             # all the clients and tools, then the servers of all the platforms
