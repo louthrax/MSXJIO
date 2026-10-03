@@ -24,7 +24,8 @@
 ;   STUB_HAS_TURBO      turbo R: Z80 mode during the transfers
 ;   STUB_SEGMENT        mapper segment of the driver
 ;   STUB_BOUNCE         bounce buffer (STUB_BOUNCE_SIZE bytes), to copy TPA data of page 2
-;   STUB_DPB            dummy DPB returned in IX by _ALLOC: the kernel takes the sector size at +2
+;   STUB_DPB            dummy DPB returned in IX by _ALLOC: the kernel only takes the sector size at +2, the rest of
+;                       a DPB is not kept (no program uses it on a drive of the server)
 ;   DRIVER_BASE         address of the driver (page 2), DRIVER_STACK its stack (top of its segment)
 ; ------------------------------------------------------------------------------
 
@@ -54,7 +55,6 @@ Segment:	defb	0			; STUB_SEGMENT
 Bounce:		defs	STUB_BOUNCE_SIZE,0	; STUB_BOUNCE
 Dpb:		defb	0,0			; STUB_DPB
 		defw	512			; sector size
-		defs	32,0
 
 IF Registers <> STUB_REGISTERS
 		ERROR	"stub.asm layout does not match stub.h"
@@ -69,12 +69,11 @@ IF Dpb <> STUB_DPB
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 
-; BDOS functions handled by the driver (bit n = function n), same as g_aDosHandlers of driver.c
+; BDOS functions handled by the driver (bit n = function n, functions 00H to 7FH), same as g_aDosHandlers of
+; driver.c. The functions 80H to FFH are never handled.
 Functions:
 		defb	00h,0C0h,01h,3Fh,80h,00h,00h,00h
 		defb	7Fh,0E7h,7Fh,4Eh,20h,00h,00h,00h
-		defb	00h,00h,00h,00h,00h,00h,00h,00h
-		defb	00h,00h,00h,00h,00h,00h,00h,00h
 
 SaveSP:		defw	0			; stack of the BDOS function
 DriverSP:	defw	0			; stack of the driver
@@ -89,10 +88,12 @@ Hook:
 		push	af
 		push	bc
 		ld	a,c
+		cp	80h
+		jr	nc,Hook_Test		; functions 80H to FFH: not handled (no carry)
 		rrca
 		rrca
 		rrca
-		and	1Fh
+		and	0Fh
 		ld	hl,Functions
 		add	a,l
 		ld	l,a
@@ -106,7 +107,7 @@ Hook:
 		ld	a,(hl)
 Hook_Bit:	rrca
 		djnz	Hook_Bit		; Cx = bit of the function
-		pop	bc
+Hook_Test:	pop	bc
 		jr	c,Hook_Driver
 		pop	af
 		pop	hl
