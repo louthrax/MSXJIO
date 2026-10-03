@@ -2,13 +2,16 @@
 
 set -euo pipefail
 
+# JIO.COM in 0_Builds, intermediate files in 0_Builds/obj/JIO_NFS (repository root)
 cd "$(dirname "$0")"
-mkdir -p 0_Builds
-cd 0_Builds
+SRC="$(pwd)"
+OBJ="$SRC/../../0_Builds/obj/JIO_NFS"
+mkdir -p "$OBJ" "$SRC/0_Builds"
+cd "$OBJ"
 
 rm -f *
 
-zcc -s --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-reloc-info -odriver ../driver.c 2>&1 | grep -v ": warning 283:" | \
+zcc -s --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-reloc-info -odriver "$SRC/driver.c" 2>&1 | grep -v ": warning 283:" | \
 awk '
 /: error /  {print "\033[1;31m" $0 "\033[0m"; next}
 /: warning / {print "\033[1;33m" $0 "\033[0m"; next}
@@ -17,23 +20,23 @@ awk '
 grep '=' driver.sym | sed -E 's/^([A-Za-z0-9_]+)[[:space:]]*=[[:space:]]*\$([0-9A-Fa-f]+).*/#define driver_\1 0x\2/' > driver.h
 
 
-z88dk-z80asm -b -mz80 -reloc-info -o./jumper ../jumper.asm
-rm ../jumper.o
+z88dk-z80asm -b -mz80 -reloc-info -o./jumper "$SRC/jumper.asm"
+rm "$SRC/jumper.o"
 
-z88dk-z80asm -b -mz80 -m -reloc-info -o./stub ../stub.asm
-rm ../stub.o
+z88dk-z80asm -b -mz80 -m -reloc-info -o./stub "$SRC/stub.asm"
+rm "$SRC/stub.o"
 
-zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     -omain   ../main.c   2>&1 | grep -v ": warning 283:" | \
+zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     -omain   "$SRC/main.c"   2>&1 | grep -v ": warning 283:" | \
 awk '
 /: error /  {print "\033[1;31m" $0 "\033[0m"; next}
 /: warning / {print "\033[1;33m" $0 "\033[0m"; next}
 {print}'
 
-zcc -a --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-reloc-info ../driver.c > /dev/null 2>&1
-zcc -a --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     ../main.c  > /dev/null 2>&1
+zcc -a --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-reloc-info "$SRC/driver.c" > /dev/null 2>&1
+zcc -a --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     "$SRC/main.c"  > /dev/null 2>&1
 
-mv ../driver.c.asm .
-mv ../main.c.asm .
+mv "$SRC/driver.c.asm" .
+mv "$SRC/main.c.asm" .
 
 # The driver is relocated at install (16-bit addresses of driver.reloc): an address split in bytes or an
 # uninitialized variable (placed at address 0, over the code) would not work
@@ -46,7 +49,7 @@ if grep -nE '^_g_[A-Za-z0-9_]+ += \$0000 ' driver.sym; then
     exit 1
 fi
 # Functions of stub.asm (BDOS functions mapped to the driver) must be the functions of g_aDosHandlers (driver.c)
-if ! python3 - ../driver.c ../stub.asm <<'PYEOF'
+if ! python3 - "$SRC/driver.c" "$SRC/stub.asm" <<'PYEOF'
 import re, sys
 table = open(sys.argv[1]).read()
 table = table[table.index('g_aDosHandlers[] ='):]
@@ -63,7 +66,5 @@ then
     exit 1
 fi
 mv main JIO.COM
-
-cd ..
-
-openmsx -machine Philips_NMS_8255 openMSX_CopyFiles.tcl
+cp JIO.COM "$SRC/0_Builds/"
+echo "$SRC/0_Builds/JIO.COM"

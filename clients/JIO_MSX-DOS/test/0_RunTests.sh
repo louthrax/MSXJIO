@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 #
-# Emulator tests of the JIO MSX-DOS 2 ROMs (no MSX and no JIO server needed).
+# Emulator tests of the JIO MSX-DOS 2 ROM and of the JIO clients (no MSX and no JIO server needed).
 #
 # openMSX runs the ROM, tcl/bridge.tcl intercepts the serial routines of the
 # kernel and forwards the bytes to mockserver.py, which serves a host directory
 # as drive A:. See README.md.
 #
-# Usage: ./0_RunTests.sh [jio|hybrid|all] [scenario...]
-#   jio     JIO only ROM (p0_kernel.asm, same build as 0_Make_DOS2.sh)
-#   hybrid  hybrid ROM (p0_hybrid.asm, same build as 0_Make_DOS2_Hybrid.sh)
-#   all     both (default)
+# Usage: ./0_RunTests.sh [scenario...]       (all the scenarios by default)
+# The MSX-DOS 2 ROM is built as by 0_Build.sh (JIO drives and local drives).
 # Results: out/<scenario>/ (screens, mock server log, JIO drive, floppy contents)
 #
 # REAL_SERVER=<path of JIOServerCLI> (environment): the real server (server/JIOServerCLI.pro) instead of mockserver.py, on a
@@ -26,8 +24,8 @@ MSXDOS2_FILES=$(realpath ../../JIO_NFS/MSX-DOS2)
 MOCK_PORT=${MOCK_PORT:-9876}
 export MOCK_PORT
 
-WHAT=${1:-all}
-shift || true
+# first argument of the former versions (JIO only and hybrid ROMs): ignored
+case "${1:-}" in all|jio|hybrid) shift ;; esac
 ONLY="$*"
 
 PASSED=0
@@ -80,11 +78,11 @@ prepare_files() {
     mkdir -p "$OUT/nfs/clients"
     cp -r "$SRC/../../common" "$OUT/nfs/"
     cp -r "$SRC/../JIO_NFS" "$OUT/nfs/clients/"
-    rm -rf "$OUT/nfs/clients/JIO_NFS/0_Builds"
-    ( cd "$OUT/nfs/clients/JIO_NFS" && sed '/^openmsx/d' 0_Make.sh | bash > build.log 2>&1 && cp 0_Builds/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
+    rm -rf "$OUT/nfs/clients/JIO_NFS/0_Builds" "$OUT/nfs/0_Builds"
+    ( cd "$OUT/nfs/clients/JIO_NFS" && bash 0_Build.sh > build.log 2>&1 && cp 0_Builds/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
     # serial routines: in the resident stub (driver in a mapper segment) or in the resident driver
-    NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Builds/stub.map"
-    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Builds/driver.sym"
+    NFS_MAP="$OUT/nfs/0_Builds/obj/JIO_NFS/stub.map"
+    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/0_Builds/obj/JIO_NFS/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
@@ -193,26 +191,9 @@ wanted() { [ -z "$ONLY" ] || [[ " $ONLY " == *" $1 "* ]]; }
 
 FCB_OK='RENAME/DEL/DEL: 00 00 FF'
 FIB_OK='00 D7 00 00 FIBTEST: Hello'
-FNEW_OK='00 CC FF 00 FNEW DIRX'
 # FIBTEST on a FAT drive: result of the original MSX-DOS 2 kernel (floppy)
 FIB_FAT='00 D7 00 C7 FIBTEST:'
 FNEW_FAT='00 CC FF CA FNEW DIRX'
-
-# JIO drive only: DOS commands, big copy, redirection, FCB functions
-DOS_JIO='VER\r\nFIBTEST\r\nCOPY COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nDIR > \\OUT.TXT\r\nCD \\\r\nFCBTEST\r\nDIR /W\r\n'
-test_dos_jio() { # name rom map machine slots description
-    wanted "$1" || return
-    run_scenario "$1" "$2" "$3" "$4" "$5" "$DOS_JIO" "$TEST/tcl/screens.tcl" "" "" 1 "5 6 7 8 9 10 11 12 13 14 45"
-    local d="$OUT/$1"
-    begin_checks "$1"
-    check "FCB test result" "$(has_text "$d/screens.txt" "$FCB_OK" && echo ok)"
-    check "open with the FIB after the last _FNEXT" "$(has_text "$d/screens.txt" "$FIB_OK" && echo ok)"
-    check "_FNEW on a directory returns its FIB" "$(has_text "$d/screens.txt" "$FNEW_OK" && echo ok)"
-    check "X.COM identical to COMMAND2.COM" "$(cmp -s "$d/drive/X.COM" "$d/drive/COMMAND2.COM" && echo ok)"
-    check "SUB/HELLO.TXT copied" "$([ -f "$d/drive/SUB/HELLO.TXT" ] && echo ok)"
-    check "redirected DIR (OUT.TXT)" "$(has_text "$d/drive/OUT.TXT" 'Directory of A:\SUB' && echo ok)"
-    end_checks "$1" "$6"
-}
 
 # Long host names: 8.3 aliases (XXXXXX~N.EXT) on the MSX
 setup_longnames() { # drive directory
@@ -234,7 +215,7 @@ test_longnames() { # name rom map machine slots description
     end_checks "$1" "$6"
 }
 
-# REN, MOVE, ATTRIB (_RENAME, _MOVE, _ATTR): on drive A: (JIO), and on the floppy B: for the hybrid ROM
+# REN, MOVE, ATTRIB (_RENAME, _MOVE, _ATTR): on drive A: (JIO), and on the floppy B:
 renmove_cmds() { # drive (same escapes as the other command strings: run_scenario uses printf)
     echo -n "$1:"'\r\nCOPY A:HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMD SUB\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDEL SUB\\R2.TXT\r\nATTRIB -R SUB\\R2.TXT\r\nCOPY SUB\\R2.TXT R3.TXT\r\nDIR /W\r\n'
 }
@@ -334,7 +315,7 @@ test_noserver() { # name rom map machine floppy size description
     end_checks "$1" "$6"
 }
 
-# Server in disk image mode: the JIO drive A: is a disk image (sectors, local FAT12 drive of the hybrid kernel)
+# Server in disk image mode: the JIO drive A: is a disk image (sectors, local FAT12 drive of the kernel)
 DOS_IMAGE='VER\r\nFIBTEST\r\nDIR A:/W\r\nCOPY B:FLOPPY.TXT A:\r\nCOPY A:HELLO.TXT B:\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nDIR > OUT.TXT\r\nFCBTEST\r\nRAMDISK 32K > RAMD.TXT\r\nDIR /W\r\n'
 test_image_hybrid() { # name rom map machine slots floppy size description
     wanted "$1" || return
@@ -356,7 +337,7 @@ test_image_hybrid() { # name rom map machine slots floppy size description
 }
 
 # "Read only" server: every modification of the JIO drive is refused (.WPROT), reading works, the RAM disk H:
-# (and the floppy B: of the hybrid ROM) stay writable
+# (and the floppy B:) stay writable
 READONLY='COPY HELLO.TXT X.TXT\r\nMD SUB\r\nDEL HELLO.TXT\r\nREN HELLO.TXT Y.TXT\r\nATTRIB +R HELLO.TXT\r\nTYPE HELLO.TXT\r\nRAMDISK 32K\r\nCOPY HELLO.TXT H:\r\nDIR H:\r\n'
 READONLY_FLOPPY='COPY HELLO.TXT B:\r\nDIR B:\r\n'
 test_readonly() { # name rom map machine slots description [floppy size]
@@ -433,7 +414,7 @@ test_nfs() { # name machine "slots" description
     cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/FCBREAD.COM "$OUT"/base/P2TEST.COM "$OUT/floppy_nfs/"
     printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
     printf "$NFS_CMDS" > "$OUT/floppy_nfs/NFSTEST.BAT"
-    TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D run_scenario "$1" "$J" "$JM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
+    TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D run_scenario "$1" "$R" "$RM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
     local d="$OUT/$1"
     begin_checks "$1"
     check "DIR of the JIO drive D:" "$(has_text "$d/screens.txt" 'COMMAND2.COM' && has_text "$d/screens.txt" 'FCBTEST .COM' && echo ok)"
@@ -448,7 +429,7 @@ test_nfs() { # name machine "slots" description
     end_checks "$1" "$4"
 }
 
-# Hybrid ROM taking over from a MSX-DOS 2 cartridge in slot 1
+# MSX-DOS 2 ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
     run_scenario "$1" "$2" "$3" "$4" "-ext msxdos2 -cartb $2" 'VER\r\nDIR B:/W\r\nCOPY A:HELLO.TXT B:\r\nTYPE B:HELLO.TXT\r\n' "$TEST/tcl/screens.tcl" "$5" "$OUT/floppy_base" 1
@@ -467,46 +448,31 @@ command -v z88dk-z80asm > /dev/null || { echo "z88dk not found"; exit 1; }
 
 echo "Build:"
 prepare_files
-if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then build_rom dos2 p0_kernel.asm "-DJIO"; fi
-if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then build_rom dos2h p0_hybrid.asm "-DJIO -DHYBRID"; fi
+build_rom dos2 p0_kernel.asm "-DJIO -DHYBRID"
 
-J="$OUT/jio_dos2.rom";  JM="$OUT/obj_dos2/jio_dos2.map"
-H="$OUT/jio_dos2h.rom"; HM="$OUT/obj_dos2h/jio_dos2h.map"
+R="$OUT/jio_dos2.rom"; RM="$OUT/obj_dos2/jio_dos2.map"
 
-if [ "$WHAT" = jio ] || [ "$WHAT" = all ]; then
-    echo "JIO only ROM:"
-    test_dos_jio   jio_nms8255  "$J" "$JM" Philips_NMS_8255  "-carta $J"             "NMS 8255, DOS commands and FCB functions"
-    test_dos_jio   jio_vg8235   "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, DOS commands and FCB functions"
-    test_dos_jio   jio_turbor   "$J" "$JM" Panasonic_FS-A1ST "-carta $J"             "turbo R, DOS commands and FCB functions"
-    test_dos_jio   jio_takeover "$J" "$JM" Philips_NMS_8255  "-ext msxdos2 -cartb $J" "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
-    test_basic     jio_basic    "$J" "$JM" Philips_VG_8235   "-carta $J" A           "VG-8235, Disk BASIC"
-    test_ramdisk   jio_ramdisk  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, RAMDISK (H: on the server), MSX reset"
-    test_renmove   jio_renmove  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, REN, MOVE, ATTRIB"
-    test_longnames jio_longnames "$J" "$JM" Philips_VG_8235  "-carta $J"             "VG-8235, long host names and 8.3 aliases"
-    test_readonly  jio_readonly "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, read only server"
-    test_jiotime   jio_jiotime  "$J" "$JM" Philips_VG_8235   "-carta $J"             "VG-8235, JIOTIME.COM sets the date and time"
-    test_jiotime   jio_jiotime_tr "$J" "$JM" Panasonic_FS-A1ST "-carta $J"           "turbo R, JIOTIME.COM sets the date and time (Z80 mode)"
-    test_jiotime   jio_jiotime_none "$J" "$JM" Philips_VG_8235 "-carta $J"           "VG-8235, JIOTIME.COM without answer of the server" none
-    test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"                      "NMS 8255, JIO.COM (JIO_NFS) on the original MSX-DOS 2, drive D:"
-    test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                                  "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
-fi
+echo "MSX-DOS 2 ROM (JIO drive A: + floppy B:):"
+test_dos_hybrid      dos2_vg8235      "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235 (360 KB drive), both drives"
+test_dos_hybrid      dos2_nms8255     "$R" "$RM" Philips_NMS_8255  "-carta $R" 720 "NMS 8255 (720 KB drive), both drives"
+test_dos_hybrid      dos2_turbor      "$R" "$RM" Panasonic_FS-A1ST "-carta $R" 720 "turbo R, both drives"
+test_noserver        dos2_noserver    "$R" "$RM" Philips_VG_8235   360 "VG-8235, no server: boots from the floppy"
+test_basic           dos2_basic_jio   "$R" "$RM" Philips_VG_8235   "-carta $R" A "VG-8235, Disk BASIC on the JIO drive" 360
+test_basic           dos2_basic_flop  "$R" "$RM" Philips_VG_8235   "-carta $R" B "VG-8235, Disk BASIC on the floppy" 360
+test_renmove         dos2_renmove     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, REN, MOVE, ATTRIB on JIO drive A: and floppy B:" 360
+test_longnames       dos2_longnames   "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, long host names and 8.3 aliases"
+test_ramdisk         dos2_ramdisk     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
+test_takeover_hybrid dos2_takeover    "$R" "$RM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
+test_readonly        dos2_readonly    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, read only server, floppy B: writable" 360
+test_bootloader_hybrid dos2_bootsector "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, disk image mode: self-booting image (boot loader of the boot sector)"
+test_image_hybrid    dos2_image       "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
 
-if [ "$WHAT" = hybrid ] || [ "$WHAT" = all ]; then
-    echo "Hybrid ROM (JIO drive A: + floppy B:):"
-    test_dos_hybrid      hyb_vg8235      "$H" "$HM" Philips_VG_8235   "-carta $H" 360 "VG-8235 (360 KB drive), both drives"
-    test_dos_hybrid      hyb_nms8255     "$H" "$HM" Philips_NMS_8255  "-carta $H" 720 "NMS 8255 (720 KB drive), both drives"
-    test_dos_hybrid      hyb_turbor      "$H" "$HM" Panasonic_FS-A1ST "-carta $H" 720 "turbo R, both drives"
-    test_noserver        hyb_noserver    "$H" "$HM" Philips_VG_8235   360 "VG-8235, no server: boots from the floppy"
-    test_basic           hyb_basic_jio   "$H" "$HM" Philips_VG_8235   "-carta $H" A "VG-8235, Disk BASIC on the JIO drive" 360
-    test_basic           hyb_basic_flop  "$H" "$HM" Philips_VG_8235   "-carta $H" B "VG-8235, Disk BASIC on the floppy" 360
-    test_renmove         hyb_renmove     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, REN, MOVE, ATTRIB on JIO drive A: and floppy B:" 360
-    test_longnames       hyb_longnames   "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, long host names and 8.3 aliases"
-    test_ramdisk         hyb_ramdisk     "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
-    test_takeover_hybrid hyb_takeover    "$H" "$HM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
-    test_readonly        hyb_readonly    "$H" "$HM" Philips_VG_8235   "-carta $H" "VG-8235, read only server, floppy B: writable" 360
-    test_bootloader_hybrid hyb_bootsector "$H" "$HM" Philips_VG_8235 "-carta $H" "VG-8235, disk image mode: self-booting image (boot loader of the boot sector)"
-    test_image_hybrid    hyb_image       "$H" "$HM" Philips_VG_8235   "-carta $H" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
-fi
+echo "Clients:"
+test_jiotime   jiotime      "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM sets the date and time"
+test_jiotime   jiotime_tr   "$R" "$RM" Panasonic_FS-A1ST "-carta $R"   "turbo R, JIOTIME.COM sets the date and time (Z80 mode)"
+test_jiotime   jiotime_none "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM without answer of the server" none
+test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM (JIO_NFS) on the original MSX-DOS 2, drive D:"
+test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
 
 echo
 echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"

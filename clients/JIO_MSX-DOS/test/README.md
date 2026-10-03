@@ -1,13 +1,14 @@
 # JIO MSX-DOS 2 emulator tests
 
-Automatic tests of the JIO MSX-DOS 2 ROMs in openMSX, without an MSX and without a JIO server.
+Automatic tests of the JIO MSX-DOS 2 ROM (JIO drives and local drives, as built by `0_Build.sh`) and of
+the JIO clients (JIOTIME.COM, JIO.COM) in openMSX, without an MSX and without a JIO server.
 
 ```
-./0_RunTests.sh              # both ROMs
-./0_RunTests.sh jio          # JIO only ROM (p0_kernel.asm, as built by 0_Make_DOS2.sh)
-./0_RunTests.sh hybrid       # hybrid ROM (p0_hybrid.asm, as built by 0_Make_DOS2_Hybrid.sh)
-./0_RunTests.sh all hyb_vg8235 jio_basic   # only some scenarios
+./0_RunTests.sh                            # all the scenarios
+./0_RunTests.sh dos2_vg8235 dos2_basic_jio # only some scenarios
 ```
+
+From the root of the repository: `./0_Test.sh [--real-server <JIOServerCLI>] [scenario...]`.
 
 Every scenario prints `PASS` or `FAIL` (with the failed checks). The script exits with 0 when all
 scenarios passed. A full run takes about 6 minutes.
@@ -17,12 +18,12 @@ Needs `openmsx` (with the system ROMs of the machines used), `z88dk` and `python
 
 ## How it works
 
-- The ROMs are assembled into `out/` (without the IAR compiler step: `drv_jio_c.asm` is used as is).
+- The ROM is assembled into `out/` (without the IAR compiler step: `drv_jio_c.asm` is used as is).
 - `tcl/bridge.tcl.in` is turned into `bridge.tcl` with the addresses of the ROM map file. In openMSX it
   intercepts the serial routines of the kernel (`RFS_TX`, `J_RX1`) and of the driver (`vJIOTransmit`,
   `bJIOReceive`) and forwards the bytes to `mockserver.py` over TCP. The "waiting for server"
-  handshake of the ROM is skipped; `JIO_DRIVES` sets the number of JIO drives it reports (hybrid ROM,
-  0 simulates [ESC]). With `JIO_HANDSHAKE` (disk image scenario), the handshake is not skipped.
+  handshake of the ROM is skipped; `JIO_DRIVES` sets the number of JIO drives it reports (0 simulates
+  [ESC]). With `JIO_HANDSHAKE` (disk image scenario), the handshake is not skipped.
 - `mockserver.py` implements the `COMMAND_BDOS` file functions of the protocol
   (see `msxjio_protocol_specification.md`) on a host directory, served as drive A:. It follows the
   behavior of the C++ server, it is not the C++ server: server changes must still be tested with the
@@ -52,21 +53,18 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 
 | Scenario | ROM | Machine | Tests |
 |---|---|---|---|
-| `jio_nms8255`, `jio_vg8235`, `jio_turbor` | JIO only | NMS 8255, VG-8235, FS-A1ST | boot, FIB handling (`fibtest/`: open with the FIB after the last `_FNEXT`, `_FNEW` on an existing directory), COPY of a 23 KB file (byte compare), MD/CD, redirection, FCB functions |
-| `jio_takeover` | JIO only | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | same, the JIO ROM takes over |
-| `jio_basic` | JIO only | VG-8235 | Disk BASIC: OPEN, PRINT#, LINE INPUT#, SAVE, KILL, LOAD, FILES |
-| `hyb_vg8235`, `hyb_nms8255`, `hyb_turbor` | hybrid | VG-8235 (360 KB), NMS 8255, FS-A1ST (720 KB) | JIO drive A: + floppy B:: copies both ways (byte compare), MD/CD on the floppy, DIR of the floppy redirected to the JIO drive, FCB functions on both drives, DEL |
-| `hyb_noserver` | hybrid | VG-8235 | no server: the floppy is A:, MSX-DOS 2 boots from it, FCB functions, `RAMDISK` answers "Not enough memory" |
-| `hyb_basic_jio`, `hyb_basic_flop` | hybrid | VG-8235 | Disk BASIC on the JIO drive / on the floppy |
-| `jio_ramdisk`, `hyb_ramdisk` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | `RAMDISK 32K` (H: on the server): copies both ways (byte compare), MD, FCB functions on H:, free space, disk full, H: -> floppy (hybrid), `RAMDISK 0 /D`, RAM disk destroyed by a MSX reset (`tcl/reboot.tcl`) |
-| `jio_longnames`, `hyb_longnames` | JIO only, hybrid | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
-| `jio_renmove`, `hyb_renmove` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and, with the hybrid ROM, on the floppy B: |
-| `hyb_takeover` | hybrid | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the hybrid ROM takes over, copy to the floppy |
-| `jio_readonly`, `hyb_readonly` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: (and floppy B:) writable |
-| `jio_jiotime`, `jio_jiotime_tr`, `jio_jiotime_none` | JIO only | VG-8235, FS-A1ST | `clients/JIO_TIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
+| `dos2_vg8235`, `dos2_nms8255`, `dos2_turbor` | MSX-DOS 2 | VG-8235 (360 KB), NMS 8255, FS-A1ST (720 KB) | JIO drive A: + floppy B:: boot, FIB handling (`fibtest/`), copies both ways (byte compare), MD/CD on the floppy, DIR of the floppy redirected to the JIO drive, FCB functions on both drives, DEL |
+| `dos2_noserver` | MSX-DOS 2 | VG-8235 | no server: the floppy is A:, MSX-DOS 2 boots from it, FCB functions, `RAMDISK` answers "Not enough memory" |
+| `dos2_basic_jio`, `dos2_basic_flop` | MSX-DOS 2 | VG-8235 | Disk BASIC on the JIO drive / on the floppy: OPEN, PRINT#, LINE INPUT#, SAVE, KILL, LOAD, FILES |
+| `dos2_ramdisk` | MSX-DOS 2 | VG-8235 (360 KB) | `RAMDISK 32K` (H: on the server): copies both ways (byte compare), MD, FCB functions on H:, free space, disk full, H: -> floppy, `RAMDISK 0 /D`, RAM disk destroyed by a MSX reset (`tcl/reboot.tcl`) |
+| `dos2_longnames` | MSX-DOS 2 | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
+| `dos2_renmove` | MSX-DOS 2 | VG-8235 (360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and on the floppy B: |
+| `dos2_takeover` | MSX-DOS 2 | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the JIO ROM takes over, copy to the floppy |
+| `dos2_readonly` | MSX-DOS 2 | VG-8235 (360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: and floppy B: writable |
+| `dos2_bootsector` | MSX-DOS 2 | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
+| `dos2_image` | MSX-DOS 2 | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
+| `jiotime`, `jiotime_tr`, `jiotime_none` | MSX-DOS 2 | VG-8235, FS-A1ST | `clients/JIO_TIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
 | `nfs_nms8255`, `nfs_turbor` | JIO.COM (`clients/JIO_NFS`) | NMS 8255 + MSX-DOS 2 cartridge, FS-A1ST (internal MSX-DOS 2) | no JIO ROM: `JIO +D` from the floppy A:, then (after the warm restart of JIO.COM) `NFSTEST.BAT` typed at the prompt (`tcl/typecmd.tcl`): DIR, TYPE, COPY to D: (byte compare, date set with `_HFTIME`), MD/CD, REN, MOVE, ATTRIB, FCB open / block read / close (`fcbread/`), parameters and buffers in page 2 (`p2test/`: path, FIB, `_READ` buffer, FCB and DTA at 9000H and above, hidden by the driver which is mapped in page 2). The bridge intercepts the serial routines of the resident driver (or stub) when JIO.COM installs its hook. Not tested: redirection to D: (`_DUP` not supported by JIO.COM) |
-| `hyb_bootsector` | hybrid | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
-| `hyb_image` | hybrid | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
 
 ## Results
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-set -ex
+# JIO.COM, disk images and intermediate files
 
 cd "$(dirname "$0")"
 
-rm -rf ./0_Builds driver.c.asm main.c.asm
+rm -rf ./0_Builds ../../0_Builds/obj/JIO_NFS
+rm -f driver.c.asm main.c.asm jumper.o stub.o

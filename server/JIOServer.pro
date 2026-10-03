@@ -25,7 +25,7 @@ macx {
 
     icns_from_svg.target   = $$ICON_RELATIVE
     icns_from_svg.depends  = $$ICON_SVG
-    icns_from_svg.commands = $$PWD/tools/svg2icns.sh $$ICON_SVG $$ICON_RELATIVE
+    icns_from_svg.commands = $$PWD/tools/Svg2icns.sh $$ICON_SVG $$ICON_RELATIVE
 
     QMAKE_EXTRA_TARGETS += icns_from_svg
 }

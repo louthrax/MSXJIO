@@ -2,7 +2,7 @@
 # forwarded to mockserver.py (TCP), the ROM "waiting for server" handshake is skipped.
 # Generated from bridge.tcl.in by 0_RunTests.sh (addresses from the ROM map file).
 #
-# JIO_DRIVES (environment): number of JIO drives reported by the handshake (hybrid ROM),
+# JIO_DRIVES (environment): number of JIO drives reported by the handshake (MSX-DOS 2 ROM),
 # 0 simulates [ESC] (no server). Default 1.
 # JIO_HANDSHAKE (environment): if not empty, the handshake is not skipped (COMMAND_DRIVE_INFO and _LOGIN
 # of the driver, sent to the mock server like the commands of DSKIO).

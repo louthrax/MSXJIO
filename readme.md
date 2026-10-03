@@ -239,6 +239,21 @@ JIOServerCLI --list                                       # serial ports (and th
 | `-l`, `--log <file>` | also write the log to a file (appended) |
 | `-q`, `--quiet`, `--brief`, `--no-color` | no log on the console, no details of the BDOS functions, no colours |
 
+## Building and testing
+
+Each project (`clients/JIO_MSX-DOS`, `clients/JIO_NFS`, `clients/JIO_TIME`, `tools/JSM`, `server`) has the same scripts:
+`0_Build.sh` (or `0_Build_<platform>.sh` for the server), `0_Clean.sh`, and `0_Run.sh` for the clients run in
+openMSX. The outputs go to the `0_Builds` folder of the project, the intermediate files of the clients and tools to
+`0_Builds/obj` at the root of the repository. At the root:
+
+```
+./0_Build_All.sh             # all the clients and tools, then the servers of all the platforms
+./0_Build_All.sh clients     # clients and tools only
+./0_Test.sh                  # emulator tests of the MSX-DOS 2 ROM and of the clients (openMSX, mock server)
+./0_Test.sh --real-server ~/bin/JIOServerCLI  # same with the real server (server/0_Install_CLI_Linux_Static.sh)
+./0_Clean.sh                 # outputs and intermediate files of all the projects
+```
+
 ## Known issues
 
 Casio PV-7 and National CF3000 are showing these kind of corruptions on reception:

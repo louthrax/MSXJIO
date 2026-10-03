@@ -10,7 +10,7 @@
 ; there is no FAT, sector or disk buffer code left in the kernel.
 ; Device files (CON, AUX, PRN, LST, NUL) are still handled by the kernel.
 ;
-; HYBRID build (p0_hybrid.asm): the drives of the JIO disk interface (first
+; HYBRID build (the MSX-DOS 2 ROM, 0_Build.sh): the drives of the JIO disk interface (first
 ; drives) are served by the JIO server, the other drives use the FAT code of
 ; the kernel. The X_ functions route each call to the JIO (R_) or local (F_)
 ; implementation. The FCB functions use the kernel file handle functions and
@@ -19,7 +19,7 @@
 ; drive: the partitions of the image are local drives (FAT12, sectors read and
 ; written by DSKIO of the driver).
 ;
-; This file is included in p0_kernel.asm or p0_hybrid.asm (page 0 code segment, kernel RAM).
+; This file is included in p0_kernel.asm (page 0 code segment, kernel RAM).
 ; The communication variables are also located in the code segment, so they
 ; stay available while a TPA segment is mapped in page 2 for data transfers.
 ; ------------------------------------------------------------------------------
