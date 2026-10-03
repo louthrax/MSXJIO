@@ -1,4 +1,4 @@
-diska ./Tmp/disk.dsk
+diska ./0_Builds/disk.dsk
 
 set auto_enable_reverse on
 

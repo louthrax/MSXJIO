@@ -8,7 +8,7 @@ QT_DIR="$HOME/Qt/6.8.3/macos"
 script_dir="$(cd "$(dirname "$0")" && pwd)/.."
 project_dir="$(pwd)"
 
-PROJECT_NAME="$(basename "$(ls "$script_dir"/*.pro)" .pro)"
+PROJECT_NAME="JIOServer"     # graphical server (JIOServerAll.pro: both servers, for Qt Creator)
 
 BUILD_HASH="$(git -C "$script_dir" rev-parse HEAD)"
 BUILD_VERSION="$(<"$script_dir/Version.txt")"
@@ -25,10 +25,10 @@ cd "$build_dir"
 "$QT_DIR/bin/qmake" "$project_dir/${PROJECT_NAME}.pro" CONFIG+=release
 make -j"$(sysctl -n hw.ncpu)"
 
-# command line server (cli/), in the bundle: uses its Qt frameworks
+# command line server (JIOServerCLI.pro), in the bundle: uses its Qt frameworks
 mkdir -p "$build_dir/cli"
 cd "$build_dir/cli"
-"$QT_DIR/bin/qmake" "$project_dir/cli/JIOServerCLI.pro" CONFIG+=release
+"$QT_DIR/bin/qmake" "$project_dir/JIOServerCLI.pro" CONFIG+=release
 make -j"$(sysctl -n hw.ncpu)"
 cd "$build_dir"
 cp -f "cli/JIOServerCLI" "${PROJECT_NAME}.app/Contents/MacOS/JIOServerCLI"

@@ -7,14 +7,14 @@ CONFIG -= app_bundle
 TARGET = JIOServerCLI
 MAKEFILE = Makefile
 
-include(../JIOServerCore.pri)
+include(JIOServerCore.pri)
 
 WARN_CXX = -Wall -Wextra -Wno-unused-parameter
 
 unix {
     BUILD_DATE    = $$system(date +'%Y-%m-%d_%H:%M:%S')
-    BUILD_HASH    = $$system(git config --global --add safe.directory "$$PWD/.." && git -C "$$PWD/.." rev-parse HEAD)
-    BUILD_VERSION = $$system(cat "$$PWD/../Version.txt")
+    BUILD_HASH    = $$system(git config --global --add safe.directory "$$PWD" && git -C "$$PWD" rev-parse HEAD)
+    BUILD_VERSION = $$system(cat "$$PWD/Version.txt")
 
     !macx:!android {
         QMAKE_CXXFLAGS += -fcoroutines
@@ -23,8 +23,8 @@ unix {
 
 win32 {
     BUILD_DATE    = $$system(powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd_HH:mm:ss'")
-    BUILD_HASH    = $$system(powershell -NoProfile -Command "git -C '$$PWD\\..' rev-parse HEAD")
-    BUILD_VERSION = $$system(powershell -NoProfile -Command "(Get-Content '$$PWD\\..\\Version.txt' -Raw).Trim()")
+    BUILD_HASH    = $$system(powershell -NoProfile -Command "git -C '$$PWD' rev-parse HEAD")
+    BUILD_VERSION = $$system(powershell -NoProfile -Command "(Get-Content '$$PWD\\Version.txt' -Raw).Trim()")
 }
 
 DEFINES += BUILD_DATE=$$BUILD_DATE BUILD_HASH=$$BUILD_HASH BUILD_VERSION=$$BUILD_VERSION

@@ -3,8 +3,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-mkdir -p Tmp
-cd Tmp
+mkdir -p 0_Builds
+cd 0_Builds
 
 rm -f *
 

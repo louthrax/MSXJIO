@@ -12,7 +12,7 @@
 #   all     both (default)
 # Results: out/<scenario>/ (screens, mock server log, JIO drive, floppy contents)
 #
-# REAL_SERVER=<path of JIOServerCLI> (environment): the real server (server/cli) instead of mockserver.py, on a
+# REAL_SERVER=<path of JIOServerCLI> (environment): the real server (server/JIOServerCLI.pro) instead of mockserver.py, on a
 # pseudo terminal (realbridge.py between it and the bridge). The checks of the log of the mock server and the
 # JIOTIME scenarios (date of the mock server) are skipped.
 
@@ -71,7 +71,7 @@ prepare_files() {
     ( cd "$TEST/fcbtest" && z88dk-z80asm -b -o="$OUT/base/FCBTEST.COM" fcbtest.asm && rm -f "$OUT"/base/*.o fcbtest.o ) || { echo "Build of FCBTEST.COM failed"; exit 1; }
     ( cd "$TEST/fibtest" && z88dk-z80asm -b -o="$OUT/base/FIBTEST.COM" fibtest.asm && rm -f "$OUT"/base/*.o fibtest.o ) || { echo "Build of FIBTEST.COM failed"; exit 1; }
     rm -rf "$OUT/obj_jiotime"
-    ( cd "$SRC/../../tools/JIOTIME" && z88dk-z80asm -b -m -O"$OUT/obj_jiotime" -o=JIOTIME.COM jiotime.asm && cp "$OUT/obj_jiotime/JIOTIME.COM" "$OUT/base/" ) || { echo "Build of JIOTIME.COM failed"; exit 1; }
+    ( cd "$SRC/../JIO_TIME" && z88dk-z80asm -b -m -O"$OUT/obj_jiotime" -o=JIOTIME.COM jiotime.asm && cp "$OUT/obj_jiotime/JIOTIME.COM" "$OUT/base/" ) || { echo "Build of JIOTIME.COM failed"; exit 1; }
     TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
     ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
     ( cd "$TEST/p2test" && z88dk-z80asm -b -o="$OUT/base/P2TEST.COM" p2test.asm && rm -f "$OUT"/base/*.o p2test.o ) || { echo "Build of P2TEST.COM failed"; exit 1; }
@@ -80,11 +80,11 @@ prepare_files() {
     mkdir -p "$OUT/nfs/clients"
     cp -r "$SRC/../../common" "$OUT/nfs/"
     cp -r "$SRC/../JIO_NFS" "$OUT/nfs/clients/"
-    rm -rf "$OUT/nfs/clients/JIO_NFS/Tmp"
-    ( cd "$OUT/nfs/clients/JIO_NFS" && sed '/^openmsx/d' 0_Make.sh | bash > build.log 2>&1 && cp Tmp/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
+    rm -rf "$OUT/nfs/clients/JIO_NFS/0_Builds"
+    ( cd "$OUT/nfs/clients/JIO_NFS" && sed '/^openmsx/d' 0_Make.sh | bash > build.log 2>&1 && cp 0_Builds/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
     # serial routines: in the resident stub (driver in a mapper segment) or in the resident driver
-    NFS_MAP="$OUT/nfs/clients/JIO_NFS/Tmp/stub.map"
-    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/Tmp/driver.sym"
+    NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Builds/stub.map"
+    [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Builds/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"

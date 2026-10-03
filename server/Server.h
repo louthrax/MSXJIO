@@ -51,7 +51,7 @@ static_assert(sizeof(tdReadWriteHeader) == 7, "tdReadWriteHeader must be 7 bytes
  =======================================================================================================================
     JIO server without user interface: protocol (commands of the MSX), disk image, served directories (BDOS functions,
     Server_BDOS.cpp) and connection to the MSX. Used by the graphical server (MainWindow) and by the command line
-    server (cli/). The log, the state of the connection and the activity are reported by signals.
+    server (JIOServerCLI.pro). The log, the state of the connection and the activity are reported by signals.
  =======================================================================================================================
  */
 class Server :

@@ -9,18 +9,19 @@ cd "$(dirname "$0")"
 wine iccZ80.exe drv_jio.c -z9 -uu -a drv_jio_c.as
 ./clean_iar_asm.py drv_jio_c.as drv_jio_c.asm
 
-rm -r -f ./obj rdate.inc
+rm -r -f ./0_Builds/obj rdate.inc
+mkdir -p 0_Builds
 date +"db \"%Y-%m-%d\"" > rdate.inc
-z88dk-z80asm -b -d -l -m -DJIO -DIDEDOS1 -Oobj -o=jio_dos1.bin dos1x.asm drv_jio.asm
-z88dk-appmake +glue -b obj/jio_dos1 --filler 0xFF --clean
+z88dk-z80asm -b -d -l -m -DJIO -DIDEDOS1 -O0_Builds/obj -o=jio_dos1.bin dos1x.asm drv_jio.asm
+z88dk-appmake +glue -b 0_Builds/obj/jio_dos1 --filler 0xFF --clean
 
-z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1.rom -s 16384 --org 0
+z88dk-appmake +rom  -b 0_Builds/obj/jio_dos1__.bin -o ./0_Builds/jio_dos1.rom -s 16384 --org 0
 
-z88dk-appmake +rom  -b obj/jio_dos1__.bin -o ./jio_dos1_64k.rom -s 65536 --org 16384 --fill 0xFF
+z88dk-appmake +rom  -b 0_Builds/obj/jio_dos1__.bin -o ./0_Builds/jio_dos1_64k.rom -s 65536 --org 16384 --fill 0xFF
 
-dd if=/dev/zero bs=1 count=65536 | tr '\0' '\377' > jio_dos1_64k_NMS_8220.rom
-dd if=jio_dos1.rom of=jio_dos1_64k_NMS_8220.rom bs=1 count=16384 seek=0 conv=notrunc
-dd if=jio_dos1.rom of=jio_dos1_64k_NMS_8220.rom bs=1 skip=16384 count=16384 seek=32768 conv=notrunc
+dd if=/dev/zero bs=1 count=65536 | tr '\0' '\377' > 0_Builds/jio_dos1_64k_NMS_8220.rom
+dd if=0_Builds/jio_dos1.rom of=0_Builds/jio_dos1_64k_NMS_8220.rom bs=1 count=16384 seek=0 conv=notrunc
+dd if=0_Builds/jio_dos1.rom of=0_Builds/jio_dos1_64k_NMS_8220.rom bs=1 skip=16384 count=16384 seek=32768 conv=notrunc
 
-cp ./jio_dos1.rom /mnt/DataBackupNAS/msxftp/RSDISK
-rm -r -f ./obj rdate.inc
+cp ./0_Builds/jio_dos1.rom /mnt/DataBackupNAS/msxftp/RSDISK
+rm -r -f ./0_Builds/obj rdate.inc

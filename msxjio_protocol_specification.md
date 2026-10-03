@@ -186,7 +186,7 @@ Notes:
   
 #### 0x17 — COMMAND DATE TIME
 
-**Description:** Request the current date and time of the server (local time), used by the JIOTIME.COM tool to set the MSX clock. Served in both modes (disk image or directories).  
+**Description:** Request the current date and time of the server (local time), used by the JIOTIME.COM client (`clients/JIO_TIME`) to set the MSX clock. Served in both modes (disk image or directories).  
 **Payload:** none  
 **Response:**
 | Field     | Size        | Description                  |

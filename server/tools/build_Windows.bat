@@ -12,11 +12,10 @@ rem =========================
 set "SCRIPT_DIR=%~dp0\.."
 if errorlevel 1 goto fail
 
-for %%F in ("%SCRIPT_DIR%\*.pro") do (
-    set "PROJECT_NAME=%%~nF"
-    goto :pro_found
-)
-echo No .pro file found in %SCRIPT_DIR%
+rem Graphical server (JIOServerAll.pro: both servers, for Qt Creator)
+set "PROJECT_NAME=JIOServer"
+if exist "%SCRIPT_DIR%\%PROJECT_NAME%.pro" goto :pro_found
+echo No %PROJECT_NAME%.pro file found in %SCRIPT_DIR%
 goto fail
 
 :pro_found
@@ -60,14 +59,14 @@ if errorlevel 1 goto fail
 copy /Y "release\%PROJECT_NAME%.exe" "deploy\%PROJECT_NAME%.exe"
 if errorlevel 1 goto fail
 
-rem Command line server (cli\JIOServerCLI.pro), in the same package
+rem Command line server (JIOServerCLI.pro), in the same package
 mkdir "%USERPROFILE%\Build\cli"
 if errorlevel 1 goto fail
 
 cd /D "%USERPROFILE%\Build\cli"
 if errorlevel 1 goto fail
 
-"%QMAKE%" "%SCRIPT_DIR%\cli\JIOServerCLI.pro" CONFIG+=release
+"%QMAKE%" "%SCRIPT_DIR%\JIOServerCLI.pro" CONFIG+=release
 if errorlevel 1 goto fail
 
 nmake -f Makefile

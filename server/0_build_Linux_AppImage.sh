@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_NAME="$(basename "$(ls "$SCRIPT_DIR"/*.pro)" .pro)"
+PROJECT_NAME="JIOServer"     # graphical server (JIOServerAll.pro: both servers, for Qt Creator)
 PROJECT_TO_BUILD="$(realpath "$SCRIPT_DIR/..")"
 
 BUILD_HASH="$(git -C "$PROJECT_TO_BUILD" rev-parse HEAD)"

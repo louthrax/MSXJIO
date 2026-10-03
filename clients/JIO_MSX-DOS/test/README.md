@@ -43,7 +43,7 @@ only tested on real hardware.
 REAL_SERVER=<build>/JIOServerCLI ./0_RunTests.sh
 ```
 
-runs the scenarios with the real server (`server/cli`, command line version of the C++ server) instead of
+runs the scenarios with the real server (`server/JIOServerCLI.pro`, command line version of the C++ server) instead of
 `mockserver.py`: the server opens a pseudo terminal as its serial port, `realbridge.py` passes the bytes
 between it and the bridge (one answer of the server = one `FFh..F0h` packet). The checks of the log of the
 mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, no answer) are skipped.
@@ -63,7 +63,7 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `jio_renmove`, `hyb_renmove` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and, with the hybrid ROM, on the floppy B: |
 | `hyb_takeover` | hybrid | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the hybrid ROM takes over, copy to the floppy |
 | `jio_readonly`, `hyb_readonly` | JIO only, hybrid | VG-8235 (hybrid: 360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: (and floppy B:) writable |
-| `jio_jiotime`, `jio_jiotime_tr`, `jio_jiotime_none` | JIO only | VG-8235, FS-A1ST | `tools/JIOTIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
+| `jio_jiotime`, `jio_jiotime_tr`, `jio_jiotime_none` | JIO only | VG-8235, FS-A1ST | `clients/JIO_TIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
 | `nfs_nms8255`, `nfs_turbor` | JIO.COM (`clients/JIO_NFS`) | NMS 8255 + MSX-DOS 2 cartridge, FS-A1ST (internal MSX-DOS 2) | no JIO ROM: `JIO +D` from the floppy A:, then (after the warm restart of JIO.COM) `NFSTEST.BAT` typed at the prompt (`tcl/typecmd.tcl`): DIR, TYPE, COPY to D: (byte compare, date set with `_HFTIME`), MD/CD, REN, MOVE, ATTRIB, FCB open / block read / close (`fcbread/`), parameters and buffers in page 2 (`p2test/`: path, FIB, `_READ` buffer, FCB and DTA at 9000H and above, hidden by the driver which is mapped in page 2). The bridge intercepts the serial routines of the resident driver (or stub) when JIO.COM installs its hook. Not tested: redirection to D: (`_DUP` not supported by JIO.COM) |
 | `hyb_bootsector` | hybrid | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
 | `hyb_image` | hybrid | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |

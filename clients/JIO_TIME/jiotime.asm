@@ -182,8 +182,8 @@ PrintString:	ld	c,09h			; _STROUT
 ; ------------------------------------------------------------------------------
 ; Serial routines (HL = data, DE = size; bJIOReceive returns A = 1 received, 0 time-out)
 ; ------------------------------------------------------------------------------
-INCLUDE "../../clients/JIO_NFS/transmit.asm"
-INCLUDE "../../clients/JIO_NFS/receive.asm"
+INCLUDE "../JIO_NFS/transmit.asm"
+INCLUDE "../JIO_NFS/receive.asm"
 
 ; ------------------------------------------------------------------------------
 COMMAND:	defb	"JIO",0,COMMAND_DATE_TIME

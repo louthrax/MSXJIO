@@ -1,5 +1,5 @@
 set renderer none
-diskmanipulator create ./Tmp/disk.dsk 720
-diska ./Tmp/disk.dsk
-diskmanipulator import diska ./MSX-DOS2/ ./Tmp/JIO.COM
+diskmanipulator create ./0_Builds/disk.dsk 720
+diska ./0_Builds/disk.dsk
+diskmanipulator import diska ./MSX-DOS2/ ./0_Builds/JIO.COM
 exit

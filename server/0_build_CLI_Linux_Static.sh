@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Command line server (JIOServerCLI.pro), static Linux executable
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_NAME="JIOServer"     # graphical server (JIOServerAll.pro: both servers, for Qt Creator)
+PROJECT_NAME="JIOServerCLI"
 PROJECT_TO_BUILD="$(realpath "$SCRIPT_DIR/..")"
 
 BUILD_HASH="$(git -C "$PROJECT_TO_BUILD" rev-parse HEAD)"
@@ -27,7 +29,7 @@ docker run --rm -it \
     make -j"$(nproc)" || bash
   '
 
+rm -f "$SCRIPT_DIR/0_Builds/$PROJECT_PACKAGE_NAME.zip"
 7z a -tzip \
   "$SCRIPT_DIR/0_Builds/$PROJECT_PACKAGE_NAME.zip" \
-  "$BUILD_DIR/$PROJECT_NAME" \
-  "$SCRIPT_DIR/$PROJECT_NAME.svg"
+  "$BUILD_DIR/$PROJECT_NAME"

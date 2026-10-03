@@ -136,5 +136,7 @@ DISTFILES += \
     ../clients/JIO_NFS/*.asm \
     ../clients/JIO_NFS/*.c \
     ../clients/JIO_NFS/*.h \
+    ../clients/JIO_TIME/*.sh \
+    ../clients/JIO_TIME/*.asm \
     android/AndroidManifest.xml \
     readme.md

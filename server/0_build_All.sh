@@ -15,8 +15,16 @@ cd "$SCRIPT_DIR"
 
 cd "$SCRIPT_DIR"
 ./0_build_macOS.sh
-sudo killall qemu-system-x86_64 || true
 
 cd "$SCRIPT_DIR"
 ./0_build_Windows.sh
-sudo killall qemu-system-x86_64 || true
+
+# command line server
+cd "$SCRIPT_DIR"
+./0_build_CLI_Linux_Static.sh
+
+cd "$SCRIPT_DIR"
+./0_build_CLI_macOS.sh
+
+cd "$SCRIPT_DIR"
+./0_build_CLI_Windows.sh

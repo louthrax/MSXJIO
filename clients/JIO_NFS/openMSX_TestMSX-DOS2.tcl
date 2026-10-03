@@ -1,9 +1,9 @@
-diskmanipulator create ./Tmp/disk.dsk 720
-diska ./Tmp/disk.dsk
+diskmanipulator create ./0_Builds/disk.dsk 720
+diska ./0_Builds/disk.dsk
 
-diskmanipulator create ./Tmp/diskb.dsk 720
-diskb ./Tmp/diskb.dsk
-diskmanipulator import diskb ./MSX-DOS2/ ./Tmp/main
+diskmanipulator create ./0_Builds/diskb.dsk 720
+diskb ./0_Builds/diskb.dsk
+diskmanipulator import diskb ./MSX-DOS2/ ./0_Builds/main
 
 
 set auto_enable_reverse off

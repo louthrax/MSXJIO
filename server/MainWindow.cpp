@@ -881,7 +881,7 @@ void MainWindow::onAddressLineValidated()
 
 /*
  =======================================================================================================================
-    Command line of JIOServerCLI (cli/) with the configuration of the user interface
+    Command line of JIOServerCLI (JIOServerCLI.pro) with the configuration of the user interface
  =======================================================================================================================
  */
 static QString szQuoteArgument(const QString &_szArgument)

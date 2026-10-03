@@ -16,9 +16,9 @@ JAVA_HOME="$HOME/bin/Qt/jdk-23.0.2+7"
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 project_dir="$script_dir"   # <-- IMPORTANT: anchor to script folder
 
-# Find the single .pro file in script_dir
-pro_file="$(ls "$script_dir"/*.pro)"
-PROJECT_NAME="$(basename "$pro_file" .pro)"
+# Graphical server (JIOServerAll.pro: both servers, for Qt Creator)
+pro_file="$script_dir/JIOServer.pro"
+PROJECT_NAME="JIOServer"
 
 BUILD_HASH="$(git -C "$script_dir" rev-parse HEAD)"
 BUILD_VERSION="$(<"$script_dir/Version.txt")"
