@@ -17,6 +17,7 @@
 #define STUB_SEGMENT        0x31
 #define STUB_BOUNCE         0x32
 #define STUB_BOUNCE_SIZE    64
+#define STUB_DPB            0x72
 
 #define DRIVER_BASE         0x8000
 #define DRIVER_STACK        0xC000

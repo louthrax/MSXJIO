@@ -99,6 +99,8 @@ unsigned char          g_aucPath[66] = { 0 };       // copy of the path or FIB p
 unsigned char          g_aucString[66] = { 0 };     // copy of a string parameter (HL), FIB template
 tdFileInfoBlock        g_oFIB = { 0 };              // FIB answered by the server
 tdFileControlBlock     g_oFCB = { 0 };              // copy of the FCB parameter (DE)
+// Answers of the server: received in a global, never on the stack (the receive routine of the stub uses SP)
+unsigned char          g_aucAnswer[5] = { 0 };
 
 static bool bDoCommand();
 
@@ -587,17 +589,24 @@ static void vDOS_FIND_NEXT_ENTRY()
  */
 static void vDOS_GET_ALLOCATION_INFORMATION()
 {
-    unsigned char aucAnswer[5];             // sectors per cluster (0 = invalid drive), total clusters, free clusters
 
     if (bIsLogicalDriveHandled(E))
     {
         vSendCommonHeader();
         vJIOTransmit(&E, sizeof(E));
-        vReceive(aucAnswer, sizeof(aucAnswer));
-        A = aucAnswer[0];
-        BCi = 512;
-        DEi = *((unsigned int *) (aucAnswer + 1));
-        HLi = *((unsigned int *) (aucAnswer + 3));
+        vReceive(g_aucAnswer, 5);           // sectors per cluster (0 = invalid drive), total clusters, free clusters
+        // registers of the GO_BDOS hook (as the JIO ROM): the kernel returns A = C to the program, and BC = sector
+        // size taken from the DPB pointed to by IX
+        A = 0;
+        BCi = g_aucAnswer[0];
+        DEi = *((unsigned int *) (g_aucAnswer + 1));
+        HLi = *((unsigned int *) (g_aucAnswer + 3));
+        IXi = (unsigned int) (g_pucStub + STUB_DPB);
+        if (!g_aucAnswer[0])
+        {
+            BCi = 0xFF;                     // invalid drive
+            A = DOS_ERR_IDRV;
+        }
     }
 }
 
@@ -793,12 +802,11 @@ static void vDOS_GET_SET_FILE_ATTRIBUTES()
  */
 static void vDateTimeAnswer()
 {
-    unsigned char aucAnswer[5];             // error, time, date
 
-    vReceive(aucAnswer, sizeof(aucAnswer));
-    A = aucAnswer[0];
-    DEi = *((unsigned int *) (aucAnswer + 1));
-    HLi = *((unsigned int *) (aucAnswer + 3));
+    vReceive(g_aucAnswer, 5);               // error, time, date
+    A = g_aucAnswer[0];
+    DEi = *((unsigned int *) (g_aucAnswer + 1));
+    HLi = *((unsigned int *) (g_aucAnswer + 3));
 }
 
 static void vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME()
@@ -942,15 +950,14 @@ static unsigned long ulMultiply(unsigned long _ulValue, unsigned int _uiFactor)
 // Function $4A _SEEK, returns the new file pointer
 static unsigned long ulSeek(unsigned char _ucHandle, unsigned char _ucMethod, unsigned long _ulOffset)
 {
-    unsigned char aucAnswer[5];             // error, new file pointer
 
     vSendFunction(0x4A);
     vJIOTransmit(&_ucHandle, sizeof(_ucHandle));
     vJIOTransmit(&_ucMethod, sizeof(_ucMethod));
     vJIOTransmit(&_ulOffset, sizeof(_ulOffset));
-    vReceive(aucAnswer, sizeof(aucAnswer));
+    vReceive(g_aucAnswer, 5);               // error, new file pointer
 
-    return *((unsigned long *) (aucAnswer + 1));
+    return *((unsigned long *) (g_aucAnswer + 1));
 }
 
 /*
@@ -978,7 +985,6 @@ static void vDOS_OPEN_FILE_FCB()
     tdFileControlBlock  *poFCB = &g_oFCB;
     char                acPath[15];         // "D:NAME.EXT"
     char                *pcPath = acPath;
-    unsigned char       aucAnswer[2];       // error, file handle
     unsigned char       ucMode = 0;
 
     if (!bFCBFromCaller())
@@ -1000,17 +1006,17 @@ static void vDOS_OPEN_FILE_FCB()
     vSendFunction(0x43);                    // _OPEN
     vTransmitString(acPath);
     vJIOTransmit(&ucMode, sizeof(ucMode));
-    vReceive(aucAnswer, sizeof(aucAnswer));
+    vReceive(g_aucAnswer, 2);               // error, file handle
 
-    if (aucAnswer[0])
+    if (g_aucAnswer[0])
     {
         A = L = 0xFF;
         return;
     }
 
-    poFCB->ucNewFileHandle = aucAnswer[1];
-    poFCB->m_ulFileSize = ulSeek(aucAnswer[1], 2, 0);
-    ulSeek(aucAnswer[1], 0, 0);
+    poFCB->ucNewFileHandle = g_aucAnswer[1];   // g_aucAnswer reused by ulSeek
+    poFCB->m_ulFileSize = ulSeek(poFCB->ucNewFileHandle, 2, 0);
+    ulSeek(poFCB->ucNewFileHandle, 0, 0);
     poFCB->m_ucExtentNumber = 0;
     poFCB->u.dos.m_uiRecordSize = 128;
     poFCB->m_ucCurrentRecordWithinExtent = 0;
@@ -1025,15 +1031,13 @@ static void vDOS_OPEN_FILE_FCB()
  */
 static void vDOS_CLOSE_FILE_FCB()
 {
-    unsigned char ucError;
-
     if (!bFCBFromCaller())
         return;
 
     vSendFunction(0x45);                    // _CLOSE
     vJIOTransmit(&g_oFCB.ucNewFileHandle, sizeof(g_oFCB.ucNewFileHandle));
-    vReceive(&ucError, sizeof(ucError));
-    A = L = ucError ? 0xFF : 0;
+    vReceive(g_aucAnswer, 1);               // error
+    A = L = g_aucAnswer[0] ? 0xFF : 0;
 }
 
 /*
@@ -1052,7 +1056,6 @@ static void vDOS_RANDOM_BLOCK_READ_FCB()
     unsigned int        uiLeft;
     unsigned int        uiRecords;
     unsigned int        uiFill;
-    unsigned char       aucAnswer[3];       // error, size read
 
     if (!bFCBFromCaller())
         return;
@@ -1070,8 +1073,8 @@ static void vDOS_RANDOM_BLOCK_READ_FCB()
     vSendFunction(0x48);                    // _READ
     vJIOTransmit(&poFCB->ucNewFileHandle, sizeof(poFCB->ucNewFileHandle));
     vJIOTransmit(&uiSize, sizeof(uiSize));
-    vReceive(aucAnswer, sizeof(aucAnswer));
-    uiSize = *((unsigned int *) (aucAnswer + 1));
+    vReceive(g_aucAnswer, 3);               // error, size read
+    uiSize = *((unsigned int *) (g_aucAnswer + 1));
     if (uiSize)
         vCallerReceive(g_pcDiskTransferAddress, uiSize);
 

@@ -416,6 +416,46 @@ void vInstallStub()
     g_pbHandledDrives = HIMSAV + STUB_DRIVES;
 }
 
+/*
+ =======================================================================================================================
+    PROGRAM environment item set back to SHELL. COMMAND2 sets PROGRAM to the path of JIO.COM, which does not end (it
+    restarts MSX-DOS): after the restart, COMMAND2 would take it as its own path (SHELL), and load JIO.COM instead of
+    COMMAND2.COM when it reloads itself ("Wrong version of command"). An empty SHELL deletes PROGRAM.
+ =======================================================================================================================
+ */
+char g_acEnvValue[256] = { 0 };
+
+void vRestoreProgramItem() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      hl,shell_item
+        ld      de,_g_acEnvValue
+        ld      b,255
+        ld      c,0x6B      ; _GENV
+        call    5
+        or      a
+        jr      z,genv_ok
+        xor     a
+        ld      (_g_acEnvValue),a
+genv_ok:
+        ld      hl,program_item
+        ld      de,_g_acEnvValue
+        ld      c,0x6C      ; _SENV
+        call    5
+        pop     iy
+        pop     ix
+        ret
+shell_item:
+        .ascii  "SHELL"
+        .db     0
+program_item:
+        .ascii  "PROGRAM"
+        .db     0
+__endasm;
+}
+
 bool bCheckRFS(unsigned int * _puiBase) __naked
 {
     _puiBase;
@@ -610,6 +650,7 @@ int main(int argc, char **argv)
         if (bAddRequired)
         {
             puts("Installing RFS and drives...\r\n");
+            vRestoreProgramItem();
             if (!bInstallDriver())
                 return g_iResult;
             vReserveMemory();

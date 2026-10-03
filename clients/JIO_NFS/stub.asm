@@ -24,6 +24,7 @@
 ;   STUB_HAS_TURBO      turbo R: Z80 mode during the transfers
 ;   STUB_SEGMENT        mapper segment of the driver
 ;   STUB_BOUNCE         bounce buffer (STUB_BOUNCE_SIZE bytes), to copy TPA data of page 2
+;   STUB_DPB            dummy DPB returned in IX by _ALLOC: the kernel takes the sector size at +2
 ;   DRIVER_BASE         address of the driver (page 2), DRIVER_STACK its stack (top of its segment)
 ; ------------------------------------------------------------------------------
 
@@ -51,6 +52,9 @@ Drives:		defs	8,0			; STUB_DRIVES
 HasTurbo:	defb	0			; STUB_HAS_TURBO
 Segment:	defb	0			; STUB_SEGMENT
 Bounce:		defs	STUB_BOUNCE_SIZE,0	; STUB_BOUNCE
+Dpb:		defb	0,0			; STUB_DPB
+		defw	512			; sector size
+		defs	32,0
 
 IF Registers <> STUB_REGISTERS
 		ERROR	"stub.asm layout does not match stub.h"
@@ -59,6 +63,9 @@ IF HookOriginal <> STUB_HOOK_ORIGINAL
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 IF Bounce <> STUB_BOUNCE
+		ERROR	"stub.asm layout does not match stub.h"
+ENDIF
+IF Dpb <> STUB_DPB
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 
