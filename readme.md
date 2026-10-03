@@ -211,6 +211,34 @@ For Android (that provides not tooltips), here's a quick explanation view:
     <img src="./readme_resources/JIO_Server_with_tooltips.png" width="900"/>
 </p>  
 
+### Command line server
+
+`JIOServerCLI` is a version of the server without user interface (included in the Windows installer and in the
+macOS application bundle, separate archive for Linux). Everything is given by arguments, there are no settings and
+no interaction once it is started. The connection is automatic: the serial port given, or the first USB serial
+adapter found (FTDI first); it waits for the device if it is not present and reconnects after a disconnection.
+Stop it with Ctrl+C. In the graphical server, the <img src="./server/icons/commandLine.svg" width="20"/> button
+copies to the clipboard (and shows in the log) the command line with its current configuration.
+
+```
+JIOServerCLI -i games.dsk                                 # serve a disk image
+JIOServerCLI -d A=~/MSX/boot -d C=~/MSX/work -l jio.log   # serve directories as drives A: and C:, log file
+JIOServerCLI -i hd.img -r -p /dev/ttyUSB1                 # read only, given serial port
+JIOServerCLI -d ~/MSX/boot -b 98:D3:31:FB:12:34           # Bluetooth
+JIOServerCLI --list                                       # serial ports (and the automatic choice)
+```
+
+| Option | |
+|---|---|
+| `-i`, `--image <file>` | serve a disk image (floppy, or hard disk with partitions) |
+| `-d`, `--drive [X=]<dir>` | serve a directory as drive X: (A to H, next free drive without `X=`), can be repeated |
+| `-r`, `--read-only` | refuse all writes (the RAM disk H: stays writable) |
+| `--no-rx-crc`, `--no-tx-crc`, `--no-auto-retry`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways, auto retry) |
+| `-p`, `--port <port>` | serial port (`ttyUSB0`, `/dev/ttyUSB0`, `/dev/serial/by-id/...`, `COM3`) |
+| `-b`, `--bluetooth <address>` | Bluetooth device instead of a serial port (`--scan-bluetooth` lists them) |
+| `-l`, `--log <file>` | also write the log to a file (appended) |
+| `-q`, `--quiet`, `--brief`, `--no-color` | no log on the console, no details of the BDOS functions, no colours |
+
 ## Known issues
 
 Casio PV-7 and National CF3000 are showing these kind of corruptions on reception:

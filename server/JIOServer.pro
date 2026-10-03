@@ -116,27 +116,14 @@ RESOURCES += \
     Icons.qrc \
     Fonts.qrc
 
+include(JIOServerCore.pri)
+
 HEADERS += \
-    ByteReader.h \
-    Common.h \
-    Drive.h \
-    Find.h \
-    Interface.h \
-    InterfaceBluetoothSocket.h \
-    InterfaceSerialPort.h \
-    MainWindow.h \
-    Pack.h \
-    PartitionExtractor.h
+    MainWindow.h
 
 SOURCES += \
-    Drive.cpp \
-    Find.cpp \
-    InterfaceBluetoothSocket.cpp \
-    InterfaceSerialPort.cpp \
     Main.cpp \
-    MainWindow.cpp \
-    MainWindow_BDOS.cpp \
-    PartitionExtractor.cpp
+    MainWindow.cpp
 
 FORMS += MainWindow.ui
 

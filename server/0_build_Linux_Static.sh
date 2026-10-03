@@ -23,11 +23,21 @@ docker run --rm -it \
   -w /build \
   qt_static_builder \
   bash -lc '
-    /qt/install/bin/qmake "/src/server/${PROJECT_NAME}.pro" CONFIG+=static DEFINES+=QT_STATIC_BUILD &&
-    make -j"$(nproc)" || bash
+    (
+      /qt/install/bin/qmake "/src/server/${PROJECT_NAME}.pro" CONFIG+=static DEFINES+=QT_STATIC_BUILD &&
+      make -j"$(nproc)" &&
+      mkdir -p /build/cli && cd /build/cli &&
+      /qt/install/bin/qmake /src/server/cli/JIOServerCLI.pro CONFIG+=static DEFINES+=QT_STATIC_BUILD &&
+      make -j"$(nproc)"
+    ) || bash
   '
 
 7z a -tzip \
   "$SCRIPT_DIR/0_Builds/$PROJECT_PACKAGE_NAME.zip" \
   "$BUILD_DIR/$PROJECT_NAME" \
   "$SCRIPT_DIR/$PROJECT_NAME.svg"
+
+# command line server (cli/)
+7z a -tzip \
+  "$SCRIPT_DIR/0_Builds/JIOServerCLI_LinuxStatic_${BUILD_VERSION}.zip" \
+  "$BUILD_DIR/cli/JIOServerCLI"

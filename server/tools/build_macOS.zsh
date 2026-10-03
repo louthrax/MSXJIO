@@ -24,7 +24,16 @@ cd "$build_dir"
 
 "$QT_DIR/bin/qmake" "$project_dir/${PROJECT_NAME}.pro" CONFIG+=release
 make -j"$(sysctl -n hw.ncpu)"
-"$QT_DIR/bin/macdeployqt" "${PROJECT_NAME}.app" -dmg
+
+# command line server (cli/), in the bundle: uses its Qt frameworks
+mkdir -p "$build_dir/cli"
+cd "$build_dir/cli"
+"$QT_DIR/bin/qmake" "$project_dir/cli/JIOServerCLI.pro" CONFIG+=release
+make -j"$(sysctl -n hw.ncpu)"
+cd "$build_dir"
+cp -f "cli/JIOServerCLI" "${PROJECT_NAME}.app/Contents/MacOS/JIOServerCLI"
+
+"$QT_DIR/bin/macdeployqt" "${PROJECT_NAME}.app" -executable="${PROJECT_NAME}.app/Contents/MacOS/JIOServerCLI" -dmg
 
 mkdir -p "$project_dir/0_Builds"
 cp -f "${PROJECT_NAME}.dmg" "$project_dir/0_Builds/${PROJECT_NAME}_macOS_${BUILD_VERSION}.dmg"

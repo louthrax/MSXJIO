@@ -1,4 +1,4 @@
-JIOServer.pro.user*
+*.pro.user*
 android/res/*
 
 clients/JIO_MSX-DOS/drv_jio.r01
@@ -38,3 +38,13 @@ clients/JIO_NFS/Tmp/
 tools/JIOTIME/obj/
 
 tools/JIOTIME/JIOTIME.COM
+
+clients/JIO_MSX-DOS/jio_dos2_hybrid.rom
+
+clients/JIO_MSX-DOS/jio_dos2_hybrid_64k.rom
+
+clients/JIO_MSX-DOS/jio_dos2_hybrid_64k_NMS_8220.rom
+
+server/0_Builds/
+
+server/JIOServer.icns

@@ -4,7 +4,7 @@
 #include <QStorageInfo>
 #include <QDirIterator>
 
-#include "MainWindow.h"
+#include "Server.h"
 #include "Find.h"
 #include "../common/drv_jio.inc"
 #include "Pack.h"
@@ -52,7 +52,7 @@ static QString szFindEntry(const QString &_szDirectory, const QString &_szName)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vResetNFS()
+void Server::vResetNFS()
 {
     for (int i = 0; i < 256; i++)
     {
@@ -79,7 +79,7 @@ void MainWindow::vResetNFS()
  =======================================================================================================================
  =======================================================================================================================
  */
-unsigned char MainWindow::ucAddFile(QFile * _poFile)
+unsigned char Server::ucAddFile(QFile * _poFile)
 {
     if (_poFile)
     {
@@ -102,12 +102,12 @@ unsigned char MainWindow::ucAddFile(QFile * _poFile)
     disk is destroyed, at each reset of the MSX (RESET_NFS) and when the server quits.
  =======================================================================================================================
  */
-bool MainWindow::bIsRamDrive(unsigned char _ucDrive)
+bool Server::bIsRamDrive(unsigned char _ucDrive)
 {
     return (_ucDrive == 7) && m_ucRamDiskSegments && m_poRamDisk;
 }
 
-QString MainWindow::szRootDir(unsigned char _ucDrive)
+QString Server::szRootDir(unsigned char _ucDrive)
 {
     if (_ucDrive >= 8)
         return QString();
@@ -118,7 +118,7 @@ QString MainWindow::szRootDir(unsigned char _ucDrive)
     return m_szBDOSRootDir[_ucDrive];
 }
 
-void MainWindow::vDestroyRamDisk()
+void Server::vDestroyRamDisk()
 {
     if (m_poRamDisk)
     {
@@ -147,7 +147,7 @@ void MainWindow::vDestroyRamDisk()
 }
 
 // Free bytes on the RAM disk: size of the RAM disk minus the files (512 bytes sectors)
-qint64 MainWindow::iRamDiskFree()
+qint64 Server::iRamDiskFree()
 {
     qint64          iUsed = 0;
     QDirIterator    oIt(m_poRamDisk->path(), QDir::Files | QDir::Hidden | QDir::System, QDirIterator::Subdirectories);
@@ -165,7 +165,7 @@ qint64 MainWindow::iRamDiskFree()
  =======================================================================================================================
  =======================================================================================================================
  */
-bool MainWindow::bIsDriveServed(unsigned char _ucDrive)
+bool Server::bIsDriveServed(unsigned char _ucDrive)
 {
     // no drive is served when a disk image is served
     return (m_eServeMode == eServeDirectories) && (_ucDrive < 8) && !szRootDir(_ucDrive).isEmpty() && QFileInfo(szRootDir(_ucDrive)).isDir();
@@ -177,7 +177,7 @@ bool MainWindow::bIsDriveServed(unsigned char _ucDrive)
     Checked before each modification of the host file system. The RAM disk H: (temporary directory) stays writable.
  =======================================================================================================================
  */
-bool MainWindow::bIsWriteProtected(const QString &_szHostPath)
+bool Server::bIsWriteProtected(const QString &_szHostPath)
 {
     if (!m_bReadOnly)
         return false;
@@ -193,7 +193,7 @@ bool MainWindow::bIsWriteProtected(const QString &_szHostPath)
     MSX path to host path. Returns the drive (0 = A:), or 0xFF if the drive is invalid.
  =======================================================================================================================
  */
-unsigned char MainWindow::ucResolvePath(QString _szMSXPath, QString &_rszHostPath, unsigned char _ucDefaultDrive)
+unsigned char Server::ucResolvePath(QString _szMSXPath, QString &_rszHostPath, unsigned char _ucDefaultDrive)
 {
     unsigned char   ucDrive;
     QStringList     aszItems;
@@ -245,7 +245,7 @@ unsigned char MainWindow::ucResolvePath(QString _szMSXPath, QString &_rszHostPat
     Host path to MSX path relative to the drive root: no drive, no leading backslash, MSX-DOS 8.3 names
  =======================================================================================================================
  */
-QString MainWindow::szRelativePath(unsigned char _ucDrive, const QString &_szHostPath)
+QString Server::szRelativePath(unsigned char _ucDrive, const QString &_szHostPath)
 {
     QString szHostPath = szRootDir(_ucDrive);
     QString szPath;
@@ -272,7 +272,7 @@ QString MainWindow::szRelativePath(unsigned char _ucDrive, const QString &_szHos
     Get the host path of an ASCIIZ path or FIB
  =======================================================================================================================
  */
-unsigned char MainWindow::ucGetTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char &_rucDrive, QString &_rszHostPath)
+unsigned char Server::ucGetTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char &_rucDrive, QString &_rszHostPath)
 {
     if (_roFIB.m_ucFF == 0xFF)
     {
@@ -299,7 +299,7 @@ unsigned char MainWindow::ucGetTarget(const tdFileInfoBlock &_roFIB, const QStri
  =======================================================================================================================
  =======================================================================================================================
  */
-unsigned char MainWindow::ucGetAttributes(const QString &_szHostPath)
+unsigned char Server::ucGetAttributes(const QString &_szHostPath)
 {
     QFileInfo       oInfo(_szHostPath);
     unsigned char   ucAttributes;
@@ -319,7 +319,7 @@ unsigned char MainWindow::ucGetAttributes(const QString &_szHostPath)
  =======================================================================================================================
  =======================================================================================================================
  */
-void MainWindow::vFillFIB(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive)
+void Server::vFillFIB(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive)
 {
     QFileInfo   oInfo(_szHostPath);
     QByteArray  acName = szGetDosName(_szHostPath).toLatin1().left(sizeof(_roFIB.m_acFileName) - 1);
@@ -341,7 +341,7 @@ void MainWindow::vFillFIB(tdFileInfoBlock &_roFIB, const QString &_szHostPath, u
     Remember the entry found, and its whole path (for _WPATH)
  =======================================================================================================================
  */
-void MainWindow::vSetFindEntry(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive)
+void Server::vSetFindEntry(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive)
 {
     if (!_roFIB.m_uiFindId || !m_oFindEntries.contains(_roFIB.m_uiFindId))
     {
@@ -386,19 +386,19 @@ static bool bAttributesMatch(const QString &_szHostPath, unsigned char _ucSearch
     Answer helpers: nothing is sent for empty data (the client does not wait for it)
  =======================================================================================================================
  */
-void MainWindow::vBDOSAnswer(const void *_pvData, unsigned int _uiSize)
+void Server::vBDOSAnswer(const void *_pvData, unsigned int _uiSize)
 {
     if (_uiSize)
         uiTransmit(_pvData, _uiSize, 0, 0, false, TRANSMIT_DELAY_NORMAL);
 }
 
-void MainWindow::vBDOSData(const void *_pvData, unsigned int _uiSize)
+void Server::vBDOSData(const void *_pvData, unsigned int _uiSize)
 {
     if (_uiSize)
         uiTransmit(_pvData, _uiSize, 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
 }
 
-void MainWindow::vBDOSError(unsigned char _ucError)
+void Server::vBDOSError(unsigned char _ucError)
 {
     vLog(eLogBDOSDetails, "Result: %02Xh\n", _ucError);
     vBDOSAnswer(&_ucError, sizeof(_ucError));
@@ -409,7 +409,7 @@ void MainWindow::vBDOSError(unsigned char _ucError)
     Function $0E _SELDSK
  =======================================================================================================================
  */
-void MainWindow::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
+void Server::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
 {
     unsigned char ucNumberOfDrives = 8;
 
@@ -424,7 +424,7 @@ void MainWindow::vDOS_SELECT_DISK(unsigned char _ucDiskToSelect)
     Function $18 _LOGIN: drives served (bit 0 = A:)
  =======================================================================================================================
  */
-unsigned char MainWindow::ucLoginVector()
+unsigned char Server::ucLoginVector()
 {
     unsigned char ucLogin = 0;
 
@@ -437,7 +437,7 @@ unsigned char MainWindow::ucLoginVector()
     return ucLogin;
 }
 
-void MainWindow::vDOS_GET_LOGIN_VECTOR()
+void Server::vDOS_GET_LOGIN_VECTOR()
 {
     unsigned char ucLogin = ucLoginVector();
 
@@ -451,7 +451,7 @@ void MainWindow::vDOS_GET_LOGIN_VECTOR()
     Answer: error, RAM disk size (segments), drives served (the JIO only ROM updates its drive list)
  =======================================================================================================================
  */
-void MainWindow::vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments)
+void Server::vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments)
 {
     PACK_PUSH
     struct
@@ -504,7 +504,7 @@ void MainWindow::vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments)
     Cluster counts are kept below 8000H (DSKF in BASIC is a signed integer)
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_ALLOCATION_INFORMATION(unsigned char _ucDrive)
+void Server::vDOS_GET_ALLOCATION_INFORMATION(unsigned char _ucDrive)
 {
     PACK_PUSH
     struct
@@ -531,14 +531,18 @@ void MainWindow::vDOS_GET_ALLOCATION_INFORMATION(unsigned char _ucDrive)
             iFreeSectors = qMin(iRamDiskFree() / 512, iFreeSectors);
         }
 
+        // at most 2 sectors per cluster: COMMAND2 computes the free space in K on 16 bits (clusters x sectors per
+        // cluster up to 65535 sectors), a bigger disk is shown as 32767K free (largest value shown right)
         s.ucSectorsPerCluster = 1;
-        while ((iSectors / s.ucSectorsPerCluster > 0x7FFF) && (s.ucSectorsPerCluster < 128))
+        while ((iSectors / s.ucSectorsPerCluster > 0x7FFF) && (s.ucSectorsPerCluster < 2))
             s.ucSectorsPerCluster <<= 1;
 
         s.uiTotalClusters = qMin<qint64>(iSectors / s.ucSectorsPerCluster, 0x7FFF);
         s.uiFreeClusters = qMin<qint64>(iFreeSectors / s.ucSectorsPerCluster, 0x7FFF);
     }
 
+    vLog(eLogBDOSDetails, "Drive %c: | Result: %d sectors per cluster, %d clusters, %d free\n", 'A' + ucDrive,
+         s.ucSectorsPerCluster, s.uiTotalClusters, s.uiFreeClusters);
     vBDOSAnswer(&s, sizeof(s));
 }
 
@@ -563,7 +567,7 @@ static void vSplitPath(const QString &_szMSXPath, QString &_rszDirectory, QStrin
     Directory and last item of path or FIB + file name
  =======================================================================================================================
  */
-unsigned char MainWindow::ucGetFindTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char &_rucDrive, QString &_rszDirectory, QString &_rszItem)
+unsigned char Server::ucGetFindTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char &_rucDrive, QString &_rszDirectory, QString &_rszItem)
 {
     if (_roFIB.m_ucFF == 0xFF)
     {
@@ -585,7 +589,7 @@ unsigned char MainWindow::ucGetFindTarget(const tdFileInfoBlock &_roFIB, const Q
     Function $40 _FFIRST
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_FIRST_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucSearchAttributes)
+void Server::vDOS_FIND_FIRST_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucSearchAttributes)
 {
     unsigned char   ucDrive;
     QString         szDirectory;
@@ -648,7 +652,7 @@ void MainWindow::vDOS_FIND_FIRST_ENTRY(tdFileInfoBlock &_roFIB, const QString &_
     Function $41 _FNEXT
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
+void Server::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
 {
     unsigned char   ucDrive = _roFIB.m_ucDrive ? _roFIB.m_ucDrive - 1 : m_ucCurrentPhysicalDrive;
     unsigned char   ucSearchAttributes = _roFIB.m_aucClient[0];
@@ -693,7 +697,7 @@ void MainWindow::vDOS_FIND_NEXT_ENTRY(tdFileInfoBlock &_roFIB)
     Attributes: b7 = create new (error if exists), b4 = sub-directory
  =======================================================================================================================
  */
-void MainWindow::vDOS_FIND_NEW_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucAttributes, const char *_acTemplate)
+void Server::vDOS_FIND_NEW_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucAttributes, const char *_acTemplate)
 {
     unsigned char   ucDrive;
     QString         szDirectory;
@@ -780,7 +784,7 @@ static QIODevice::OpenMode eOpenMode(unsigned char _ucOpenMode)
     Answer error and new file handle (0FFH if no file)
  =======================================================================================================================
  */
-void MainWindow::vAnswerHandle(unsigned char _ucError, QFile *_poFile)
+void Server::vAnswerHandle(unsigned char _ucError, QFile *_poFile)
 {
     PACK_PUSH
     struct
@@ -816,7 +820,7 @@ void MainWindow::vAnswerHandle(unsigned char _ucError, QFile *_poFile)
     Function $43 _OPEN
  =======================================================================================================================
  */
-void MainWindow::vDOS_OPEN_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode)
+void Server::vDOS_OPEN_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -858,7 +862,7 @@ void MainWindow::vDOS_OPEN_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QStr
     Attributes: b7 = create new (error if exists), b4 = sub-directory (no file handle)
  =======================================================================================================================
  */
-void MainWindow::vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode, unsigned char _ucAttributes)
+void Server::vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucOpenMode, unsigned char _ucAttributes)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -909,7 +913,7 @@ void MainWindow::vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QS
     Function $45 _CLOSE
  =======================================================================================================================
  */
-void MainWindow::vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle)
+void Server::vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle)
 {
     unsigned char ucError = DOS_ERR_OK;
 
@@ -930,7 +934,7 @@ void MainWindow::vDOS_CLOSE_FILE_HANDLE(unsigned char _ucFileHandle)
     Function $48 _READ
  =======================================================================================================================
  */
-void MainWindow::vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize)
+void Server::vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigned short int _uiSize)
 {
     PACK_PUSH
     struct
@@ -963,7 +967,7 @@ void MainWindow::vDOS_READ_FROM_FILE_HANDLE(unsigned char _ucFileHandle, unsigne
     Function $49 _WRITE
  =======================================================================================================================
  */
-void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QByteArray &_racData)
+void Server::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QByteArray &_racData)
 {
     PACK_PUSH
     struct
@@ -1021,7 +1025,7 @@ void MainWindow::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QB
     Function $4A _SEEK
  =======================================================================================================================
  */
-void MainWindow::vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, qint32 _iOffset)
+void Server::vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsigned char _ucMethodCode, qint32 _iOffset)
 {
     PACK_PUSH
     struct
@@ -1067,7 +1071,7 @@ void MainWindow::vDOS_MOVE_FILE_HANDLE_POINTER(unsigned char _ucFileHandle, unsi
  =======================================================================================================================
  =======================================================================================================================
  */
-unsigned char MainWindow::ucDelete(unsigned char _ucDrive, const QString &_szPath)
+unsigned char Server::ucDelete(unsigned char _ucDrive, const QString &_szPath)
 {
     QFileInfo oInfo(_szPath);
 
@@ -1100,7 +1104,7 @@ unsigned char MainWindow::ucDelete(unsigned char _ucDrive, const QString &_szPat
     Function $4D _DELETE
  =======================================================================================================================
  */
-void MainWindow::vDOS_DELETE_FILE_OR_SUBDIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath)
+void Server::vDOS_DELETE_FILE_OR_SUBDIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -1138,7 +1142,7 @@ static unsigned char ucRename(const QString &_szPath, const QString &_szNewPath)
     New host path for _RENAME (new name in same directory) or _MOVE (new directory, same drive)
  =======================================================================================================================
  */
-unsigned char MainWindow::ucNewPath(unsigned char _ucDrive, const QString &_szPath, const QString &_szNew, bool _bMove, QString &_rszNewPath)
+unsigned char Server::ucNewPath(unsigned char _ucDrive, const QString &_szPath, const QString &_szNew, bool _bMove, QString &_rszNewPath)
 {
     QFileInfo oInfo(_szPath);
 
@@ -1177,7 +1181,7 @@ unsigned char MainWindow::ucNewPath(unsigned char _ucDrive, const QString &_szPa
     Function $4F _MOVE
  =======================================================================================================================
  */
-void MainWindow::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szNew, bool _bMove)
+void Server::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szNew, bool _bMove)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -1206,7 +1210,7 @@ void MainWindow::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QStrin
     Get or set attributes (only read-only can be changed)
  =======================================================================================================================
  */
-void MainWindow::vAttributes(unsigned char _ucError, const QString &_szPath, unsigned char _ucSet, unsigned char _ucNewAttributes)
+void Server::vAttributes(unsigned char _ucError, const QString &_szPath, unsigned char _ucSet, unsigned char _ucNewAttributes)
 {
     PACK_PUSH
     struct
@@ -1251,7 +1255,7 @@ void MainWindow::vAttributes(unsigned char _ucError, const QString &_szPath, uns
     Get or set date and time
  =======================================================================================================================
  */
-void MainWindow::vDateTime(unsigned char _ucError, const QString &_szPath, QFile *_poFile, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
+void Server::vDateTime(unsigned char _ucError, const QString &_szPath, QFile *_poFile, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
 {
     PACK_PUSH
     struct
@@ -1303,7 +1307,7 @@ void MainWindow::vDateTime(unsigned char _ucError, const QString &_szPath, QFile
     Function $50 _ATTR
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned char _ucNewAttributes)
+void Server::vDOS_GET_SET_FILE_ATTRIBUTES(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned char _ucNewAttributes)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -1317,7 +1321,7 @@ void MainWindow::vDOS_GET_SET_FILE_ATTRIBUTES(const tdFileInfoBlock &_roFIB, con
     Function $51 _FTIME
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_DATE_AND_TIME(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
+void Server::vDOS_GET_SET_FILE_DATE_AND_TIME(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -1331,7 +1335,7 @@ void MainWindow::vDOS_GET_SET_FILE_DATE_AND_TIME(const tdFileInfoBlock &_roFIB, 
     Get host path of file handle
  =======================================================================================================================
  */
-unsigned char MainWindow::ucGetHandlePath(unsigned char _ucFileHandle, QString &_rszPath)
+unsigned char Server::ucGetHandlePath(unsigned char _ucFileHandle, QString &_rszPath)
 {
     QFile *poFile = m_apoOpenedFiles[_ucFileHandle];
 
@@ -1352,7 +1356,7 @@ unsigned char MainWindow::ucGetHandlePath(unsigned char _ucFileHandle, QString &
     The file handle stays allocated (but dead) until it is closed.
  =======================================================================================================================
  */
-void MainWindow::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
+void Server::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
 {
     QString         szPath;
     unsigned char   ucError = ucGetHandlePath(_ucFileHandle, szPath);
@@ -1378,7 +1382,7 @@ void MainWindow::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
     Function $54 _HMOVE
  =======================================================================================================================
  */
-void MainWindow::vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, const QString &_szNew, bool _bMove)
+void Server::vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, const QString &_szNew, bool _bMove)
 {
     QString         szPath;
     QString         szNewPath;
@@ -1421,7 +1425,7 @@ void MainWindow::vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, co
     Function $55 _HATTR
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned char _ucNewAttributes)
+void Server::vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned char _ucNewAttributes)
 {
     QString         szPath;
     unsigned char   ucError = ucGetHandlePath(_ucFileHandle, szPath);
@@ -1434,7 +1438,7 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_ATTRIBUTES(unsigned char _ucFileHandle
     Function $56 _HFTIME
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
+void Server::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(unsigned char _ucFileHandle, unsigned char _ucSet, unsigned short int _uiNewTime, unsigned short int _uiNewDate)
 {
     QString         szPath;
     unsigned char   ucError = ucGetHandlePath(_ucFileHandle, szPath);
@@ -1447,7 +1451,7 @@ void MainWindow::vDOS_GET_SET_FILE_HANDLE_DATE_AND_TIME(unsigned char _ucFileHan
     Function $59 _GETCD
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber)
+void Server::vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber)
 {
     unsigned char   ucDrive = _ucDriveNumber ? _ucDriveNumber - 1 : m_ucCurrentPhysicalDrive;
     QByteArray      acPath;
@@ -1473,7 +1477,7 @@ void MainWindow::vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber)
     Function $5A _CHDIR
  =======================================================================================================================
  */
-void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath)
+void Server::vDOS_CHANGE_CURRENT_DIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath)
 {
     unsigned char   ucDrive;
     QString         szPath;
@@ -1500,7 +1504,7 @@ void MainWindow::vDOS_CHANGE_CURRENT_DIRECTORY(const tdFileInfoBlock &_roFIB, co
     Function $5E _WPATH: whole path of the last entry found
  =======================================================================================================================
  */
-void MainWindow::vDOS_GET_WHOLE_PATH_STRING()
+void Server::vDOS_GET_WHOLE_PATH_STRING()
 {
     PACK_PUSH
     struct

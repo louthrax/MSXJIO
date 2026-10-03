@@ -423,7 +423,7 @@ class Server:
             if d == RAM and self.ram_segs:
                 total, free = self.ram_segs * 16384, self.ram_free()
             spc = 1
-            while total // 512 // spc > 0x7FFF and spc < 128:
+            while total // 512 // spc > 0x7FFF and spc < 2:      # as the C++ server: COMMAND2 shows up to 32767K
                 spc *= 2
             return [struct.pack('<BHH', spc, min(total // 512 // spc, 0x7FFF), min(free // 512 // spc, 0x7FFF))]
         if func in (0x40, 0x42):

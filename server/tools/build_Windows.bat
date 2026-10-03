@@ -60,6 +60,28 @@ if errorlevel 1 goto fail
 copy /Y "release\%PROJECT_NAME%.exe" "deploy\%PROJECT_NAME%.exe"
 if errorlevel 1 goto fail
 
+rem Command line server (cli\JIOServerCLI.pro), in the same package
+mkdir "%USERPROFILE%\Build\cli"
+if errorlevel 1 goto fail
+
+cd /D "%USERPROFILE%\Build\cli"
+if errorlevel 1 goto fail
+
+"%QMAKE%" "%SCRIPT_DIR%\cli\JIOServerCLI.pro" CONFIG+=release
+if errorlevel 1 goto fail
+
+nmake -f Makefile
+if errorlevel 1 goto fail
+
+"%WINDEPLOYQT%" "release\JIOServerCLI.exe" --dir "%USERPROFILE%\Build\deploy" --release
+if errorlevel 1 goto fail
+
+copy /Y "release\JIOServerCLI.exe" "%USERPROFILE%\Build\deploy\JIOServerCLI.exe"
+if errorlevel 1 goto fail
+
+cd /D "%USERPROFILE%\Build"
+if errorlevel 1 goto fail
+
 "%SCRIPT_DIR%\tools\MakeWinInst.py" "%PROJECT_NAME% %BUILD_VERSION%" "%PROJECT_NAME%" "%BUILD_VERSION%" "deploy" "%OUT_EXE%"
 if errorlevel 1 goto fail
 

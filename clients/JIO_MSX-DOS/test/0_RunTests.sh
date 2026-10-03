@@ -11,6 +11,10 @@
 #   hybrid  hybrid ROM (p0_hybrid.asm, same build as 0_Make_DOS2_Hybrid.sh)
 #   all     both (default)
 # Results: out/<scenario>/ (screens, mock server log, JIO drive, floppy contents)
+#
+# REAL_SERVER=<path of JIOServerCLI> (environment): the real server (server/cli) instead of mockserver.py, on a
+# pseudo terminal (realbridge.py between it and the bridge). The checks of the log of the mock server and the
+# JIOTIME scenarios (date of the mock server) are skipped.
 
 set -u
 
@@ -119,8 +123,21 @@ run_scenario() {
         [ -n "${IMAGE_SETUP:-}" ] && $IMAGE_SETUP "$image"
     fi
 
-    MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} MOCK_DRIVE=${JIO_DRIVE:-A} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
-    mp=$!
+    if [ -n "${REAL_SERVER:-}" ]; then
+        # real server (JIOServerCLI) on a pseudo terminal, realbridge.py between it and the bridge
+        rm -f pty.path
+        python3 "$TEST/realbridge.py" "$MOCK_PORT" pty.path &
+        mp=$!
+        while [ ! -s pty.path ]; do sleep 0.1; done
+        local serve=(-d "${JIO_DRIVE:-A}=$dir/drive")
+        [ -n "$image" ] && serve=(-i "$image")
+        [ -n "${READ_ONLY:-}" ] && serve+=(-r)
+        "$REAL_SERVER" "${serve[@]}" --port "$(cat pty.path)" -q -l server.log &
+        mp="$mp $!"
+    else
+        MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} MOCK_DRIVE=${JIO_DRIVE:-A} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
+        mp=$!
+    fi
     sleep 1
     TOOL_TX=$(tool_addr vJIOTransmit) TOOL_RX=$(tool_addr bJIOReceive) \
     NFS_TX=${NFS:+$(nfs_offset vJIOTransmit)} NFS_RX=${NFS:+$(nfs_offset bJIOReceive)} \
@@ -148,6 +165,8 @@ run_scenario() {
 # ------------------------------------------------------------------------------
 ERRORS=""
 check()      { [ "$2" ] || ERRORS="$ERRORS\n    - $1"; }
+# check of the log of the mock server (format of mockserver.py): not done with the real server (REAL_SERVER)
+mock_check() { [ -n "${REAL_SERVER:-}" ] || check "$@"; }
 has_text()   { grep -qF -- "$2" "$1" 2> /dev/null; }
 count_text() { grep -cF -- "$2" "$1" 2> /dev/null; }
 
@@ -308,7 +327,7 @@ test_noserver() { # name rom map machine floppy size description
     run_scenario "$1" "$2" "$3" "$4" "-carta $2" 'DIR\r\n' "$TEST/tcl/screens.tcl" "$5" "$OUT/floppy_dos" 0
     local d="$OUT/$1"
     begin_checks "$1"
-    check "no request to the server" "$([ ! -s "$d/server.log" ] && echo ok)"
+    mock_check "no request to the server" "$([ ! -s "$d/server.log" ] && echo ok)"
     check "MSX-DOS 2 booted from the floppy" "$(has_text "$d/screen_60.txt" 'COMMAND2.COM version' && echo ok)"
     check "FCB test result" "$(has_text "$d/screen_60.txt" "$FCB_OK" && echo ok)"
     check "RAMDISK without server: not enough memory" "$(grep -qi 'not enough memory' "$d/floppy_out/ramd.txt" 2> /dev/null && echo ok)"
@@ -322,9 +341,9 @@ test_image_hybrid() { # name rom map machine slots floppy size description
     IMAGE_MODE=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$DOS_IMAGE" "$TEST/tcl/screens.tcl" "$6" "$OUT/floppy_base" 1
     local d="$OUT/$1" i="$OUT/$1/image_out"
     begin_checks "$1"
-    check "handshake: drive info, no drive served by BDOS" "$(has_text "$d/server.log" 'INFO' && has_text "$d/server.log" 'LOGIN 00' && echo ok)"
-    check "only drive commands, RESET and LOGIN" "$( ! grep -qvE '^(RESET|LOGIN 00|INFO|DISK CHANGED|(READ|WRITE) P[0-9])' "$d/server.log" && echo ok)"
-    check "sectors written to the image" "$(grep -q '^WRITE P0' "$d/server.log" && echo ok)"
+    mock_check "handshake: drive info, no drive served by BDOS" "$(has_text "$d/server.log" 'INFO' && has_text "$d/server.log" 'LOGIN 00' && echo ok)"
+    mock_check "only drive commands, RESET and LOGIN" "$( ! grep -qvE '^(RESET|LOGIN 00|INFO|DISK CHANGED|(READ|WRITE) P[0-9])' "$d/server.log" && echo ok)"
+    mock_check "sectors written to the image" "$(grep -q '^WRITE P0' "$d/server.log" && echo ok)"
     check "FCB test result" "$(has_text "$d/screen_60.txt" "$FCB_OK" && echo ok)"
     check "FIBTEST as the original MSX-DOS 2 on a FAT drive" "$(has_text "$d/screens.txt" "$FIB_FAT" && has_text "$d/screens.txt" "$FNEW_FAT" && echo ok)"
     check "X.COM identical to COMMAND2.COM (image)" "$(cmp -s "$i/x.com" "$OUT/base/COMMAND2.COM" && echo ok)"
@@ -379,7 +398,7 @@ test_bootloader_hybrid() { # name rom map machine slots description
     local d="$OUT/$1"
     begin_checks "$1"
     check "boot loader started (GAME STARTED)" "$(has_text "$d/screen_20.txt" 'GAME STARTED' && echo ok)"
-    check "boot sector read (sector 0)" "$(grep -q '^READ P0 0 x 1' "$d/server.log" && echo ok)"
+    mock_check "boot sector read (sector 0)" "$(grep -q '^READ P0 0 x 1' "$d/server.log" && echo ok)"
     check "MSX-DOS 2 not started" "$( ! has_text "$d/screen_20.txt" 'MSX-DOS' && echo ok)"
     end_checks "$1" "$6"
 }
@@ -389,6 +408,7 @@ test_bootloader_hybrid() { # name rom map machine slots description
 # to the chip), the default date uses a month it keeps.
 test_jiotime() { # name rom map machine slots description [mock date]
     wanted "$1" || return
+    [ -n "${REAL_SERVER:-}" ] && return     # date of the mock server (or no answer)
     local date=${7:-"2031-10-25 13:45:30"}
     MOCK_DATE="$date" run_scenario "$1" "$2" "$3" "$4" "$5" 'JIOTIME\r\n' "$TEST/tcl/screens.tcl" "" "" 1 "15"
     local d="$OUT/$1"

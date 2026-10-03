@@ -68,6 +68,10 @@ void InterfaceSerialPort::onError(QSerialPort::SerialPortError _eError)
         oError += m_poSerialPort->errorString();
 
     emit log(eLogError, oError);
+
+    // device removed (USB adapter unplugged): closed, deviceDisconnected emitted (outside of the signal of the port)
+    if (_eError == QSerialPort::SerialPortError::ResourceError)
+        QMetaObject::invokeMethod(this, [this]() { vDisconnectDevice2(); }, Qt::QueuedConnection);
 }
 
 /*
@@ -215,7 +219,7 @@ QString InterfaceSerialPort::oGetName()
         "  Vendor ID: 0x%04X\n"
         "  Product ID: 0x%04X\n"
         "  System Location: %s",
-        qPrintable(info.portName()),
+        qPrintable(info.portName().isEmpty() ? m_poSerialPort->portName() : info.portName()),
         qPrintable(info.description()),
         qPrintable(info.manufacturer()),
         qPrintable(info.serialNumber()),

@@ -37,6 +37,17 @@ Needs `openmsx` (with the system ROMs of the machines used), `z88dk` and `python
 Because the serial routines are replaced, the tests do not check the transmission timings: those are
 only tested on real hardware.
 
+## Real server
+
+```
+REAL_SERVER=<build>/JIOServerCLI ./0_RunTests.sh
+```
+
+runs the scenarios with the real server (`server/cli`, command line version of the C++ server) instead of
+`mockserver.py`: the server opens a pseudo terminal as its serial port, `realbridge.py` passes the bytes
+between it and the bridge (one answer of the server = one `FFh..F0h` packet). The checks of the log of the
+mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, no answer) are skipped.
+
 ## Scenarios
 
 | Scenario | ROM | Machine | Tests |

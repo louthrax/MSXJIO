@@ -290,7 +290,7 @@
          <x>290</x>
          <y>240</y>
          <width>61</width>
-         <height>51</height>
+         <height>25</height>
         </rect>
        </property>
        <property name="text">
@@ -302,8 +302,34 @@
        </property>
        <property name="iconSize">
         <size>
-         <width>40</width>
-         <height>40</height>
+         <width>20</width>
+         <height>20</height>
+        </size>
+       </property>
+       <property name="checkable">
+        <bool>false</bool>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="commandLinePushButton">
+       <property name="geometry">
+        <rect>
+         <x>290</x>
+         <y>266</y>
+         <width>61</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset resource="Icons.qrc">
+         <normaloff>:/icons/commandLine.svg</normaloff>:/icons/commandLine.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>20</width>
+         <height>20</height>
         </size>
        </property>
        <property name="checkable">
