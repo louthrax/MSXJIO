@@ -659,12 +659,18 @@ void vInstallStub()
  */
 char g_acEnvValue[256] = { 0 };
 
-void vRestoreProgramItem() __naked
+/*
+ =======================================================================================================================
+    Value of an environment item (_GENV) in g_acEnvValue, empty if not found
+ =======================================================================================================================
+ */
+void vGetEnv(const char *_szItem) __naked
 {
+    _szItem;
+
 __asm
         push    ix
         push    iy
-        ld      hl,shell_item
         ld      de,_g_acEnvValue
         ld      b,255
         ld      c,0x6B      ; _GENV
@@ -674,6 +680,19 @@ __asm
         xor     a
         ld      (_g_acEnvValue),a
 genv_ok:
+        pop     iy
+        pop     ix
+        ret
+__endasm;
+}
+
+void vRestoreProgramItem() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      hl,shell_item
+        call    _vGetEnv
         ld      hl,program_item
         ld      de,_g_acEnvValue
         ld      c,0x6C      ; _SENV
@@ -739,22 +758,61 @@ void vApplyDriveChanges()
  =======================================================================================================================
  =======================================================================================================================
  */
+static void vExample(const char *_szName, const char *_szText)
+{
+    unsigned char   ucLength = 0;
+
+    vPrint("  ");
+    vPrint(_szName);
+    while (_szName[ucLength])
+        ucLength++;
+    for (; ucLength < 3; ucLength++)
+        vPutChar(' ');                      // columns aligned as for a 3 letter name
+    vPrint(_szText);
+}
+
 void vUsage(void)
 {
-    puts("\r\nUsage: RFS [+] [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
-    puts("  +          Add / handle all the drives served by the server\r\n");
-    puts("  +<drive>   Add / handle drive (A..H)\r\n");
-    puts("  -<drive>   Remove / unhandle drive (A..H)\r\n");
-    puts("  S          Show currently handled drives\r\n");
-    puts("  V          Show the steps of the install\r\n");
-    puts("  H          Show this help\r\n");
-    puts("\r\nExamples:\r\n");
-    puts("  RFS +           ; install and handle the drives served\r\n");
-    puts("  RFS +A +B       ; install and handle drives A and B\r\n");
-    puts("  RFS -C          ; remove drive C\r\n");
-    puts("  RFS S           ; list handled drives\r\n");
-    puts("  RFS H           ; show this message\r\n");
+    char    acName[9];
+    char    *pcName = acName;
+
+    // name of the program: PROGRAM environment item (path of the program, set by COMMAND2), without path and extension
+    vGetEnv("PROGRAM");
+    for (char *pcPath = g_acEnvValue; *pcPath; pcPath++)
+    {
+        if ((*pcPath == '\\') || (*pcPath == ':'))
+            pcName = acName;
+        else if (*pcPath == '.')
+            break;
+        else if (pcName < acName + 8)
+            *pcName++ = *pcPath;
+    }
+    if (pcName == acName)
+    {
+        acName[0] = 'J';
+        acName[1] = 'I';
+        acName[2] = 'O';
+        pcName = acName + 3;
+    }
+    *pcName = 0;
+
+    vPrint("\r\nUsage: ");
+    vPrint(acName);
+    vPrint(" [+] [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
+    vPrint("  +          Add / handle all the drives served by the server\r\n");
+    vPrint("  +<drive>   Add / handle drive (A..H)\r\n");
+    vPrint("  -<drive>   Remove / unhandle drive (A..H)\r\n");
+    vPrint("  S          Show currently handled drives\r\n");
+    vPrint("  V          Show the steps of the install\r\n");
+    vPrint("  H          Show this help (also without parameters)\r\n");
+    vPrint("\r\nExamples:\r\n");
+    vExample(acName, " +           ; install and handle the drives served\r\n");
+    vExample(acName, " +A +B       ; install and handle drives A and B\r\n");
+    vExample(acName, " -C          ; remove drive C\r\n");
+    vExample(acName, " S           ; list handled drives\r\n");
+    vExample(acName, " H           ; show this message\r\n");
 }
+
 /*
  =======================================================================================================================
  =======================================================================================================================
@@ -804,6 +862,12 @@ int main(int argc, char **argv)
 
     bAddRequired = false;
     bRemoveRequired = false;
+
+    if (argc < 2)
+    {
+        vUsage();                           // no parameter: help
+        return 0;
+    }
 
     bInstalled = bCheckRFS(&pcBase);
 
