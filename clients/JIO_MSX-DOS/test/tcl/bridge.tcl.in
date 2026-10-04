@@ -6,6 +6,7 @@
 # 0 simulates [ESC] (no server). Default 1.
 # JIO_HANDSHAKE (environment): if not empty, the handshake is not skipped (COMMAND_DRIVE_INFO and _LOGIN
 # of the driver, sent to the mock server like the commands of DSKIO).
+# JIO_AUTORETRY (environment): if not empty, "Auto retry" flag of the server in the skipped handshake.
 set jio_drives [expr {[info exists ::env(JIO_DRIVES)] ? $::env(JIO_DRIVES) : 1}]
 set mock_port  [expr {[info exists ::env(MOCK_PORT)] ? $::env(MOCK_PORT) : 9876}]
 
@@ -29,7 +30,7 @@ proc do_ret {} {
     reg sp [expr {($sp + 2) & 0xFFFF}]
 }
 
-# RFS_TX: HL = data, BC = size
+# J_TXSEG (RFS_TX, request sent again by RFS_RX): HL = data, BC = size
 proc rfs_tx {} {
     set hl [reg hl]
     set n [reg bc]
@@ -76,7 +77,7 @@ proc drv_rx {} {
     rfs_rx
 }
 
-debug set_bp @RFS_TX@ {[sig @RFS_TX@ {0x78 0xB1 0xC8 0xD9}]} { rfs_tx }
+debug set_bp @J_TXSEG@ {[sig @J_TXSEG@ {0xD9 0xC5 0xD5 0xD9}]} { rfs_tx }
 debug set_bp @J_RX1@ {[sig @J_RX1@ {0xD5 0x11 0x00 0x00 0x2B}]} { rfs_rx }
 debug set_bp @vJIOTransmit@ {[sig @vJIOTransmit@ {0xD9 0xC5 0xD5 0xD9}]} { drv_tx }
 debug set_bp @bJIOReceive@ {[sig @bJIOReceive@ {0x62 0x6B 0x50 0x59}]} { drv_rx }
@@ -108,11 +109,19 @@ if {[info exists ::env(NFS_TX)] && $::env(NFS_TX) ne ""} {
     }
 }
 
-# skipped handshake: W_DRIVES = JIO drives, W_RFS = directories served
+# skipped handshake: W_DRIVES = JIO drives, W_RFS = directories served, reset of the server (sent by the driver)
 if {![info exists ::env(JIO_HANDSHAKE)] || $::env(JIO_HANDSHAKE) eq ""} {
     debug set_bp @DRIVES_Retry@ {[sig @DRIVES_Retry@ {0x3E 0x07 0xCD}]} {
         poke [expr {([reg ix] + 2) & 0xFFFF}] $::jio_drives
         poke [expr {([reg ix] + 7) & 0xFFFF}] [expr {$::jio_drives ? 1 : 0}]
+        if {[info exists ::env(JIO_AUTORETRY)] && $::env(JIO_AUTORETRY) ne ""} {
+            poke [expr {([reg ix] + 3) & 0xFFFF}] 8
+        }
+        if {$::jio_drives} {
+            puts -nonewline $::sock [binary format a1s T 6]
+            puts -nonewline $::sock [binary format a3ccc JIO 0 22 0x1D]
+            flush $::sock
+        }
         reg pc @DRIVES_Exit@
     }
 }

@@ -53,6 +53,7 @@ IF (IDEDOS1 || HYBRID)
 ENDIF
 IFDEF HYBRID
         PUBLIC	W_RFS
+        PUBLIC	W_FLAGS
 ENDIF
 	PUBLIC	MYSIZE
         PUBLIC	SECLEN
@@ -153,6 +154,10 @@ IFDEF HYBRID
         ; Directories served (BDOS _LOGIN not 0): number of JIO drives = highest drive served,
         ; the files are served by the kernel (rfs.asm).
         ; Disk image served (_LOGIN = 0): JIO drives = partitions of the image, local FAT drives (DSKIO).
+        ld	de,ResetCmd		; reset the server file system state (no answer)
+        ld	bc,6
+        di
+        call	vJIOTransmit
 DRIVES_Login:
         ld	a,7
         call	SNSMAT
@@ -426,6 +431,7 @@ PrintMsg:	ex      (sp),hl
 
 IFDEF HYBRID
 LoginCmd:	db	"JIO",0,22,18h		; COMMAND_BDOS, _LOGIN
+ResetCmd:	db	"JIO",0,22,1Dh		; COMMAND_BDOS, reset (RFS_RESET)
 ENDIF
 
 PrintString:	ld      a,(hl)

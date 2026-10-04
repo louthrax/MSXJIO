@@ -20,10 +20,11 @@ Needs `openmsx` (with the system ROMs of the machines used), `z88dk` and `python
 
 - The ROM is assembled into `out/` (without the IAR compiler step: `drv_jio_c.asm` is used as is).
 - `tcl/bridge.tcl.in` is turned into `bridge.tcl` with the addresses of the ROM map file. In openMSX it
-  intercepts the serial routines of the kernel (`RFS_TX`, `J_RX1`) and of the driver (`vJIOTransmit`,
+  intercepts the serial routines of the kernel (`J_TXSEG`, `J_RX1`) and of the driver (`vJIOTransmit`,
   `bJIOReceive`) and forwards the bytes to `mockserver.py` over TCP. The "waiting for server"
-  handshake of the ROM is skipped; `JIO_DRIVES` sets the number of JIO drives it reports (0 simulates
-  [ESC]). With `JIO_HANDSHAKE` (disk image scenario), the handshake is not skipped.
+  handshake of the ROM is skipped (the RESET request of the driver is still sent); `JIO_DRIVES` sets the
+  number of JIO drives it reports (0 simulates [ESC]), `JIO_AUTORETRY` the "Auto retry" flag of the server.
+  With `JIO_HANDSHAKE` (disk image scenario), the handshake is not skipped.
 - `mockserver.py` implements the `COMMAND_BDOS` file functions of the protocol
   (see `msxjio_protocol_specification.md`) on a host directory, served as drive A:. It follows the
   behavior of the C++ server, it is not the C++ server: server changes must still be tested with the
@@ -63,6 +64,7 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `dos2_readonly` | MSX-DOS 2 | VG-8235 (360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: and floppy B: writable |
 | `dos2_bootsector` | MSX-DOS 2 | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
 | `dos2_image` | MSX-DOS 2 | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
+| `dos2_retry_auto`, `dos2_retry_ask`, `dos2_retry_write` | MSX-DOS 2 | VG-8235, FS-A1ST | answer of the server lost once (`MOCK_DROP`: request containing a text). Auto retry (`JIO_AUTORETRY`): the request is sent again, no error. No auto retry: "Not ready reading drive A:", Retry typed (`tcl/typecmd.tcl`), the request is sent again. Write on the turbo R: data sent again from the TPA segment in page 2 (the mock server has done the first write: the data is written twice, as with the real server) |
 | `jiotime`, `jiotime_tr`, `jiotime_none` | MSX-DOS 2 | VG-8235, FS-A1ST | `clients/JIO_TIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
 | `nfs_nms8255`, `nfs_turbor` | JIO.COM (`clients/JIO_NFS`) | NMS 8255 + MSX-DOS 2 cartridge, FS-A1ST (internal MSX-DOS 2) | no JIO ROM: `JIO +D` from the floppy A:, then (after the warm restart of JIO.COM) `NFSTEST.BAT` typed at the prompt (`tcl/typecmd.tcl`): DIR, TYPE, COPY to D: (byte compare, date set with `_HFTIME`), MD/CD, REN, MOVE, ATTRIB, FCB open / block read / close (`fcbread/`), parameters and buffers in page 2 (`p2test/`: path, FIB, `_READ` buffer, FCB and DTA at 9000H and above, hidden by the driver which is mapped in page 2). The bridge intercepts the serial routines of the resident driver (or stub) when JIO.COM installs its hook. Not tested: redirection to D: (`_DUP` not supported by JIO.COM) |
 

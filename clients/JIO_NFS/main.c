@@ -523,11 +523,11 @@ static bool bInfoCRCOK()
     return (g_aucInfoCRC[0] == (unsigned char) uiCRC) && (g_aucInfoCRC[1] == (unsigned char) (uiCRC >> 8));
 }
 
-// false if cancelled with [ESC]
-bool bGetServerInfo()
+// Request to the server and its answer (and the CRC of the answer if _pvCRC), Z80 mode (turbo R), interrupts
+// disabled. false: time-out.
+bool bServerExchange(const void *_pvRequest, unsigned int _uiRequestSize, void *_pvAnswer, unsigned int _uiAnswerSize, void *_pvCRC)
 {
     bool    bTurbo = bHasTurbo();
-    bool    bWaiting = false;
     bool    bReceived;
     char    cCPU = 0;
 
@@ -536,13 +536,73 @@ bool bGetServerInfo()
         cCPU = cGetCPU();
         vSetCPU(0);                         // Z80 mode: timings of the serial routines
     }
+    vDI();
+    vInfoTransmit(_pvRequest, _uiRequestSize);
+    bReceived = bInfoReceive(_pvAnswer, _uiAnswerSize) && (!_pvCRC || bInfoReceive(_pvCRC, 2));
+    vEI();
+    if (bTurbo)
+        vSetCPU(cCPU);
+    return bReceived;
+}
+
+/*
+ =======================================================================================================================
+    Drives served by the server ("JIO +"): BDOS _LOGIN, as the hybrid JIO ROM at boot (bit 0 = A:). Answer without
+    CRC: asked just after the server information, a few times.
+ =======================================================================================================================
+ */
+static const unsigned char g_aucLoginCommand[] = { 'J', 'I', 'O', 0, COMMAND_BDOS, 0x18 };
+unsigned char g_ucLogin = 0;                // answer (never on the stack)
+
+bool bGetServedDrives()
+{
+    unsigned char ucTry;
+
+    for (ucTry = 0; ucTry < 5; ucTry++)
+    {
+        if (bServerExchange(g_aucLoginCommand, sizeof(g_aucLoginCommand), &g_ucLogin, sizeof(g_ucLogin), 0))
+            return true;
+    }
+    vError("No answer from the server.\r\n", 1);
+    return false;
+}
+
+// "JIO +": all the drives served by the server are handled (false: none or no answer)
+bool bAddServedDrives()
+{
+    char            acDrive[] = "  :";
+    unsigned char   ucDrive;
+
+    if (!bGetServedDrives())
+        return false;
+    if (!g_ucLogin)
+    {
+        vError("No drive served by the server (disk image mode ?).\r\n", 1);
+        return false;
+    }
+    vPrint("Drives served:");
+    for (ucDrive = 0; ucDrive < 8; ucDrive++)
+    {
+        if (g_ucLogin & (1 << ucDrive))
+        {
+            g_aucDrivesToChange[ucDrive] = 1;
+            acDrive[1] = 'A' + ucDrive;
+            vPrint(acDrive);
+        }
+    }
+    vPrint("\r\n");
+    return true;
+}
+
+// false if cancelled with [ESC]
+bool bGetServerInfo()
+{
+    bool    bWaiting = false;
+    bool    bReceived;
 
     for (;;)
     {
-        vDI();
-        vInfoTransmit(g_aucInfoCommand, sizeof(g_aucInfoCommand));
-        bReceived = bInfoReceive(g_aucInfo, sizeof(g_aucInfo)) && bInfoReceive(g_aucInfoCRC, sizeof(g_aucInfoCRC));
-        vEI();
+        bReceived = bServerExchange(g_aucInfoCommand, sizeof(g_aucInfoCommand), g_aucInfo, sizeof(g_aucInfo), g_aucInfoCRC);
         if (bReceived && bInfoCRCOK())
             break;
         bReceived = false;
@@ -561,8 +621,6 @@ bool bGetServerInfo()
         }
     }
 
-    if (bTurbo)
-        vSetCPU(cCPU);
     if (bWaiting)
         vPrint("\r\n");
     if (!bReceived)
@@ -683,13 +741,15 @@ void vApplyDriveChanges()
  */
 void vUsage(void)
 {
-    puts("\r\nUsage: RFS [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
+    puts("\r\nUsage: RFS [+] [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
+    puts("  +          Add / handle all the drives served by the server\r\n");
     puts("  +<drive>   Add / handle drive (A..H)\r\n");
     puts("  -<drive>   Remove / unhandle drive (A..H)\r\n");
     puts("  S          Show currently handled drives\r\n");
     puts("  V          Show the steps of the install\r\n");
     puts("  H          Show this help\r\n");
     puts("\r\nExamples:\r\n");
+    puts("  RFS +           ; install and handle the drives served\r\n");
     puts("  RFS +A +B       ; install and handle drives A and B\r\n");
     puts("  RFS -C          ; remove drive C\r\n");
     puts("  RFS S           ; list handled drives\r\n");
@@ -738,6 +798,7 @@ int main(int argc, char **argv)
     bool            bInstalled;
     bool            bAddRequired;
     bool            bRemoveRequired;
+    bool            bAddAll = false;
     unsigned char * pcBase;
     unsigned char * szArg;
 
@@ -756,7 +817,12 @@ int main(int argc, char **argv)
         {
             str_to_upper(szArg);
 
-            if (szArg[1])
+            if ((szArg[0] == '+') && !szArg[1])
+            {
+                bAddAll = true;             // all the drives served by the server
+                bAddRequired = true;
+            }
+            else if (szArg[1])
             {
                 if (!szArg[2])
                 {
@@ -791,17 +857,17 @@ int main(int argc, char **argv)
             {
                 if (bInstalled)
                 {
-                    char acDisks[] = " ";
-                    puts("Disks handled: ");
+                    vPrint("Disks handled:");
                     for(int iIndex = 0; iIndex < 8; iIndex++)
                     {
                         if (g_pbHandledDrives[iIndex])
                         {
-                            acDisks[0] = 'A' + iIndex;
-                            puts(acDisks);
+                            vPutChar(' ');
+                            vPutChar('A' + iIndex);
+                            vPutChar(':');
                         }
                     }
-                    puts("\r\n");
+                    vPrint("\r\n");
                 }
                 else
                     puts("RFS not installed.\r\n");
@@ -825,7 +891,7 @@ int main(int argc, char **argv)
     {
         if (bAddRequired)
         {
-            if (!bGetServerInfo())
+            if (!bGetServerInfo() || (bAddAll && !bAddServedDrives()))
             {
                 puts("RFS not installed.\r\n");
                 return g_iResult;
@@ -858,6 +924,8 @@ __endasm;
     }
     else
     {
+        if (bAddAll && !bAddServedDrives())
+            return g_iResult;
         if (bAddRequired || bRemoveRequired)
         {
             vApplyDriveChanges();

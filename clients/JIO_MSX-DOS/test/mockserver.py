@@ -17,6 +17,9 @@ MOCK_DATE (environment): answer of COMMAND_DATE_TIME ("YYYY-MM-DD HH:MM:SS", def
 
 MOCK_READONLY (environment): "Read only" button of the server, the served directories cannot be modified
 (error .WPROT), the RAM disk stays writable.
+
+MOCK_DROP (environment): the answer of the first BDOS request containing this text is not sent (lost answer, the
+client sends the request again).
 """
 import os, re, socket, struct, sys, shutil, datetime, tempfile, atexit, signal
 
@@ -28,6 +31,7 @@ if IMAGE:
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 9876
 LOG = open(sys.argv[3] if len(sys.argv) > 3 else '/dev/stdout', 'w', buffering=1)
 RAM = 7                           # RAM disk drive (H:)
+DROP = os.environ.get('MOCK_DROP', '').encode()  # answer not sent once (request containing this text)
 signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 FIBFMT = '<B13sBHHHIB6sI13sB'
@@ -703,6 +707,7 @@ class Server:
 
 
 def main():
+    global DROP
     srv = Server()
     ls = socket.socket()
     ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -769,6 +774,10 @@ def main():
                             continue
                         else:
                             out = srv.command(r)
+                            if DROP and DROP in stream[:r.pos]:
+                                LOG.write('DROPPED (answer not sent)\n')
+                                DROP = b''
+                                out = []
                     except Incomplete:
                         break
                     stream = stream[r.pos:]

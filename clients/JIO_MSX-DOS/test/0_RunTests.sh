@@ -54,7 +54,7 @@ build_rom() { # name kernel defines
 make_bridge() { # map output
     local a
     a() { grep -E "^$1 " "$2" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
-    sed -e "s/@RFS_TX@/$(a RFS_TX "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g; s/@vJIOTransmit@/$(a vJIOTransmit "$1")/g; s/@bJIOReceive@/$(a bJIOReceive "$1")/g" \
+    sed -e "s/@J_TXSEG@/$(a J_TXSEG "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g; s/@vJIOTransmit@/$(a vJIOTransmit "$1")/g; s/@bJIOReceive@/$(a bJIOReceive "$1")/g" \
         "$TEST/tcl/bridge.tcl.in" > "$2"
 }
 
@@ -263,6 +263,35 @@ test_basic() { # name rom map machine slots drive description [floppy size]
     if [ "$6" = A ]; then loc="$d/drive"; prog=PROG.BAS; data=DATA.TXT; else loc="$d/floppy_out"; prog=prog.bas; data=data.txt; fi
     check "PROG.BAS saved on $6:" "$([ -f "$loc/$prog" ] && echo ok)"
     check "DATA.TXT deleted (KILL)" "$([ ! -f "$loc/$data" ] && echo ok)"
+    end_checks "$1" "$7"
+}
+
+# Answer of the server lost (MOCK_DROP): the request is sent again (auto retry), or "Not ready" error, then Retry
+RETRY_CMDS='TYPE HELLO.TXT\r\nDIR /W\r\n'
+# lost answer of a write (data in the TPA segment, page 2): the request and the data are sent again
+RETRY_WRITE='COPY HELLO.TXT X.TXT\r\nTYPE X.TXT\r\nDIR /W\r\n'
+test_retry() { # name rom map machine slots auto|ask description [text of the dropped request] [commands]
+    wanted "$1" || return
+    local d="$OUT/$1" drop=${8:-HELLO.TXT} cmds=${9:-$RETRY_CMDS}
+    if [ "$6" = auto ]; then
+        MOCK_DROP=$drop JIO_AUTORETRY=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/screens.tcl" "" "" 1 "25"
+    else
+        MOCK_DROP=$drop TYPE_TIME=20 TYPE_TEXT=${RETRY_KEY:-r} run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/typecmd.tcl" "" "" 1 "19 30"
+    fi
+    begin_checks "$1"
+    mock_check "answer dropped once" "$([ "$(count_text "$d/server.log" 'DROPPED')" = 1 ] && echo ok)"
+    if [ "$6" != auto ]; then
+        check "Not ready error (Abort, Retry)" "$(has_text "$d/screen_19.txt" 'Not ready' && echo ok)"
+    else
+        check "no error shown" "$( ! has_text "$d/screens.txt" 'Not ready' && echo ok)"
+    fi
+    if [ -z "${9:-}" ]; then
+        mock_check "request sent again" "$([ "$(grep -c "^FFIRST 'A:HELLO.TXT'" "$d/server.log")" = 2 ] && echo ok)"
+    else
+        check "file written (X.TXT)" "$(has_text "$d/drive/X.TXT" 'Hello' && echo ok)"
+    fi
+    check "TYPE output" "$(has_text "$d/screens.txt" 'Hello' && echo ok)"
+    check "DIR after the retry" "$(has_text "$d/screens.txt" 'FCBTEST' && echo ok)"
     end_checks "$1" "$7"
 }
 
@@ -475,6 +504,9 @@ test_takeover_hybrid dos2_takeover    "$R" "$RM" Philips_NMS_8255  720 "NMS 8255
 test_readonly        dos2_readonly    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, read only server, floppy B: writable" 360
 test_bootloader_hybrid dos2_bootsector "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, disk image mode: self-booting image (boot loader of the boot sector)"
 test_image_hybrid    dos2_image       "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
+test_retry           dos2_retry_auto "$R" "$RM" Philips_VG_8235  "-carta $R" auto "VG-8235, answer lost, auto retry: request sent again"
+test_retry           dos2_retry_ask  "$R" "$RM" Philips_VG_8235   "-carta $R" ask  "VG-8235, answer lost, no auto retry: Not ready, Retry"
+test_retry           dos2_retry_write "$R" "$RM" Panasonic_FS-A1ST "-carta $R" ask "turbo R, answer of a write lost: Not ready, Retry" 'Hello from' "$RETRY_WRITE"
 
 echo "Clients:"
 test_jiotime   jiotime      "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM sets the date and time"

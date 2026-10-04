@@ -61,6 +61,10 @@
 	IFDEF HYBRID
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 		EXTERN	W_RFS		; Offset in the driver work area: not 0 if the server serves directories
+		EXTERN	W_FLAGS		; Offset in the driver work area: flags of the server (COMMAND_DRIVE_INFO)
+		EXTERN	RFS_TURBO	; Kernel (rfs.asm): turbo R flag
+		EXTERN	RFS_RETRY	; Kernel (rfs.asm): not 0 for auto retry
+		EXTERN	RFS_NJIO	; Kernel (rfs.asm): number of JIO drives
 	ENDIF
 
 		; Additional symbol defined by the ide driver module
@@ -4523,6 +4527,33 @@ C_RFS:		CALL	GETWRK			; IX = work area of the JIO driver
 		OR	A
 		RET
 
+; Subroutine initialize the JIO remote file system of the kernel (rfs.asm), after the kernel initialization
+; (kernel in page 0, data segment in page 2)
+C_RFSINIT:	LD	A,(EXPTBL)
+		LD	HL,IDBYT2
+		CALL	RDSLT
+		CP	3			; turbo R?
+		LD	A,0
+		JR	NZ,J_RFI1
+		DEC	A
+J_RFI1:		LD	(RFS_TURBO),A
+		CALL	GETWRK			; IX = work area of the JIO driver
+		LD	A,(IX+W_FLAGS)
+		AND	8			; FLAG_AUTO_RETRY
+		LD	(RFS_RETRY),A
+		LD	HL,DRVTBL		; JIO drives: drives of the first disk interface, if it is this one and if the
+		LD	A,(MASTER)		; server serves directories (disk image served: the JIO drives are local drives,
+		INC	HL			; sectors read and written by DSKIO)
+		CP	(HL)
+		DEC	HL
+		LD	A,0
+		JR	NZ,J_RFI2
+		OR	(IX+W_RFS)
+		JR	Z,J_RFI2
+		LD	A,(HL)
+J_RFI2:		LD	(RFS_NJIO),A
+		RET
+
 ; Subroutine get valid boot loader
 ; Note: DOSV231 changes not implemented
 C694A:		LD      HL,I6A02		; on BDOS disk error warm boot (start DiskBASIC)
@@ -5146,6 +5177,11 @@ J410F:		DI
 		CALL    PUT_P2
 		CALL    C418C			; initialize characterset
 I416E:		CALL    0                       ; initialize BDOS code
+	IFDEF HYBRID
+		PUSH	AF
+		CALL	C_RFSINIT		; initialize JIO remote file system of the kernel
+		POP	AF
+	ENDIF
 		EX      AF,AF'
 		DI
 		LD      A,(EXPTBL+0)

@@ -152,7 +152,9 @@ J0101:		LD	B,5			; number of buffers
 		CALL	F_BUFFER		; allocate buffers
 		LD	B,00H
 		CALL	F_JOIN
-		CALL	RFS_INIT		; JIO remote file system
+	IFNDEF HYBRID
+		CALL	RFS_INIT		; JIO remote file system (HYBRID: C_RFSINIT of p1_main.asm)
+	ENDIF
 		CALL	K_CON_INIT
 	IF OPTM = 0
 		; copy cursor on/off escape codes to data segment

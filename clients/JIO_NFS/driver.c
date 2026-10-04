@@ -92,7 +92,8 @@ unsigned char          g_ucPreviousErrorCode = 0;
 bool                   g_bResult = 0;
 unsigned int           g_uiAbortSP = 0;     // stack of vCallHandler: a BDOS function is abandoned there (no answer)
 const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
-unsigned char          g_ucCurrentDisk = 0;
+unsigned char          g_ucCurrentDisk = 0xFF;  // current drive if it is a drive of the server, FFH: drive of MSX-DOS
+unsigned char          g_ucDosDrive = 0xFF;     // current drive of MSX-DOS (_SELDSK, _CURDRV), FFH: unknown
 unsigned char          g_bHasTurbo = false;
 bool                   g_bLastFindHandled = false;  // last _FFIRST/_FNEXT/_FNEW on a JIO drive (for _WPATH)
 // All the variables are initialized: they are then in the code of the driver (an uninitialized variable would be at
@@ -498,6 +499,25 @@ static void vReceive(void *_pvAddress, unsigned int _uiLength)
 
 /*
  =======================================================================================================================
+    Original BDOS function being handled (TPA mapped), its results in the registers. Only for the function being
+    handled: MSX-DOS calls the function it received, whatever C is (another function cannot be called this way).
+ =======================================================================================================================
+ */
+static void vOriginalFunction()
+{
+    vCopy(g_pucStub + STUB_REGISTERS, (const unsigned char *) &g_aoRegisters, sizeof(g_aoRegisters));
+    vStubOriginal();
+    vCopy((unsigned char *) &g_aoRegisters, g_pucStub + STUB_REGISTERS, sizeof(g_aoRegisters));
+}
+
+// Current drive (0 = A:): drive of the server selected by _SELDSK, or current drive of MSX-DOS (FFH: unknown)
+static unsigned char ucCurrentDrive()
+{
+    return (g_ucCurrentDisk != 0xFF) ? g_ucCurrentDisk : g_ucDosDrive;
+}
+
+/*
+ =======================================================================================================================
  =======================================================================================================================
  */
 bool bIsPhysicalDriveHandled(unsigned char _ucPhysicalDrive)
@@ -511,7 +531,7 @@ bool bIsPhysicalDriveHandled(unsigned char _ucPhysicalDrive)
  */
 bool bIsLogicalDriveHandled(unsigned char _ucLogicalDrive)
 {
-    return bIsPhysicalDriveHandled(_ucLogicalDrive ? _ucLogicalDrive - 1 : g_ucCurrentDisk);
+    return bIsPhysicalDriveHandled(_ucLogicalDrive ? _ucLogicalDrive - 1 : ucCurrentDrive());
 }
 
 /*
@@ -1187,6 +1207,8 @@ static void vDOS_RANDOM_BLOCK_READ_FCB()
  =======================================================================================================================
  =======================================================================================================================
  */
+// Drive of the server: current drive of the driver. Other drive: selected by MSX-DOS (not changed if it does not
+// exist, as programs check with _CURDRV).
 static void vDOS_SELECT_DISK()
 {
     if (bIsPhysicalDriveHandled(E))
@@ -1196,9 +1218,17 @@ static void vDOS_SELECT_DISK()
         vReceive(&A, sizeof(A));
         L = A;
         g_bResult = false;
+        g_ucCurrentDisk = E;
     }
-
-    g_ucCurrentDisk = E;
+    else
+    {
+        // A = number of drives: the drive does not exist after them (current drive of MSX-DOS not changed)
+        g_bResult = true;
+        vOriginalFunction();
+        g_ucCurrentDisk = 0xFF;
+        if (E < A)
+            g_ucDosDrive = E;
+    }
 }
 
 /*
@@ -1216,22 +1246,33 @@ static void vDOS_GET_PREVIOUS_ERROR_CODE()
  =======================================================================================================================
  =======================================================================================================================
  */
+// Drives of MSX-DOS and drives of the server
 static void vDOS_GET_LOGIN_VECTOR()
 {
-    g_bResult = true;                       // answered here, nothing sent to the server
-    H = 0;
-    L = 15;
+    unsigned char ucDrive;
+
+    g_bResult = true;
+    vOriginalFunction();
+    for (ucDrive = 0; ucDrive < 8; ucDrive++)
+        if (bIsPhysicalDriveHandled(ucDrive))
+            L |= 1 << ucDrive;
 }
 
 /*
  =======================================================================================================================
  =======================================================================================================================
  */
+// Drive of the server selected: answered here. Otherwise: MSX-DOS (current drive of MSX-DOS known).
 static void vDOS_GET_CURRENT_DRIVE()
 {
-    g_bResult = true;                       // answered here, nothing sent to the server
-
-    L = A = g_ucCurrentDisk;
+    g_bResult = true;                       // nothing sent to the server
+    if (g_ucCurrentDisk != 0xFF)
+        L = A = g_ucCurrentDisk;
+    else
+    {
+        vOriginalFunction();
+        g_ucDosDrive = A;
+    }
 }
 
 /*
@@ -1243,11 +1284,9 @@ static void vDOS_PARSE_PATHNAME()
     g_bResult = true;
 
     // original function (with the TPA mapped), drive of the current disk of the driver if no drive is given
-    vCopy(g_pucStub + STUB_REGISTERS, (unsigned char *) &g_aoRegisters, sizeof(g_aoRegisters));
-    vStubOriginal();
-    vCopy((unsigned char *) &g_aoRegisters, g_pucStub + STUB_REGISTERS, sizeof(g_aoRegisters));
+    vOriginalFunction();
 
-    if (!(B & 4))
+    if (!(B & 4) && (g_ucCurrentDisk != 0xFF))
         C = g_ucCurrentDisk + 1;
 }
 

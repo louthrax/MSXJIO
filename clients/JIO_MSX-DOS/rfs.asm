@@ -43,6 +43,9 @@ RFS_RH:		DEFB	0		; remote file handle
 RFS_OP:		DEFB	0		; b0 = read, b2 = segment type
 RFS_TURBO:	DEFB	0		; turbo R flag
 RFS_CPU:	DEFB	0		; saved CPU mode
+RFS_RETRY:	DEFB	0		; not 0: auto retry (server setting, HYBRID: set at boot by C_RFSINIT of p1_main.asm)
+RFS_SEGP:	DEFW	RFS_SEGS	; end of RFS_SEGS
+RFS_SEGS:	DEFS	5*4,0		; parts of the request (address, size), sent again if the server does not answer
 	IFNDEF HYBRID
 RFS_LOGIN:	DEFB	0		; drives served by the server (bit 0 = A:)
 	ENDIF
@@ -87,8 +90,13 @@ RFS_DPB:	DEFS	36,0		; unopened FCB for _SFIRST, dummy DPB for _ALLOC
 
 ; ---------------------------------------------------------
 ; Subroutine initialize remote file system
-; Called once by K_INIT
+; Called once by K_INIT (HYBRID: C_RFSINIT of p1_main.asm, after K_INIT)
 ; ---------------------------------------------------------
+	IFDEF HYBRID
+		PUBLIC	RFS_TURBO		; set at boot by C_RFSINIT (p1_main.asm), with RFS_RETRY and RFS_NJIO
+		PUBLIC	RFS_RETRY
+		PUBLIC	RFS_NJIO
+	ELSE
 RFS_INIT:	LD	A,(EXPTBL)
 		LD	HL,IDBYT2
 		CALL	C000C			; RDSLT
@@ -97,33 +105,6 @@ RFS_INIT:	LD	A,(EXPTBL)
 		JR	NZ,J_RI1
 		DEC	A
 J_RI1:		LD	(RFS_TURBO),A
-	IFDEF HYBRID
-		LD	HL,DRVTBL		; JIO drives: drives of the first disk interface, if it is this one
-		LD	A,(MASTER)
-		INC	HL
-		CP	(HL)
-		DEC	HL
-		LD	A,0
-		JR	NZ,J_RI6
-		LD	A,(HL)
-J_RI6:		LD	(RFS_NJIO),A
-		OR	A
-		RET	Z			; no JIO drive (no server)
-		LD	A,RFS_RESET		; reset server state (no answer)
-		CALL	RFS_CMD
-		CALL	RFS_END
-		LD	A,18H			; get drives served
-		CALL	RFS_CMD
-		LD	HL,RFS_BUF
-		LD	BC,1
-		CALL	RFS_RX
-		CALL	RFS_END
-		LD	A,(RFS_BUF)
-		OR	A
-		RET	NZ			; directories served
-		LD	(RFS_NJIO),A		; disk image served: the JIO drives are local drives (sectors, see DSKIO)
-		RET
-	ELSE
 		LD	A,RFS_RESET		; reset server state (no answer)
 		CALL	RFS_CMD
 		CALL	RFS_END
@@ -173,6 +154,8 @@ RFS_CMD:	LD	(RFS_FUNC),A
 		CALL	K_BIOS
 		POP	IX
 J_RC1:		DI
+		LD	HL,RFS_SEGS		; new request
+		LD	(RFS_SEGP),HL
 		LD	HL,RFS_HDR
 		LD	BC,6
 		JR	RFS_TX
@@ -245,7 +228,7 @@ J_TS1:		LD	A,(HL)
 		POP	HL
 
 ; ---------------------------------------------------------
-; Subroutine transmit data
+; Subroutine transmit data, part of the request (RFS_SEGS)
 ; Input:  HL = pointer to data
 ;         BC = size
 ; May corrupt: AF,BC,HL
@@ -253,7 +236,21 @@ J_TS1:		LD	A,(HL)
 RFS_TX:		LD	A,B
 		OR	C
 		RET	Z
-		EXX
+		PUSH	DE
+		EX	DE,HL
+		LD	HL,(RFS_SEGP)
+		LD	(HL),E
+		INC	HL
+		LD	(HL),D
+		INC	HL
+		LD	(HL),C
+		INC	HL
+		LD	(HL),B
+		INC	HL
+		LD	(RFS_SEGP),HL
+		EX	DE,HL
+		POP	DE
+J_TXSEG:	EXX
 		PUSH	BC
 		PUSH	DE
 		EXX
@@ -357,6 +354,7 @@ J_TX17:		OUT	(C),E			; -1
 
 ; ---------------------------------------------------------
 ; Subroutine receive one answer packet, wait until received
+; No answer: the request is sent again (auto retry), or "not ready" disk error (abort, retry, ignore)
 ; Input:  HL = pointer to buffer
 ;         BC = size
 ; May corrupt: AF,BC,DE,HL
@@ -370,11 +368,55 @@ J_RX0:		PUSH	HL
 		LD	D,B
 		LD	E,C
 		CALL	J_RX1
+		OR	A
+		JR	NZ,J_RX5		; received
+		LD	A,(RFS_RETRY)
+		OR	A
+		CALL	Z,RFS_NRDY
+		LD	HL,RFS_SEGS		; request sent again
+J_RX3:		LD	DE,(RFS_SEGP)
+		OR	A
+		SBC	HL,DE
+		ADD	HL,DE
+		JR	Z,J_RX4
+		LD	E,(HL)
+		INC	HL
+		LD	D,(HL)
+		INC	HL
+		LD	C,(HL)
+		INC	HL
+		LD	B,(HL)
+		INC	HL
+		PUSH	HL
+		EX	DE,HL
+		CALL	J_TXSEG
+		POP	HL
+		JR	J_RX3
+
+J_RX4:		POP	BC
+		POP	HL
+		JR	J_RX0
+
+J_RX5:		LD	HL,RFS_SEGS		; answer started: the request is not sent again (its buffer may be overwritten)
+		LD	(RFS_SEGP),HL
 		POP	BC
 		POP	HL
-		OR	A
-		JR	Z,J_RX0			; time-out: server not ready yet
 		POP	IX
+		RET
+
+; Server not ready: disk error of the first drive (JIO), returns on retry or ignore
+; (Z80 mode kept on turbo R, the CPU mode of the caller is restored by RFS_END)
+RFS_NRDY:	CALL	GET_P2			; transfer segment of RFS_RW
+		PUSH	AF
+		LD	A,(DATA_S)
+		CALL	PUT_P2
+		LD	HL,(I_BA23+2)		; drive table of the first drive
+		LD	DE,0FFFFH		; no sector
+		LD	A,_NRDY
+		CALL	C3689
+		POP	AF
+		CALL	PUT_P2
+		DI
 		RET
 
 ; Input:  HL = buffer, DE = size
@@ -1567,18 +1609,29 @@ J_GC1:
 		PUSH	DE
 		LD	C,59H
 		CALL	RFS_CMD1
-		LD	HL,RFS_BUF
+		POP	DE
 		LD	BC,1
+		CALL	RFS_RXSTR
+		XOR	A
+		RET
+
+; Subroutine receive header in RFS_BUF and string, end command
+; Input:  BC = size of the header (last byte: size of the string)
+;         DE = pointer to string buffer
+RFS_RXSTR:	PUSH	DE
+		LD	HL,RFS_BUF
+		PUSH	BC
 		CALL	RFS_RX
+		POP	BC
+		LD	HL,RFS_BUF-1
+		ADD	HL,BC
+		LD	C,(HL)
+		LD	B,0
 		POP	HL
 		PUSH	HL
-		LD	A,(RFS_BUF)
-		LD	C,A
-		LD	B,0
 		CALL	RFS_RX
 		CALL	RFS_END
 		POP	DE
-		XOR	A
 		RET
 
 ; ---------------------------------------------------------
@@ -1589,17 +1642,9 @@ J_GC1:
 R_WPATH:	PUSH	DE
 		LD	A,5EH
 		CALL	RFS_CMD
-		LD	HL,RFS_BUF
-		LD	BC,3
-		CALL	RFS_RX
-		POP	HL
-		PUSH	HL
-		LD	A,(RFS_BUF+2)
-		LD	C,A
-		LD	B,0
-		CALL	RFS_RX
-		CALL	RFS_END
 		POP	DE
+		LD	BC,3
+		CALL	RFS_RXSTR
 		LD	A,(RFS_BUF+1)
 		LD	L,A
 		LD	H,0
