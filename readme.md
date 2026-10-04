@@ -233,7 +233,8 @@ JIOServerCLI --list                                       # serial ports (and th
 | `-i`, `--image <file>` | serve a disk image (floppy, or hard disk with partitions) |
 | `-d`, `--drive [X=]<dir>` | serve a directory as drive X: (A to H, next free drive without `X=`), can be repeated |
 | `-r`, `--read-only` | refuse all writes (the RAM disk H: stays writable) |
-| `--no-rx-crc`, `--no-tx-crc`, `--no-auto-retry`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways, auto retry) |
+| `--no-rx-crc`, `--no-tx-crc`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways) |
+| `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry): disk image, and directories with JIO.COM ("Not ready" after 1 s) |
 | `-p`, `--port <port>` | serial port (`ttyUSB0`, `/dev/ttyUSB0`, `/dev/serial/by-id/...`, `COM3`) |
 | `-b`, `--bluetooth <address>` | Bluetooth device instead of a serial port (`--scan-bluetooth` lists them) |
 | `-l`, `--log <file>` | also write the log to a file (appended) |

@@ -71,7 +71,11 @@ try:
         kind = recv_exact(1)
         n = struct.unpack('<H', recv_exact(2))[0]
         if kind == b'T':
-            os.write(master, recv_exact(n))
+            data = recv_exact(n)
+            try:
+                os.write(master, data)
+            except OSError:
+                pass                    # no server on the pseudo terminal: the bytes are lost
         else:
             # sync of the packet, then its data
             b = read_byte(TIMEOUT)

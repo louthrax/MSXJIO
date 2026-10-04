@@ -740,6 +740,14 @@ def main():
                         cmd = r.byte()
                         if IMAGE and CMD_READ <= cmd <= CMD_CHANGED:
                             out = drive_command(r, flags, cmd)
+                        elif cmd == CMD_INFO:
+                            # directories (JIO.COM at install): flags of the server ("Auto retry", MOCK_AUTORETRY,
+                            # default on as the C++ server), no drive, description
+                            retry = os.environ.get('MOCK_AUTORETRY', '1') != '0'
+                            LOG.write('INFO (auto retry %s)\n' % ('on' if retry else 'off'))
+                            info = b'\r\nMock server: directories\r\n'
+                            data = (bytes([8 if retry else 0, 0, 0]) + info + b'\0' * 512)[:512]
+                            out = [data] + ([struct.pack('<H', crc16(data))] if flags & FLAG_RX_CRC else [])
                         elif cmd == CMD_LOG:
                             LOG.write('MSX: %s\n' % r.string())
                             out = []

@@ -23,6 +23,8 @@
 ;   STUB_DRIVES         8 bytes: drives handled (A: to H:)
 ;   STUB_HAS_TURBO      turbo R: Z80 mode during the transfers
 ;   STUB_SEGMENT        mapper segment of the driver
+;   STUB_AUTO_RETRY     not 0: "Auto retry" of the server (COMMAND_DRIVE_INFO), the BDOS functions without answer are
+;                       done again; 0: they return "Not ready"
 ;   STUB_BOUNCE         bounce buffer (STUB_BOUNCE_SIZE bytes), to copy TPA data of page 2
 ;   STUB_DPB            dummy DPB returned in IX by _ALLOC: the kernel only takes the sector size at +2, the rest of
 ;                       a DPB is not kept (no program uses it on a drive of the server)
@@ -52,6 +54,7 @@ Registers:	defs	10,0			; STUB_REGISTERS: BC, AF, HL, DE, IX
 Drives:		defs	8,0			; STUB_DRIVES
 HasTurbo:	defb	0			; STUB_HAS_TURBO
 Segment:	defb	0			; STUB_SEGMENT
+AutoRetry:	defb	0			; STUB_AUTO_RETRY
 Bounce:		defs	STUB_BOUNCE_SIZE,0	; STUB_BOUNCE
 Dpb:		defb	0,0			; STUB_DPB
 		defw	512			; sector size
@@ -60,6 +63,9 @@ IF Registers <> STUB_REGISTERS
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 IF HookOriginal <> STUB_HOOK_ORIGINAL
+		ERROR	"stub.asm layout does not match stub.h"
+ENDIF
+IF AutoRetry <> STUB_AUTO_RETRY
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 IF Bounce <> STUB_BOUNCE

@@ -1,6 +1,7 @@
 
 #include "driver.h"
 #include "stub.h"
+#include "../../common/drv_jio.inc"
 
 extern char driver_start;
 extern char driver_end;
@@ -400,12 +401,187 @@ void vInstallJumper()
 }
 
 // Stub at HIMSAV (memory reserved before the restart of MSX-DOS) and hook
+/*
+ =======================================================================================================================
+    Server information (COMMAND_DRIVE_INFO, as the JIO ROM at boot), before anything is installed: flags of the
+    server ("Auto retry") and description. While the server does not answer: "Waiting for server, press [ESC] to
+    cancel" and a dot for each time-out of the receive routine (about 0.9 s), [ESC] cancels the install.
+ =======================================================================================================================
+ */
+static const unsigned char g_aucInfoCommand[] = { 'J', 'I', 'O', FLAG_RX_CRC, COMMAND_DRIVE_INFO };
+unsigned char g_aucInfo[512] = { 0 };       // answer: flags, drives, boot drive, description (never on the stack)
+unsigned char g_aucInfoCRC[2] = { 0 };      // CRC of the answer (separate packet), low byte first
+unsigned char g_ucAutoRetry = 0;
+
+// Serial routines of the driver (transmit.asm, receive.asm): HL = data, DE = size, interrupts disabled.
+// receive.asm changes IX (frame pointer of the C code): kept by bInfoReceive
+static void vInfoTransmit(const void *_pvSource, unsigned int _uiSize) __naked
+{
+    _pvSource;
+    _uiSize;
+__asm
+#include "transmit.asm"
+__endasm;
+}
+
+static bool bInfoReceive(void *_pvDestination, unsigned int _uiSize) __naked
+{
+    _pvDestination;
+    _uiSize;
+__asm
+    push    ix
+    push    iy
+    call    bJIOReceive
+    pop     iy
+    pop     ix
+    ret
+#include "receive.asm"
+__endasm;
+}
+
+// Main ROM through CALSLT, IX (frame pointer of the C code) and IY kept: GETCPU, CHGCPU (turbo R), SNSMAT
+static char cGetCPU() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      ix,0x0183   ; GETCPU
+        ld      iy,(0xFCC1-1)
+        call    0x001C      ; CALSLT
+        pop     iy
+        pop     ix
+        ret
+__endasm;
+}
+
+static void vSetCPU(char _cCPUMode) __naked
+{
+    _cCPUMode;
+__asm
+        push    ix
+        push    iy
+        ld      ix,0x0180   ; CHGCPU
+        ld      iy,(0xFCC1-1)
+        call    0x001C      ; CALSLT
+        pop     iy
+        pop     ix
+        ret
+__endasm;
+}
+
+static bool bEscPressed() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      a,7         ; row 7: [ESC] = bit 2 (0 = pressed)
+        ld      ix,0x0141   ; SNSMAT
+        ld      iy,(0xFCC1-1)
+        call    0x001C      ; CALSLT
+        pop     iy
+        pop     ix
+        and     4
+        ld      a,0
+        ret     nz
+        inc     a
+        ret
+__endasm;
+}
+
+static void vDI() __naked
+{
+__asm
+        di
+        ret
+__endasm;
+}
+
+static void vEI() __naked
+{
+__asm
+        ei
+        ret
+__endasm;
+}
+
+bool bHasTurbo();
+
+// CRC-16 XModem of the answer: a reception completed by noise (or by the FFH bytes sent by the server when it
+// connects) is not taken as the answer
+static bool bInfoCRCOK()
+{
+    unsigned int  uiCRC = 0;
+    unsigned int  uiIndex;
+    unsigned char ucBit;
+
+    for (uiIndex = 0; uiIndex < sizeof(g_aucInfo); uiIndex++)
+    {
+        uiCRC ^= ((unsigned int) g_aucInfo[uiIndex]) << 8;
+        for (ucBit = 0; ucBit < 8; ucBit++)
+            uiCRC = (uiCRC & 0x8000) ? ((uiCRC << 1) ^ 0x1021) : (uiCRC << 1);
+    }
+    return (g_aucInfoCRC[0] == (unsigned char) uiCRC) && (g_aucInfoCRC[1] == (unsigned char) (uiCRC >> 8));
+}
+
+// false if cancelled with [ESC]
+bool bGetServerInfo()
+{
+    bool    bTurbo = bHasTurbo();
+    bool    bWaiting = false;
+    bool    bReceived;
+    char    cCPU = 0;
+
+    if (bTurbo)
+    {
+        cCPU = cGetCPU();
+        vSetCPU(0);                         // Z80 mode: timings of the serial routines
+    }
+
+    for (;;)
+    {
+        vDI();
+        vInfoTransmit(g_aucInfoCommand, sizeof(g_aucInfoCommand));
+        bReceived = bInfoReceive(g_aucInfo, sizeof(g_aucInfo)) && bInfoReceive(g_aucInfoCRC, sizeof(g_aucInfoCRC));
+        vEI();
+        if (bReceived && bInfoCRCOK())
+            break;
+        bReceived = false;
+
+        if (bEscPressed())
+        {
+            while (bEscPressed());          // [ESC] released: not read by COMMAND2
+            break;
+        }
+        if (bWaiting)
+            vPutChar('.');
+        else
+        {
+            vPrint("Waiting for server, press [ESC] to cancel");
+            bWaiting = true;
+        }
+    }
+
+    if (bTurbo)
+        vSetCPU(cCPU);
+    if (bWaiting)
+        vPrint("\r\n");
+    if (!bReceived)
+        return false;
+
+    g_aucInfo[sizeof(g_aucInfo) - 1] = 0;
+    g_ucAutoRetry = (g_aucInfo[0] & FLAG_AUTO_RETRY) ? 1 : 0;
+    puts((char *) g_aucInfo + 3);           // description of the server (as the JIO ROM)
+    vVerbose("Auto retry: ", g_ucAutoRetry, 2);
+    return true;
+}
+
 void vInstallStub()
 {
     memcopy(HIMSAV, &stub_start, &stub_end - &stub_start);
     vRelocate(HIMSAV, &stub_reloc_start, (&stub_reloc_end - &stub_reloc_start) >> 1);
 
     HIMSAV[STUB_SEGMENT] = g_ucDriverSegment;
+    HIMSAV[STUB_AUTO_RETRY] = g_ucAutoRetry;
     *((unsigned int*)(HIMSAV + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
     *((unsigned int*)(HIMSAV + STUB_GET_P2 + 1)) = (unsigned int) g_pucMapper + 0x27;
     HIMSAV[STUB_HOOK_ORIGINAL + 1] = *((unsigned char*)0xF37B);
@@ -649,6 +825,11 @@ int main(int argc, char **argv)
     {
         if (bAddRequired)
         {
+            if (!bGetServerInfo())
+            {
+                puts("RFS not installed.\r\n");
+                return g_iResult;
+            }
             puts("Installing RFS and drives...\r\n");
             vRestoreProgramItem();
             if (!bInstallDriver())

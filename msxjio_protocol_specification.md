@@ -80,9 +80,10 @@ Count * 512 bytes of raw data
   
 #### 0x12 — COMMAND DRIVE INFO
 
-**Description:** Request server metadata.  
+**Description:** Request server metadata. Sent by the JIO ROMs at boot, and by JIO.COM at install (flags 0: no CRC,
+512-byte answer), in both serve modes.  
 **Payload:** none  
-**Response:**
+**Response:** 512 bytes (+ CRC if requested)
 | Field     | Size        | Description                                            |
 |:----------|:------------|:-------------------------------------------------------|
 | Flags     | 1 byte      | Error detection flags                                  |
@@ -97,10 +98,14 @@ Count * 512 bytes of raw data
 |   1 | TX CRC         |
 |   2 | TIMEOUT        |
 |   3 | RETRY          |
-|   4 | RESERVED       |
+|   4 | SLOW TX        |
 |   5 | RESERVED       |
 |   6 | RESERVED       |
 |   7 | RESERVED       |
+
+RETRY ("Auto retry" of the server) also applies to the served directories: JIO.COM sends again a request without
+answer (receive time-out, about 1 s) until the server answers; without it, the BDOS function returns "Not ready"
+(FFH for the FCB functions), as a drive without disk.
   
   
 #### 0x13 — COMMAND DRIVE DISK CHANGED

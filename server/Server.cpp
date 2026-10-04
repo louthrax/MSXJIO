@@ -124,13 +124,13 @@ QString Server::szGetServerInfo()
     QString oFlags;
     /*~~~~~~~~~~~*/
 
-    // only "Read only" is used for the files of the served directories (COMMAND_BDOS)
+    // only "Read only" and "Auto retry" (JIO.COM) are used for the served directories (COMMAND_BDOS)
     bool bImage = m_eServeMode == eServeDiskImage;
 
     if(m_bRxCRC && bImage) oFlags += "RxCRC ";
     if(m_bTxCRC && bImage) oFlags += "TxCRC ";
     if(m_bTimeout && bImage) oFlags += "Timeout ";
-    if(m_bAutoRetry && bImage) oFlags += "AutoRetry ";
+    if(m_bAutoRetry) oFlags += "AutoRetry ";
     if(m_bReadOnly || (bImage && m_oDrive.bIsMediaWriteProtected())) oFlags += "ReadOnly ";
     if(m_bSlowTx && bImage) oFlags += "SlowTx";
 
@@ -1053,6 +1053,12 @@ void Server::onDeviceConnected()
     vLog(eLogConnected, "Connected to " + m_poInterface->oGetName() + "\n");
     m_bConnectedOnce = true;
     vSetState(eCStateConnected);
+
+    // Unlock: the opening of the port may disturb the line, the MSX may then wait for the data of an answer that is
+    // never sent (no time-out in the data of an answer). FFH bytes complete such a reception (its CRC fails, or FFH =
+    // error code); they are never taken as the start of an answer (sync byte F0H).
+    QByteArray acUnlock(1024, (char) 0xFF);
+    m_poInterface->vWrite(acUnlock);
 }
 
 /*

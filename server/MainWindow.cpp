@@ -222,7 +222,7 @@ MainWindow::MainWindow() :
     m_poUI->unlockPushButton->setToolTip("Send repeated data to the MSX until it responds.\nUseful when the MSX is stuck waiting for data.");
     m_poUI->RxCRC->setToolTip("Enable CRC checking for incoming data on the MSX.\nApplied at MSX startup.");
     m_poUI->TxCRC->setToolTip("Enable CRC for outgoing data to the MSX.\nApplied at MSX startup.");
-    m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.");
+    m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.\nDirectories: used by JIO.COM (otherwise \"Not ready\" after 1 s without answer).\nApplied at MSX startup (JIO.COM: at install).");
     m_poUI->timeout->setToolTip("If enabled, abort the command after a timeout.\nIf disabled, wait indefinitely for a response.");
     m_poUI->readOnly->setToolTip("Prevent writes to the disk image, or to the served directories\n(the RAM disk H: stays writable).");
     m_poUI->fileEjectPushButton->setToolTip("Eject disk image.");
@@ -792,11 +792,11 @@ void MainWindow::vSetServeMode(tdServeMode _eServeMode)
     m_poUI->serveImageButton->setChecked(bImage);
     m_poUI->serveDirectoriesButton->setChecked(!bImage);
 
-    // CRC, retry, timeout and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings are
-    // kept. "Read only" is used in both modes.
+    // CRC, timeout and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings are kept.
+    // "Read only" and "Auto retry" (JIO.COM for the directories) are used in both modes.
     m_poUI->RxCRC->setEnabled(bImage);
     m_poUI->TxCRC->setEnabled(bImage);
-    m_poUI->autoRetry->setEnabled(bImage);
+    m_poUI->autoRetry->setEnabled(true);          // also used by JIO.COM (directories)
     m_poUI->timeout->setEnabled(bImage);
     m_poUI->slowTx->setEnabled(bImage);
 
@@ -919,7 +919,6 @@ QString MainWindow::szCommandLine()
         aszArguments << "-i" << QDir::toNativeSeparators(m_poServer->roDrive().oMediaPath());
         if(!m_poServer->m_bRxCRC) aszArguments << "--no-rx-crc";
         if(!m_poServer->m_bTxCRC) aszArguments << "--no-tx-crc";
-        if(!m_poServer->m_bAutoRetry) aszArguments << "--no-auto-retry";
         if(m_poServer->m_bTimeout) aszArguments << "--timeout";
         if(m_poServer->m_bSlowTx) aszArguments << "--slow-tx";
     }
@@ -934,6 +933,7 @@ QString MainWindow::szCommandLine()
     }
 
     if(m_poServer->m_bReadOnly) aszArguments << "-r";
+    if(!m_poServer->m_bAutoRetry) aszArguments << "--no-auto-retry";
 
     if(!roSelectedID().isEmpty())
         aszArguments << (m_eSelectedInterface == eInterfaceBluetooth ? "-b" : "-p") << roSelectedID();

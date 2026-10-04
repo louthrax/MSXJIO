@@ -82,6 +82,8 @@ prepare_files() {
     ( cd "$OUT/nfs/clients/JIO_NFS" && bash 0_Build.sh > build.log 2>&1 && cp 0_Builds/JIO.COM "$OUT/base/" ) || { echo "Build of JIO.COM failed"; exit 1; }
     # serial routines: in the resident stub (driver in a mapper segment) or in the resident driver
     NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/stub.map"
+    # serial routines of the installer (COMMAND_DRIVE_INFO at install), intercepted as the routines of JIOTIME.COM
+    NFS_MAIN_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/main.map"
     [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/driver.sym"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
@@ -137,7 +139,14 @@ run_scenario() {
         mp=$!
     fi
     sleep 1
-    TOOL_TX=$(tool_addr vJIOTransmit) TOOL_RX=$(tool_addr bJIOReceive) \
+    local tool_tx tool_rx
+    if [ -n "${NFS:-}" ]; then
+        tool_tx=$(grep -E "^vJIOTransmit " "$NFS_MAIN_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/')
+        tool_rx=$(grep -E "^bJIOReceive " "$NFS_MAIN_MAP" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/')
+    else
+        tool_tx=$(tool_addr vJIOTransmit); tool_rx=$(tool_addr bJIOReceive)
+    fi
+    TOOL_TX=$tool_tx TOOL_RX=$tool_rx \
     NFS_TX=${NFS:+$(nfs_offset vJIOTransmit)} NFS_RX=${NFS:+$(nfs_offset bJIOReceive)} \
     JIO_DRIVES=$njio JIO_HANDSHAKE=$handshake SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
         -script bridge.tcl -script "$script" > openmsx.log 2>&1

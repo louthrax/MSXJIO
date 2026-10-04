@@ -86,9 +86,11 @@ typedef union
 unsigned char *        g_pucStub = 0;                   // resident stub (stub.h)
 char *                 g_pcDiskTransferAddress = 0x80;
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };   // registers of the BDOS function (copy of the stub)
+tdRegisters            g_aoRegistersIn = { { 0,0,0,0,0 } }; // input registers of the BDOS function (retry)
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
 unsigned char          g_ucPreviousErrorCode = 0;
 bool                   g_bResult = 0;
+unsigned int           g_uiAbortSP = 0;     // stack of vCallHandler: a BDOS function is abandoned there (no answer)
 const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
 unsigned char          g_ucCurrentDisk = 0;
 unsigned char          g_bHasTurbo = false;
@@ -157,11 +159,20 @@ static bool bStubReceive(void *_pvDestination, unsigned int _uiSize) __naked
     _pvDestination;
     _uiSize;
 __asm
+    push    ix              ; IX (frame pointer of the C code) and IY changed by receive.asm
+    push    iy
+    push    hl
+    ld      hl,bStubReceive_ret
+    ex      (sp),hl
     push    hl
     ld      hl,(_g_pucStub)
     ld      bc,STUB_RECEIVE
     add     hl,bc
     ex      (sp),hl
+    ret
+bStubReceive_ret:
+    pop     iy
+    pop     ix
     ret
 __endasm;
 }
@@ -187,11 +198,20 @@ static bool bStubXferReceive(void *_pvDestination, unsigned int _uiSize) __naked
     _uiSize;
 __asm
     ld      a,1
+    push    ix              ; IX (frame pointer of the C code) and IY changed by receive.asm
+    push    iy
+    push    hl
+    ld      hl,bStubXferReceive_ret
+    ex      (sp),hl
     push    hl
     ld      hl,(_g_pucStub)
     ld      bc,STUB_XFER
     add     hl,bc
     ex      (sp),hl
+    ret
+bStubXferReceive_ret:
+    pop     iy
+    pop     ix
     ret
 __endasm;
 }
@@ -379,6 +399,67 @@ static void vStringFromCaller(unsigned char *_pucDestination, const unsigned cha
     _pucDestination[64] = 0;
 }
 
+/*
+ =======================================================================================================================
+    No answer of the server after a time-out of the receive routine (about 0.9 s at 3.58 MHz): server not started, or
+    started after the request was sent (the request is lost), or disconnected.
+    - "Auto retry" of the server (COMMAND_DRIVE_INFO at install, STUB_AUTO_RETRY): the BDOS function is done again
+      (request sent again), its input registers restored, until the server answers.
+    - Otherwise the BDOS function returns "Not ready" (FFH for the FCB functions), as for a drive without disk.
+    The handler is abandoned at the stack of vCallHandler.
+ =======================================================================================================================
+ */
+static void (*g_pHandler)(void) = 0;        // handler of the BDOS function (vCallHandler)
+
+// Handler g_pHandler, called again from the start by vRetryCommand: IX (frame pointer of the C code) restored
+static void vCallHandler() __naked
+{
+__asm
+    push    ix
+    ld      (_g_uiAbortSP),sp
+call_handler_start:
+    ld      de,call_handler_end
+    push    de
+    ld      hl,(_g_pHandler)
+    jp      (hl)
+call_handler_end:
+    pop     ix
+    ret
+__endasm;
+}
+
+static void vAbortCommand() __naked
+{
+__asm
+    ld      sp,(_g_uiAbortSP)
+    jp      call_handler_end
+__endasm;
+}
+
+static void vRetryCommand() __naked
+{
+__asm
+    ld      sp,(_g_uiAbortSP)
+    jp      call_handler_start
+__endasm;
+}
+
+static void vNoAnswer()
+{
+    if (g_pucStub[STUB_AUTO_RETRY])
+    {
+        vCopy((unsigned char *) &g_aoRegisters, (const unsigned char *) &g_aoRegistersIn, sizeof(g_aoRegisters));
+        vRetryCommand();
+    }
+
+    if ((C == 0x0F) || (C == 0x10) || (C == 0x27))
+        A = L = 0xFF;                       // FCB functions: error
+    else
+        A = DOS_ERR_NRDY;
+    g_bResult = true;
+    vAbortCommand();
+}
+
 // Transfer data of the program
 static void vCallerTransmit(void *_pvSource, unsigned int _uiSize)
 {
@@ -390,10 +471,8 @@ static void vCallerTransmit(void *_pvSource, unsigned int _uiSize)
 
 static void vCallerReceive(void *_pvDestination, unsigned int _uiSize)
 {
-    if (bInPage2(_pvDestination, _uiSize))
-        while (!bStubXferReceive(_pvDestination, _uiSize));
-    else
-        while (!bStubReceive(_pvDestination, _uiSize));
+    if (!(bInPage2(_pvDestination, _uiSize) ? bStubXferReceive(_pvDestination, _uiSize) : bStubReceive(_pvDestination, _uiSize)))
+        vNoAnswer();
 }
 
 /*
@@ -413,7 +492,8 @@ static void vTransmitString(char *_pcString)
 
 static void vReceive(void *_pvAddress, unsigned int _uiLength)
 {
-    while(!bStubReceive(_pvAddress, _uiLength));
+    if (!bStubReceive(_pvAddress, _uiLength))
+        vNoAnswer();
 }
 
 /*
@@ -1306,7 +1386,9 @@ noTurbo1:
 __endasm;
 
     g_oCommonHeader.m_ucFunction = C;
-    pEntry->handler();
+    g_pHandler = pEntry->handler;
+    vCopy((unsigned char *) &g_aoRegistersIn, (const unsigned char *) &g_aoRegisters, sizeof(g_aoRegisters));   // input registers, for a retry
+    vCallHandler();
     g_ucPreviousErrorCode = A;
 
 __asm

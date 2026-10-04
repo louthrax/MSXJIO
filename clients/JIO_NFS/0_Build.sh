@@ -26,7 +26,7 @@ rm "$SRC/jumper.o"
 z88dk-z80asm -b -mz80 -m -reloc-info -o./stub "$SRC/stub.asm"
 rm "$SRC/stub.o"
 
-zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100     -omain   "$SRC/main.c"   2>&1 | grep -v ": warning 283:" | \
+zcc --allseg CODE --no-crt -nostdlib +z80 --sdcccall1 -mz80 -Cl-r0x100 -m  -omain   "$SRC/main.c"   2>&1 | grep -v ": warning 283:" | \
 awk '
 /: error /  {print "\033[1;31m" $0 "\033[0m"; next}
 /: warning / {print "\033[1;33m" $0 "\033[0m"; next}
