@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QGuiApplication>
 #include <QDir>
+#include <QUrl>
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -110,8 +111,14 @@ MainWindow::MainWindow() :
     connect(m_poUI->directoryPathLineEdit_DriveG, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
     connect(m_poUI->directoryPathLineEdit_DriveH, &QLineEdit::editingFinished, this, &MainWindow::onDirectoryPathChanged);
 
-    setFixedSize(size());
+    // Layouts (MainWindow.ui): the window can be resized, the log and the list of the devices take the space
+    // (Android: full screen, any size and orientation)
+    vUpdateDriveRowsHeight();
     setFocusPolicy(Qt::StrongFocus);
+
+#ifdef Q_OS_ANDROID
+    m_poUI->imagePathLineEdit->setReadOnly(true);   // content:// URI from the file picker, only its name is shown
+#endif
 
     onRedLightTimer();
     m_poRedLightOffTimer->setSingleShot(true);
@@ -144,7 +151,7 @@ MainWindow::MainWindow() :
 
     m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
     m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
-    m_poUI->imagePathLineEdit->setText(m_poSettings->value("LastMediaInserted").toString());
+    vSetImagePath(m_poSettings->value("LastMediaInserted").toString());
     onImagePathValidated();
     m_poServer->roDrive().m_oLastPathBrowsed = m_poSettings->value("LastPathBrowsed").toString();
 
@@ -230,6 +237,7 @@ MainWindow::MainWindow() :
 
     vSetState(m_poServer->eState());
 
+    vUpdateLights();        // counters shown from the start (0 / 0)
     vUpdateDrivePathsTexts();
     vSetServeMode(eServeMode);
 
@@ -237,6 +245,7 @@ MainWindow::MainWindow() :
     vRequestAndroidPermissionsAndSetInterface(this);
 #else
     vSetInterface(m_eSelectedInterface);
+    restoreGeometry(m_poSettings->value("WindowGeometry").toByteArray());     // size and position of the last run
 #endif
 }
 
@@ -346,6 +355,39 @@ void MainWindow::onDataTransmitted(int _iSize)
  =======================================================================================================================
  =======================================================================================================================
  */
+void MainWindow::changeEvent(QEvent *_poEvent)
+{
+    if(_poEvent->type() == QEvent::FontChange)
+        vUpdateDriveRowsHeight();           // application font set after the creation of the window (Main.cpp)
+    QMainWindow::changeEvent(_poEvent);
+}
+
+/*
+ =======================================================================================================================
+    Height of the 8 rows of the directories: compact (21 pixels with the desktop font), higher with a larger font
+    (Android), so that the text is not cut
+ =======================================================================================================================
+ */
+void MainWindow::vUpdateDriveRowsHeight()
+{
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    int			iHeight = qMax(21, QFontMetrics(font()).height() + 4);
+    QLineEdit	*apoLineEdits[] =
+    {
+        m_poUI->directoryPathLineEdit_DriveA, m_poUI->directoryPathLineEdit_DriveB, m_poUI->directoryPathLineEdit_DriveC,
+        m_poUI->directoryPathLineEdit_DriveD, m_poUI->directoryPathLineEdit_DriveE, m_poUI->directoryPathLineEdit_DriveF,
+        m_poUI->directoryPathLineEdit_DriveG, m_poUI->directoryPathLineEdit_DriveH
+    };
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    for(QLineEdit *poLineEdit : apoLineEdits)
+        poLineEdit->setFixedHeight(iHeight);
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
 void MainWindow::vSaveSettings()
 {
     m_poSettings->setValue("LastMediaInserted", m_poServer->roDrive().m_oLastMediaInserted);
@@ -365,6 +407,7 @@ void MainWindow::vSaveSettings()
 
 #ifndef Q_OS_ANDROID
     m_poSettings->setValue("SelectedInterface", m_eSelectedInterface);
+    m_poSettings->setValue("WindowGeometry", saveGeometry());
 #endif
     m_poSettings->sync();
 }
@@ -638,7 +681,7 @@ void MainWindow::onButtonClicked()
 
         if(!oImagePath.isEmpty())
         {
-            m_poUI->imagePathLineEdit->setText(oImagePath);
+            vSetImagePath(oImagePath);
             onImagePathValidated();
         }
     }
@@ -724,7 +767,7 @@ void MainWindow::onButtonClicked()
         if(!m_poServer->roDrive().oMediaPath().isEmpty())
         {
             m_poServer->vEjectMedia();
-            m_poUI->imagePathLineEdit->setText("");
+            vSetImagePath("");
             vUpdateMediaIcon();
         }
     }
@@ -855,9 +898,39 @@ void MainWindow::vLog(tdLogType _eLogType, const QString &_szMessage)
  */
 void MainWindow::onImagePathValidated()
 {
-    m_poServer->bInsertMedia(m_poUI->imagePathLineEdit->text());
+#ifndef Q_OS_ANDROID
+    m_oImagePath = m_poUI->imagePathLineEdit->text();       // path can be typed
+#endif
+    m_poServer->bInsertMedia(m_oImagePath);
     vUpdateMediaIcon();
 }
+
+/*
+ =======================================================================================================================
+    Android: the file picker gives a content:// URI (".../document/primary%3ADocuments%2FGame.dsk"), only the file name
+    is shown
+ =======================================================================================================================
+ */
+void MainWindow::vSetImagePath(const QString &_roPath)
+{
+    m_oImagePath = _roPath;
+#ifdef Q_OS_ANDROID
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    QString oName = QFileInfo(_roPath).fileName();         // display name given by the content provider
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    if(oName.isEmpty() || oName.contains('%'))
+    {
+        oName = QUrl::fromPercentEncoding(_roPath.toUtf8());
+        oName = oName.mid(oName.lastIndexOf('/') + 1);
+        oName = oName.mid(oName.lastIndexOf(':') + 1);
+    }
+    m_poUI->imagePathLineEdit->setText(oName);
+#else
+    m_poUI->imagePathLineEdit->setText(_roPath);
+#endif
+}
+
 
 void MainWindow::vUpdateMediaIcon()
 {

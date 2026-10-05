@@ -49,6 +49,7 @@ win32 {
 }
 
 android {
+    ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android     # AndroidManifest.xml (package name, label, icon) and res
     ANDROID_RES_DIR = $$PWD/android/res
 
     RESOLUTIONS_W = \
