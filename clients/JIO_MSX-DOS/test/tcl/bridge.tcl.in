@@ -128,7 +128,7 @@ if {![info exists ::env(JIO_HANDSHAKE)] || $::env(JIO_HANDSHAKE) eq ""} {
 
 # JIO_CART (environment): JIO cartridge ROM, detection of the port of the cartridge (not emulated) -> W_PORT = 30H
 if {[info exists ::env(JIO_CART)] && $::env(JIO_CART) ne ""} {
-    debug set_bp @JioDetect@ {[peek @JioDetect@] == 0x21 && [peek [expr {@JioDetect@ + 3}]] == 0x7E} {
+    debug set_bp @JioDetect@ {[peek @JioDetect@] == 0xDD && [peek [expr {@JioDetect@ + 1}]] == 0x7E} {
         poke [expr {([reg ix] + 8) & 0xFFFF}] 0x30
         do_ret
     }

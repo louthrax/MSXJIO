@@ -130,9 +130,11 @@ Of course, you can also build yourself something more handy like that:
 
 The [JIO cartridge](https://github.com/herraa1/msx-jio-cart-v1) by herraa1 has the ROM, the USB serial and/or
 Bluetooth module, and an I/O register for the serial line: joystick port 2 stays free.
-- ROM: `jio_dos2_cart.rom` (or `jio_dos1_cart.rom`), same code as the standard ROMs except the list of the serial
-  lines tried at boot: the I/O ports of the IOSEL switches (00H, 20H, 30H) are probed, the port found is shown, and
-  without cartridge (all the IOSEL switches off) joystick port 2 is used.
+- ROMs: `jio_dos2.rom` (or `jio_dos1.rom`): while waiting for the server, they try in turn the JIO cartridge (I/O
+  ports 00H, 20H, 30H of the IOSEL switches, used only if the cartridge is found there), joystick port 2 and joystick
+  port 1. The line of the server is kept and shown at boot (except joystick port 2). `jio_dos2_safe.rom` (or
+  `jio_dos1_safe.rom`): joystick ports only, no I/O port written to probe the cartridge (for an MSX with other
+  devices at these ports).
 - JIO.COM and JIOTIME.COM: option `C` (port detected) or `C<port>` (hex: `C00`, `C20`, `C30`), e.g. `JIO C +`,
   `JIOTIME C`. `JIO S` shows the serial line of the installed driver.
 - JIO.COM (at install) and JIOTIME.COM without `J1`, `J2` or `C` option: JIO cartridge (if found), then joystick
@@ -140,13 +142,14 @@ Bluetooth module, and an I/O register for the serial line: joystick port 2 stays
 - The I/O register works whatever the position of the ROMDIS switch (it only disables the flash ROM): with the ROM
   disabled, JIO.COM and JIOTIME.COM can use the cartridge from another boot device.
 
-Joystick port 1 (the adapter wired as for port 2, on port 1): option `J1` of JIO.COM and JIOTIME.COM (`J2`: port 2,
-the default), and ROMs built with `JIO_PORTS="J1"`.
+Joystick port 1 (the adapter wired as for port 2, on port 1): found automatically, or option `J1` of JIO.COM and
+JIOTIME.COM (`J2`: port 2).
 
-Serial lines of the ROMs (`clients/JIO_MSX-DOS/0_Build.sh`, list of `jio_ports.sh`, tried in this order at boot: hex =
-I/O port of a JIO cartridge, probed; `J1`, `J2` = joystick port, last of the list):
-- `JIO_PORTS`: standard ROMs, default `"J2"`, e.g. `JIO_PORTS="J1" ./0_Build.sh dos2`
-- `JIOCART_PORTS`: cartridge ROMs, default `"00 20 30 J2"`, e.g. `JIOCART_PORTS="30" ./0_Build.sh dos2cart`
+Serial lines of the ROMs (`clients/JIO_MSX-DOS/0_Build.sh`, list of `jio_ports.sh`, tried in turn at boot until the
+server answers: hex = I/O port of a JIO cartridge, used if the cartridge is found there; `J1`, `J2` = joystick ports,
+after the I/O ports):
+- `JIO_PORTS`: `dos1`, `dos2`, default `"00 20 30 J2 J1"`, e.g. `JIO_PORTS="00 J2" ./0_Build.sh dos2`
+- `JIOSAFE_PORTS`: `dos1safe`, `dos2safe`, default `"J2 J1"`, e.g. `JIOSAFE_PORTS="J1" ./0_Build.sh dos2safe`
 
 ## Usage instructions for the MSX-DOS clients
 

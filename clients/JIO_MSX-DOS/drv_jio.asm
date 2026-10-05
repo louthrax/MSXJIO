@@ -29,8 +29,9 @@ W_DSKCHG	equ	$6	; Partition changed flags
 W_RFS		equ	$7	; Hybrid: not 0 if the server serves directories (files served by the kernel, no sectors)
 W_PORT		equ	$8	; Serial line (found by JioDetect): 0FFh = joystick port 2, 0FEh = joystick port 1,
 				; else I/O port (JIO cartridge)
-W_HOOK		equ	$9	; Hybrid: H_BDOS hook for _FORMAT (24 bytes, see C_RFSINIT in p1_main.asm)
-MYSIZE		equ	$9+24
+W_LINE		equ	$9	; Index in JioPorts of the next serial line tried
+W_HOOK		equ	$A	; Hybrid: H_BDOS hook for _FORMAT (24 bytes, see C_RFSINIT in p1_main.asm)
+MYSIZE		equ	$A+24
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -117,37 +118,18 @@ IFDEF IDEDOS1
 ELSE
         db	12,"JIO MSX-DOS 2",13,10
 ENDIF
-        db	0
-        call	JioDetect		; serial line: JIO cartridge (I/O port) or joystick port 2
-        ld	a,(ix+W_PORT)
-        inc	a
-        jr	z,DRIVES_Rev		; joystick port 2
-        inc	a
-        jr	nz,DRIVES_Cart
-        call	PrintMsg
-        db	"Joystick port 1",13,10,0
-        jr	DRIVES_Rev
-DRIVES_Cart:
-        call	PrintMsg
-        db	"JIO cartridge, port ",0
-        ld	a,(ix+W_PORT)
-        call	PrintHex
-        call	PrintMsg
-        db	"H",13,10,0
-DRIVES_Rev:
-        call	PrintMsg
         db	"Rev.: "
         INCLUDE	"rdate.inc"		; Revision date
         db	13,10
         db	"Waiting for server,",13,10
         db	"press [ESC] to cancel",0
 
-
+        call	JioDetect		; first serial line (W_PORT)
 DRIVES_Retry:
         ld	a,7
         call	SNSMAT
         and	4
-        jr      z,DRIVES_Exit
+        jp      z,DRIVES_Exit
 
         ld	a,'.'
         rst	$18
@@ -158,8 +140,27 @@ DRIVES_Retry:
         ld	hl,PART_BUF
         di
         call	DoCommand
-        jr	c,DRIVES_Retry
+        jr	nc,DRIVES_Found
+        call	JioDetect		; no answer: next serial line
+        jr	DRIVES_Retry
 
+DRIVES_Found:				; serial line of the server (kept)
+        ld	a,(ix+W_PORT)
+        inc	a
+        jr	z,DRIVES_Info		; joystick port 2
+        inc	a
+        jr	nz,DRIVES_Cart
+        call	PrintMsg
+        db	13,10,"Joystick 1",0
+        jr	DRIVES_Info
+DRIVES_Cart:
+        call	PrintMsg
+        db	13,10,"Cartridge ",0
+        ld	a,(ix+W_PORT)
+        call	PrintHex
+        ld	a,'H'
+        rst	$18
+DRIVES_Info:
         ld	hl,PART_BUF
 
         ld	a,(hl)
@@ -446,19 +447,29 @@ nokey:		or	$ff
         ENDIF ; BOOTCHOICE
 
 ; ------------------------------------------------------------------------------
-; Serial line: the I/O ports of JioPorts are probed in this order (JIO cartridge, detection routine of herraa1, as
-; b3rendsh/msxdos2s) until a joystick port (0FFh = port 2, 0FEh = port 1, not probed)
+; Next serial line of JioPorts (W_LINE, the lines are tried in turn until the server answers): a joystick port
+; (0FFh = port 2, 0FEh = port 1), or the I/O port of a JIO cartridge if the cartridge is found there (detection
+; routine of herraa1, as b3rendsh/msxdos2s), else the next line. JioPorts ends with a joystick port.
 ; Output: (IX+W_PORT) = serial line
+; May corrupt: AF,BC,DE,HL
 ; ------------------------------------------------------------------------------
-JioDetect:	ld	hl,JioPorts
-JioProbe:	ld	a,(hl)
+JioDetect:	ld	a,(ix+W_LINE)
+		ld	e,a
+		inc	a
+		cp	JioPortsEnd-JioPorts
+		jr	c,JioNext
+		xor	a
+JioNext:	ld	(ix+W_LINE),a
+		ld	d,0
+		ld	hl,JioPorts
+		add	hl,de
+		ld	a,(hl)
 		ld	(ix+W_PORT),a
 		cp	0FEh
-		ret	nc
+		ret	nc			; joystick port
 		call	ProbePort
-		ret	z
-		inc	hl
-		jr	JioProbe
+		jr	nz,JioDetect		; no cartridge at this port
+		ret
 
 ; Output: Z = cartridge at port A
 ProbePort:	ld	c,a
@@ -481,10 +492,11 @@ ProbePort:	ld	c,a
 		cp	44h
 		ret
 
-; Serial lines, in this order, ending with a joystick port (JIO_PORTS of 0_Build.sh: joystick port 2 for the
-; standard ROMs, I/O ports 00H, 20H, 30H then joystick port 2 for the JIO cartridge ROMs)
+; Serial lines tried in turn, ending with joystick ports (JIO_PORTS of 0_Build.sh: joystick ports 2 and 1 for the
+; standard ROMs, I/O ports 00H, 20H, 30H then joystick ports 2 and 1 for the JIO cartridge ROMs)
 JioPorts:
 		INCLUDE	"jio_ports.inc"
+JioPortsEnd:
 
 ; Print A in hex (2 digits)
 PrintHex:	push	af
@@ -494,12 +506,12 @@ PrintHex:	push	af
 		rrca
 		call	PrintDigit
 		pop	af
-PrintDigit:	and	0Fh
-		add	a,'0'
-		cp	'9'+1
-		jr	c,PD_Out
-		add	a,'A'-'9'-1
-PD_Out:		rst	$18
+PrintDigit:	and	0Fh			; 0-9, A-F
+		add	a,90h
+		daa
+		adc	a,40h
+		daa
+		rst	$18
 		ret
 
 ; Serial line (W_PORT), all the other registers kept

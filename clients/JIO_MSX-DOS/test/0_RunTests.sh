@@ -38,7 +38,7 @@ mkdir -p "$OUT"
 # Build
 # ------------------------------------------------------------------------------
 build_rom() { # name kernel defines [serial lines (jio_ports.sh)]
-    local name=$1 kernel=$2 defines=$3 lines=${4:-J2}
+    local name=$1 kernel=$2 defines=$3 lines=${4:-00 20 30 J2 J1}
     rm -rf "$OUT/obj_$name"
     mkdir -p "$OUT/obj_$name"
     ( cd "$SRC" &&
@@ -524,11 +524,11 @@ command -v z88dk-z80asm > /dev/null || { echo "z88dk not found"; exit 1; }
 echo "Build:"
 prepare_files
 build_rom dos2 p0_kernel.asm "-DJIO -DHYBRID"
-build_rom dos2_cart p0_kernel.asm "-DJIO -DHYBRID" "00 20 30 J2"
+build_rom dos2_safe p0_kernel.asm "-DJIO -DHYBRID" "J2 J1"
 build_rom dos2_joy1 p0_kernel.asm "-DJIO -DHYBRID" "J1"
 
 R="$OUT/jio_dos2.rom"; RM="$OUT/obj_dos2/jio_dos2.map"
-RC="$OUT/jio_dos2_cart.rom"; RCM="$OUT/obj_dos2_cart/jio_dos2_cart.map"
+RS="$OUT/jio_dos2_safe.rom"; RSM="$OUT/obj_dos2_safe/jio_dos2_safe.map"
 RJ="$OUT/jio_dos2_joy1.rom"; RJM="$OUT/obj_dos2_joy1/jio_dos2_joy1.map"
 
 echo "MSX-DOS 2 ROM (JIO drive A: + floppy B:):"
@@ -548,8 +548,9 @@ test_bootloader_hybrid dos2_bootsector "$R" "$RM" Philips_VG_8235 "-carta $R" "V
 test_image_hybrid    dos2_image       "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
 test_retry           dos2_retry_auto "$R" "$RM" Philips_VG_8235  "-carta $R" auto "VG-8235, answer lost, auto retry: request sent again"
 test_retry           dos2_retry_ask  "$R" "$RM" Philips_VG_8235   "-carta $R" ask  "VG-8235, answer lost, no auto retry: Not ready, Retry"
-# JIO cartridge ROM (I/O port 30H): the serial routines are intercepted, the port is not tested (not emulated)
-JIO_CART=1 test_dos_hybrid dos2_cart        "$RC" "$RCM" Philips_VG_8235 "-carta $RC" 360 "VG-8235, JIO cartridge ROM (port 30H, not emulated), both drives"
+# JIO cartridge (I/O port 30H, faked by the bridge): the serial routines are intercepted, the port is not tested (not emulated)
+JIO_CART=1 test_dos_hybrid dos2_cart  "$R" "$RM" Philips_VG_8235 "-carta $R" 360 "VG-8235, JIO cartridge found at boot (port 30H, not emulated), both drives"
+test_dos_hybrid      dos2_safe        "$RS" "$RSM" Philips_VG_8235 "-carta $RS" 360 "VG-8235, safe ROM (joystick ports only), both drives"
 test_dos_hybrid      dos2_joy1        "$RJ" "$RJM" Philips_VG_8235 "-carta $RJ" 360 "VG-8235, ROM on joystick port 1 (J1, serial line intercepted), both drives"
 test_retry           dos2_retry_write "$R" "$RM" Panasonic_FS-A1ST "-carta $R" ask "turbo R, answer of a write lost: Not ready, Retry" 'Hello from' "$RETRY_WRITE"
 test_format          dos2_format_vg   "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, FORMAT B: (360 KB floppy), then COPY to B:" 354K
