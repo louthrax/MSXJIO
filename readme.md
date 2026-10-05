@@ -126,32 +126,25 @@ Of course, you can also build yourself something more handy like that:
     <img src="./readme_resources/Bluetooth_WithPlug.jpg" width="700"/>
 </p>  
 
-## Bluetooth configuration for MSXJIO
+## JIO cartridge and joystick port 1
 
-It is very likely that the Bluetooth Serial Transceiver module you just bought is not configured to match the required MSXJIO settings:
+The [JIO cartridge](https://github.com/herraa1/msx-jio-cart-v1) by herraa1 has the ROM, the USB serial and/or
+Bluetooth module, and an I/O register for the serial line: joystick port 2 stays free.
+- ROM: `jio_dos2_cart.rom` (or `jio_dos1_cart.rom`), same code as the standard ROMs except the list of the serial
+  lines tried at boot: the I/O ports of the IOSEL switches (00H, 20H, 30H) are probed, the port found is shown, and
+  without cartridge (all the IOSEL switches off) joystick port 2 is used.
+- JIO.COM and JIOTIME.COM: option `C` (port detected) or `C<port>` (hex: `C00`, `C20`, `C30`), e.g. `JIO C +`,
+  `JIOTIME C`. `JIO S` shows the serial line of the installed driver.
+- The I/O register works whatever the position of the ROMDIS switch (it only disables the flash ROM): with the ROM
+  disabled, JIO.COM and JIOTIME.COM can use the cartridge from another boot device.
 
-|Setting   | Value             |
-|----------|-------------------|
-|Baud rate | **115200 bits/s** |
-|Stop bit  | **1 bit**         |
-|Parity    | **None**          |
+Joystick port 1 (the adapter wired as for port 2, on port 1): option `J1` of JIO.COM and JIOTIME.COM (`J2`: port 2,
+the default), and ROMs built with `JIO_PORTS="J1"`.
 
-For the **HC-05** chip, you can download the [JSM tool](https://github.com/louthrax/MSXJIO/releases/download/v1.0/JIO_38400_bauds_serial_monitor_1_0.zip) provided by JIOMSX.
-
-- Plug your HC-05 module in MSX joystick port 2
-- Power on your MSX **while keeping the HC-05 AT switch pressed**. The HC-05 led should be blinking in a stable and slowly (2s) way.
-- Run JSM.BAS from MSX-BASIC
-- Enter this command:  
-  **AT+UART=115200,0,0**
-- You can also change the name of your device with the command:  
-  **AT+NAME=<name_here>**
-  <p align="center">
-      <img src="./readme_resources/Configure_BT_with_JSM.jpg" width="500"/>
-  </p>
-- A list of the available AT commands for the HC-05 is available [here](https://github.com/louthrax/MSXJIO/blob/main/tools/JSM/HC-03_05_AT_command_set.pdf).
-
-Configuration of the **HC-06** is trickier and requires an extra USB to TTL UART adapter.  
-Procedure is described [here](https://github.com/b3rendsh/msxdos2s/tree/main/jio/bluetooth).
+Serial lines of the ROMs (`clients/JIO_MSX-DOS/0_Build.sh`, list of `jio_ports.sh`, tried in this order at boot: hex =
+I/O port of a JIO cartridge, probed; `J1`, `J2` = joystick port, last of the list):
+- `JIO_PORTS`: standard ROMs, default `"J2"`, e.g. `JIO_PORTS="J1" ./0_Build.sh dos2`
+- `JIOCART_PORTS`: cartridge ROMs, default `"00 20 30 J2"`, e.g. `JIOCART_PORTS="30" ./0_Build.sh dos2cart`
 
 ## Usage instructions for the MSX-DOS clients
 
@@ -234,7 +227,7 @@ JIOServerCLI --list                                       # serial ports (and th
 | `-d`, `--drive [X=]<dir>` | serve a directory as drive X: (A to H, next free drive without `X=`), can be repeated |
 | `-r`, `--read-only` | refuse all writes (the RAM disk H: stays writable) |
 | `--no-rx-crc`, `--no-tx-crc`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways) |
-| `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry): disk image, and directories with JIO.COM ("Not ready" after 1 s) |
+| `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry): disk image, and directories ("Not ready" after 1 s, with JIO.COM and the MSX-DOS 2 ROM) |
 | `-p`, `--port <port>` | serial port (`ttyUSB0`, `/dev/ttyUSB0`, `/dev/serial/by-id/...`, `COM3`) |
 | `-b`, `--bluetooth <address>` | Bluetooth device instead of a serial port (`--scan-bluetooth` lists them) |
 | `-l`, `--log <file>` | also write the log to a file (appended) |

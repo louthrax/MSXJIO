@@ -5,6 +5,10 @@
 ;
 ; Works with MSX-DOS 1 and MSX-DOS 2 (_SDATE and _STIME), whatever the mode of the
 ; server (disk image or directories). On turbo R, the transfer is done in Z80 mode.
+; Usage: JIOTIME [J1|J2|C[<port>]]
+;   J1, J2     joystick port 1 or 2 (default: 2)
+;   C          JIO cartridge (herraa1/msx-jio-cart-v1) instead of joystick port 2, port detected
+;   C<port>    JIO cartridge at this I/O port (hex: 00, 20 or 30)
 ; 115K2 transmit/receive routines based on code by Nyyrikki (clients/JIO_NFS)
 ; ------------------------------------------------------------------------------
 
@@ -24,6 +28,80 @@ INCLUDE "../../common/drv_jio.inc"
 
 		ld	de,MSG_TITLE
 		call	PrintString
+
+		; parameters: J1, J2 (joystick port), C (JIO cartridge, port detected) or C<port> (hex)
+		ld	hl,0080h
+		ld	e,(hl)
+		ld	d,0
+		inc	hl
+		push	hl
+		add	hl,de
+		ld	(hl),0			; end of the parameters
+		pop	hl
+		call	SkipSpaces
+		jr	z,ArgsDone		; no parameter: joystick port 2
+		and	0DFh			; upper case
+		cp	'J'
+		jr	z,ParseJoystick
+		cp	'C'
+		jp	nz,Usage
+		inc	hl
+		ld	a,(hl)
+		call	IsEnd
+		jr	nz,ParsePort
+		call	DetectPort		; C: port detected
+		cp	0FFh
+		jr	nz,SetPort
+		ld	de,MSG_NO_CART
+		jp	PrintString
+
+ParsePort:	call	HexDigit
+		jp	c,Usage
+		rlca
+		rlca
+		rlca
+		rlca
+		ld	b,a
+		inc	hl
+		ld	a,(hl)
+		call	HexDigit
+		jp	c,Usage
+		or	b
+		ld	b,a
+		inc	hl
+		call	SkipSpaces
+		jp	nz,Usage
+		ld	a,b
+		cp	0FEh			; 0FEh, 0FFh: joystick ports
+		jp	nc,Usage
+		jr	SetPort
+
+ParseJoystick:	inc	hl			; J1 or J2
+		ld	a,(hl)
+		sub	'1'
+		cp	2
+		jp	nc,Usage
+		add	a,0FEh			; J1: 0FEh, J2: 0FFh
+		ld	(_JioPort),a
+		inc	hl
+		call	SkipSpaces
+		jp	nz,Usage
+		ld	a,(_JioPort)
+		inc	a
+		jr	z,ArgsDone		; joystick port 2
+		ld	de,MSG_JOY1
+		call	PrintString
+		jr	ArgsDone
+
+SetPort:	ld	(_JioPort),a
+		push	af
+		ld	de,MSG_CART
+		call	PrintString
+		pop	af
+		call	PrintHex
+		ld	de,MSG_PORT_END
+		call	PrintString
+ArgsDone:
 
 		; turbo R: Z80 mode for the transfer
 		ld	a,(EXPTBL)
@@ -126,6 +204,88 @@ Received:	call	RestoreCPU
 Invalid:	ld	de,MSG_INVALID
 		jp	PrintString
 
+Usage:		ld	de,MSG_USAGE
+		jp	PrintString
+
+; ------------------------------------------------------------------------------
+; Parameters
+; ------------------------------------------------------------------------------
+; Skip the spaces at HL. Output: A = next character, Z if end of the parameters
+SkipSpaces:	ld	a,(hl)
+		cp	' '
+		jr	nz,IsEnd
+		inc	hl
+		jr	SkipSpaces
+
+; Z if A is the end of a parameter (0, space, CR)
+IsEnd:		or	a
+		ret	z
+		cp	' '
+		ret	z
+		cp	13
+		ret
+
+; Hex digit A (0-9, A-F, a-f) -> A = 0 to 15, carry set if not a hex digit
+HexDigit:	sub	'0'
+		ret	c
+		cp	10
+		ccf
+		ret	nc
+		and	0DFh			; lower case letters ('a' - '0' = 31H)
+		sub	'A'-'0'
+		ret	c
+		cp	6
+		ccf
+		ret	c
+		add	a,10
+		ret
+
+; I/O port of the JIO cartridge: probe of the ports of the IOSEL switches (00H, 20H, 30H)
+; (detection routine of herraa1, as the JIO ROM). Output: A = port, 0FFh = not found
+DetectPort:	ld	hl,CART_PORTS
+DP_Probe:	ld	a,(hl)
+		cp	0FFh
+		ret	z
+		ld	c,a
+		ld	a,2Fh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	0CCh
+		jr	nz,DP_Next
+		ld	a,0DBh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	88h
+		jr	nz,DP_Next
+		ld	a,0F7h
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	44h
+		ld	a,c
+		ret	z
+DP_Next:	inc	hl
+		jr	DP_Probe
+
+CART_PORTS:	defb	00h,20h,30h,0FFh
+
+; Print A in hex (2 digits)
+PrintHex:	push	af
+		rrca
+		rrca
+		rrca
+		rrca
+		call	PrintDigit
+		pop	af
+PrintDigit:	and	0Fh
+		add	a,'0'
+		cp	'9'+1
+		jr	c,PD_Out
+		add	a,'A'-'9'-1
+PD_Out:		jp	PrintChar
+
 ; ------------------------------------------------------------------------------
 ; Restore the CPU mode of the turbo R
 ; ------------------------------------------------------------------------------
@@ -182,6 +342,8 @@ PrintString:	ld	c,09h			; _STROUT
 ; ------------------------------------------------------------------------------
 ; Serial routines (HL = data, DE = size; bJIOReceive returns A = 1 received, 0 time-out)
 ; ------------------------------------------------------------------------------
+_JioPort:	defb	0FFh		; 0FFh = joystick port 2, 0FEh = joystick port 1, else I/O port of the JIO cartridge
+				; (transmit.asm, receive.asm)
 INCLUDE "../JIO_NFS/transmit.asm"
 INCLUDE "../JIO_NFS/receive.asm"
 
@@ -209,3 +371,11 @@ MSG_SET:	defb	"Date and time set:",13,10,"$"
 MSG_NO_ANSWER:	defb	"No answer from the JIO server",13,10,"$"
 MSG_INVALID:	defb	"Invalid date or time from the JIO server",13,10,"$"
 MSG_CRLF:	defb	13,10,"$"
+MSG_CART:	defb	"JIO cartridge, port $"
+MSG_PORT_END:	defb	"H",13,10,"$"
+MSG_NO_CART:	defb	"JIO cartridge not found (IOSEL switches: 00, 20 or 30)",13,10,"$"
+MSG_JOY1:	defb	"Joystick port 1",13,10,"$"
+MSG_USAGE:	defb	"Usage: JIOTIME [J1|J2|C[<port>]]",13,10
+		defb	"  J1, J2     joystick port 1 or 2 (default: 2)",13,10
+		defb	"  C          JIO cartridge instead of joystick port 2 (port detected)",13,10
+		defb	"  C<port>    JIO cartridge at this I/O port (hex: 00, 20 or 30)",13,10,"$"

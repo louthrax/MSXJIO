@@ -27,7 +27,9 @@ W_COMMAND	equ	$4
 W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
 W_DSKCHG	equ	$6	; Partition changed flags
 W_RFS		equ	$7	; Hybrid: not 0 if the server serves directories (files served by the kernel, no sectors)
-MYSIZE		equ	$8
+W_PORT		equ	$8	; Serial line (found by JioDetect): 0FFh = joystick port 2, 0FEh = joystick port 1,
+				; else I/O port (JIO cartridge)
+MYSIZE		equ	$9
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -53,6 +55,7 @@ IF (IDEDOS1 || HYBRID)
 ENDIF
 IFDEF HYBRID
         PUBLIC	W_RFS
+        PUBLIC	W_PORT
         PUBLIC	W_FLAGS
 ENDIF
 	PUBLIC	MYSIZE
@@ -112,6 +115,25 @@ IFDEF IDEDOS1
 ELSE
         db	12,"JIO MSX-DOS 2",13,10
 ENDIF
+        db	0
+        call	JioDetect		; serial line: JIO cartridge (I/O port) or joystick port 2
+        ld	a,(ix+W_PORT)
+        inc	a
+        jr	z,DRIVES_Rev		; joystick port 2
+        inc	a
+        jr	nz,DRIVES_Cart
+        call	PrintMsg
+        db	"Joystick port 1",13,10,0
+        jr	DRIVES_Rev
+DRIVES_Cart:
+        call	PrintMsg
+        db	"JIO cartridge, port ",0
+        ld	a,(ix+W_PORT)
+        call	PrintHex
+        call	PrintMsg
+        db	"H",13,10,0
+DRIVES_Rev:
+        call	PrintMsg
         db	"Rev.: "
         INCLUDE	"rdate.inc"		; Revision date
         db	13,10
@@ -420,6 +442,77 @@ nokey:		or	$ff
                 ret
 
         ENDIF ; BOOTCHOICE
+
+; ------------------------------------------------------------------------------
+; Serial line: the I/O ports of JioPorts are probed in this order (JIO cartridge, detection routine of herraa1, as
+; b3rendsh/msxdos2s) until a joystick port (0FFh = port 2, 0FEh = port 1, not probed)
+; Output: (IX+W_PORT) = serial line
+; ------------------------------------------------------------------------------
+JioDetect:	ld	hl,JioPorts
+JioProbe:	ld	a,(hl)
+		ld	(ix+W_PORT),a
+		cp	0FEh
+		ret	nc
+		call	ProbePort
+		ret	z
+		inc	hl
+		jr	JioProbe
+
+; Output: Z = cartridge at port A
+ProbePort:	ld	c,a
+		ld	a,2Fh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	0CCh
+		ret	nz
+		ld	a,0DBh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	88h
+		ret	nz
+		ld	a,0F7h
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	44h
+		ret
+
+; Serial lines, in this order, ending with a joystick port (JIO_PORTS of 0_Build.sh: joystick port 2 for the
+; standard ROMs, I/O ports 00H, 20H, 30H then joystick port 2 for the JIO cartridge ROMs)
+JioPorts:
+		INCLUDE	"jio_ports.inc"
+
+; Print A in hex (2 digits)
+PrintHex:	push	af
+		rrca
+		rrca
+		rrca
+		rrca
+		call	PrintDigit
+		pop	af
+PrintDigit:	and	0Fh
+		add	a,'0'
+		cp	'9'+1
+		jr	c,PD_Out
+		add	a,'A'-'9'-1
+PD_Out:		rst	$18
+		ret
+
+; Serial line (W_PORT), all the other registers kept
+; Output: A = port, 0FFh = joystick port 2
+GetPort:	push	hl
+		push	de
+		push	bc
+		push	ix
+		call	GETWRK
+		ld	a,(ix+W_PORT)
+		pop	ix
+		pop	bc
+		pop	de
+		pop	hl
+		ret
 
 ; ------------------------------------------------------------------------------
 ; *** Print subroutines ***
@@ -732,17 +825,28 @@ vJIOTransmit:
         ret
 
 vJIOTransmit2:
+        call	GetPort
         ex      de,hl
         inc	bc
         exx
-        ld	a,15
+        ld	c,a
+        ld	b,4			; bit 2: joystick port 2 pin 6, JIO cartridge
+        inc	a
+        jr	z,TxPSG
+        inc	a
+        jr	nz,TxCart
+        ld	b,1			; bit 0: joystick port 1 pin 6
+TxPSG:  ld	a,15			; PSG register 15
         out	($a0),a
         in	a,($a2)
-        or	4
-        ld	e,a
-        xor	4
-        ld	d,a
         ld	c,$a1
+        jr	TxLevels
+TxCart: in	a,(c)			; I/O register of the JIO cartridge
+TxLevels:
+        or	b
+        ld	e,a
+        xor	b
+        ld	d,a
 
         db	$3e
 JIOTransmitLoop:
@@ -835,6 +939,7 @@ bJIOReceive:
         ld      l,e
         ld      d,b
         ld      e,c
+        call	GetPort
 
         push	ix
         push	de
@@ -843,17 +948,26 @@ bJIOReceive:
 
         dec	hl
         ld	b,(hl)		; What if HL=0 ?
-        ld	c,$a2
         ld	ix,0
         add	ix,sp
-        ld	a,15
+        ld	c,a
+        cp	0FEh
+        jr	nc,RxPSG
+        in	a,(c)			; I/O register of the JIO cartridge (bit 0)
+        jr	RxLevel
+RxPSG:  ld	c,$a2
+        ld	a,15			; PSG register 15: bit 6 = joystick port selected (0 = port 1)
         out	($a0),a
         in	a,($a2)
-        or	64
-        out	($a1),a
-        ld	a,14
+        jr	z,RxJoy1		; Z (CP 0FEh above, flags kept): joystick port 1
+        or	64			; joystick port 2
+        jr	RxSel
+RxJoy1: and	0BFh
+RxSel:  out	($a1),a
+        ld	a,14			; PSG register 14 (pin 1 of the joystick port selected)
         out	($a0),a
         in	a,($a2)
+RxLevel:
         or	1
         jp	pe,HeaderPE
 ;________________________________________________________________________________________________________________________________

@@ -412,6 +412,9 @@ static const unsigned char g_aucInfoCommand[] = { 'J', 'I', 'O', FLAG_RX_CRC, CO
 unsigned char g_aucInfo[512] = { 0 };       // answer: flags, drives, boot drive, description (never on the stack)
 unsigned char g_aucInfoCRC[2] = { 0 };      // CRC of the answer (separate packet), low byte first
 unsigned char g_ucAutoRetry = 0;
+unsigned char JioPort = 0xFF;               // serial line (transmit.asm, receive.asm, stub STUB_PORT): 0xFF = joystick
+                                            // port 2, 0xFE = joystick port 1 (J1 option), else I/O register of the
+                                            // JIO cartridge (C option)
 
 // Serial routines of the driver (transmit.asm, receive.asm): HL = data, DE = size, interrupts disabled.
 // receive.asm changes IX (frame pointer of the C code): kept by bInfoReceive
@@ -436,6 +439,44 @@ __asm
     pop     ix
     ret
 #include "receive.asm"
+__endasm;
+}
+
+// I/O port of the JIO cartridge: probe of the ports of the IOSEL switches (00H, 20H, 30H), 0xFF = not found
+// (detection routine of herraa1, as the JIO ROM)
+static unsigned char ucDetectCartPort() __naked
+{
+__asm
+        ld      hl,jio_ports
+jio_probe:
+        ld      a,(hl)
+        cp      0xff
+        ret     z
+        ld      c,a
+        ld      a,0x2f
+        out     (c),a
+        in      a,(c)
+        and     0xfc
+        cp      0xcc
+        jr      nz,jio_next
+        ld      a,0xdb
+        out     (c),a
+        in      a,(c)
+        and     0xfc
+        cp      0x88
+        jr      nz,jio_next
+        ld      a,0xf7
+        out     (c),a
+        in      a,(c)
+        and     0xfc
+        cp      0x44
+        ld      a,c
+        ret     z
+jio_next:
+        inc     hl
+        jr      jio_probe
+jio_ports:
+        .db     0x00,0x20,0x30,0xff
 __endasm;
 }
 
@@ -640,6 +681,7 @@ void vInstallStub()
 
     HIMSAV[STUB_SEGMENT] = g_ucDriverSegment;
     HIMSAV[STUB_AUTO_RETRY] = g_ucAutoRetry;
+    HIMSAV[STUB_PORT] = JioPort;
     *((unsigned int*)(HIMSAV + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
     *((unsigned int*)(HIMSAV + STUB_GET_P2 + 1)) = (unsigned int) g_pucMapper + 0x27;
     HIMSAV[STUB_HOOK_ORIGINAL + 1] = *((unsigned char*)0xF37B);
@@ -798,10 +840,14 @@ void vUsage(void)
 
     vPrint("\r\nUsage: ");
     vPrint(acName);
-    vPrint(" [+] [+A|-A] [+B|-B] ... [S] [V] [H]\r\n");
+    vPrint(" [+] [+A|-A] [+B|-B] ... [J1|J2|C[<port>]] [S] [V] [H]\r\n");
     vPrint("  +          Add / handle all the drives served by the server\r\n");
     vPrint("  +<drive>   Add / handle drive (A..H)\r\n");
     vPrint("  -<drive>   Remove / unhandle drive (A..H)\r\n");
+    vPrint("  J1, J2     Joystick port 1 or 2 (default: 2)\r\n");
+    vPrint("  C[<port>]  JIO cartridge instead of joystick port 2,\r\n");
+    vPrint("             I/O port in hex (00, 20 or 30, detected\r\n");
+    vPrint("             if not given)\r\n");
     vPrint("  S          Show currently handled drives\r\n");
     vPrint("  V          Show the steps of the install\r\n");
     vPrint("  H          Show this help (also without parameters)\r\n");
@@ -809,6 +855,7 @@ void vUsage(void)
     vExample(acName, " +           ; install and handle the drives served\r\n");
     vExample(acName, " +A +B       ; install and handle drives A and B\r\n");
     vExample(acName, " -C          ; remove drive C\r\n");
+    vExample(acName, " C +         ; JIO cartridge (port detected)\r\n");
     vExample(acName, " S           ; list handled drives\r\n");
     vExample(acName, " H           ; show this message\r\n");
 }
@@ -872,6 +919,8 @@ int main(int argc, char **argv)
     bInstalled = bCheckRFS(&pcBase);
 
     g_pbHandledDrives = pcBase + STUB_DRIVES;
+    if (bInstalled)
+        JioPort = pcBase[STUB_PORT];        // serial line of the installed driver
 
     for (int iIndex = 1; iIndex < argc; iIndex++)
     {
@@ -881,7 +930,56 @@ int main(int argc, char **argv)
         {
             str_to_upper(szArg);
 
-            if ((szArg[0] == '+') && !szArg[1])
+            if ((szArg[0] == 'J') && ((szArg[1] == '1') || (szArg[1] == '2')) && !szArg[2])
+            {
+                // joystick port 1 or 2
+                JioPort = (szArg[1] == '1') ? 0xFE : 0xFF;
+                if (bInstalled)
+                    pcBase[STUB_PORT] = JioPort;
+            }
+            else if (szArg[0] == 'C')
+            {
+                // JIO cartridge: I/O port (hex, 2 digits), detected by default
+                unsigned char   ucPort = 0;
+                bool            bValid = true;
+
+                if (!szArg[1])
+                {
+                    ucPort = ucDetectCartPort();
+                    if (ucPort == 0xFF)
+                    {
+                        vError("JIO cartridge not found (IOSEL switches: 00, 20 or 30).\r\n", 1);
+                        return g_iResult;
+                    }
+                }
+                else if (szArg[2] && !szArg[3])
+                {
+                    for (unsigned char ucIndex = 1; ucIndex < 3; ucIndex++)
+                    {
+                        char    cDigit = szArg[ucIndex];
+
+                        ucPort <<= 4;
+                        if ((cDigit >= '0') && (cDigit <= '9'))
+                            ucPort += cDigit - '0';
+                        else if ((cDigit >= 'A') && (cDigit <= 'F'))
+                            ucPort += cDigit - 'A' + 10;
+                        else
+                            bValid = false;
+                    }
+                }
+                else
+                    bValid = false;
+
+                if (!bValid || (ucPort >= 0xFE))
+                    vError("Invalid port. Use C or C<port> (hex, e.g. C20).", 1);
+                else
+                {
+                    JioPort = ucPort;
+                    if (bInstalled)
+                        pcBase[STUB_PORT] = ucPort;
+                }
+            }
+            else if ((szArg[0] == '+') && !szArg[1])
             {
                 bAddAll = true;             // all the drives served by the server
                 bAddRequired = true;
@@ -921,6 +1019,17 @@ int main(int argc, char **argv)
             {
                 if (bInstalled)
                 {
+                    if (JioPort == 0xFF)
+                        vPrint("Serial line: joystick port 2\r\n");
+                    else if (JioPort == 0xFE)
+                        vPrint("Serial line: joystick port 1\r\n");
+                    else
+                    {
+                        vPrint("Serial line: JIO cartridge, port ");
+                        vPutChar("0123456789ABCDEF"[JioPort >> 4]);
+                        vPutChar("0123456789ABCDEF"[JioPort & 15]);
+                        vPrint("H\r\n");
+                    }
                     vPrint("Disks handled:");
                     for(int iIndex = 0; iIndex < 8; iIndex++)
                     {

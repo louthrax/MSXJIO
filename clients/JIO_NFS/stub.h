@@ -16,9 +16,10 @@
 #define STUB_HAS_TURBO      0x30
 #define STUB_SEGMENT        0x31
 #define STUB_AUTO_RETRY     0x32
-#define STUB_BOUNCE         0x33
+#define STUB_PORT           0x33
+#define STUB_BOUNCE         0x34
 #define STUB_BOUNCE_SIZE    64
-#define STUB_DPB            0x73
+#define STUB_DPB            0x74
 
 #define DRIVER_BASE         0x8000
 #define DRIVER_STACK        0xC000

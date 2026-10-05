@@ -4,17 +4,30 @@ bJIOReceive:
 	ld	de,0
 
 	dec	hl
-	ld	c,0xa2
 	ld	ix,0
 	add	ix,sp
-	ld	a,15
+	ld	a,(_JioPort)	; 0xFF = joystick port 2, 0xFE = joystick port 1 (PSG), else I/O register of the cartridge
+	ld	c,a
+	cp	0xfe
+	jr	nc,ReceivePSG
+	in	a,(c)	; JIO cartridge: bit 0
+	jr	ReceiveLevel
+ReceivePSG:
+	ld	c,0xa2
+	ld	a,15	; PSG register 15: bit 6 = joystick port selected (0 = port 1)
 	out	(0xa0),a
 	in	a,(0xa2)
-	or	64
+	jr	z,ReceiveJoy1	; Z (CP 0xFE above, flags kept): joystick port 1
+	or	64	; joystick port 2
+	jr	ReceiveSelect
+ReceiveJoy1:
+	and	0xbf
+ReceiveSelect:
 	out	(0xa1),a
-	ld	a,14
+	ld	a,14	; PSG register 14 (pin 1 of the joystick port selected)
 	out	(0xa0),a
 	in	a,(0xa2)
+ReceiveLevel:
 	or	1
 	jp	pe,HeaderPE
 ;________________________________________________________________________________________________________________________________

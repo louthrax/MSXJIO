@@ -15,17 +15,32 @@ vJIOTransmit:
                                 exx
                                 ret
 
+; _JioPort (defined by the program): 0xFF = joystick port 2, 0xFE = joystick port 1 (PSG), else I/O register of the
+; JIO cartridge
 vJIOTransmit2:
                                 inc	bc
                                 exx
-                                ld	a,15
+                                ld	a,(_JioPort)
+                                ld	c,a
+                                ld	b,4	; bit 2: joystick port 2 pin 6, JIO cartridge
+                                inc	a
+                                jr	z,TransmitPSG
+                                inc	a
+                                jr	nz,TransmitCart
+                                ld	b,1	; bit 0: joystick port 1 pin 6
+TransmitPSG:
+                                ld	a,15	; PSG register 15
                                 out	(0xa0),a
                                 in	a,(0xa2)
-                                or	4
-                                ld	e,a
-                                xor	4
-                                ld	d,a
                                 ld	c,0xa1
+                                jr	TransmitLevels
+TransmitCart:
+                                in	a,(c)	; I/O register of the JIO cartridge
+TransmitLevels:
+                                or	b
+                                ld	e,a
+                                xor	b
+                                ld	d,a
 
                                 defb	0x3e
 JIOTransmitLoop:

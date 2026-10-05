@@ -65,6 +65,12 @@
 		EXTERN	RFS_TURBO	; Kernel (rfs.asm): turbo R flag
 		EXTERN	RFS_RETRY	; Kernel (rfs.asm): not 0 for auto retry
 		EXTERN	RFS_NJIO	; Kernel (rfs.asm): number of JIO drives
+		EXTERN	W_PORT		; Offset in the driver work area: serial line (0FFh = joystick port 2, else I/O port)
+		EXTERN	J_TXP		; Kernel (rfs.asm): setup of the serial line (transmit, receive)
+		EXTERN	J_RXP
+		EXTERN	J_TXOR
+		EXTERN	J_TXXOR
+		EXTERN	J_RXSEL
 	ENDIF
 
 		; Additional symbol defined by the ide driver module
@@ -4541,6 +4547,31 @@ J_RFI1:		LD	(RFS_TURBO),A
 		LD	A,(IX+W_FLAGS)
 		AND	8			; FLAG_AUTO_RETRY
 		LD	(RFS_RETRY),A
+		LD	A,(IX+W_PORT)		; serial line found by DRIVES
+		CP	0FFH
+		JR	Z,J_RFI3		; joystick port 2: code of the kernel
+		CP	0FEH
+		JR	NZ,J_RFI5
+		LD	A,1			; joystick port 1: pin 6 = bit 0 of PSG register 15 (OR 1, XOR 1),
+		LD	(J_TXOR+1),A		; bit 6 of register 15 reset (AND 0BFH)
+		LD	(J_TXXOR+1),A
+		LD	HL,J_RXSEL
+		LD	(HL),0E6H
+		INC	HL
+		LD	(HL),0BFH
+		JR	J_RFI3
+J_RFI5:		LD	HL,J_TXP		; I/O port: LD C,port / IN A,(C) / NOP x4
+		CALL	C_INPORT
+		LD	B,4
+J_RFI4:		LD	(HL),0
+		INC	HL
+		DJNZ	J_RFI4
+		LD	HL,J_RXP		; LD C,port / IN A,(C) / JR to the end of the 18 bytes
+		CALL	C_INPORT
+		LD	(HL),18H
+		INC	HL
+		LD	(HL),18-6
+J_RFI3:
 		LD	HL,DRVTBL		; JIO drives: drives of the first disk interface, if it is this one and if the
 		LD	A,(MASTER)		; server serves directories (disk image served: the JIO drives are local drives,
 		INC	HL			; sectors read and written by DSKIO)
@@ -4552,6 +4583,17 @@ J_RFI1:		LD	(RFS_TURBO),A
 		JR	Z,J_RFI2
 		LD	A,(HL)
 J_RFI2:		LD	(RFS_NJIO),A
+		RET
+
+; Write LD C,<port A> / IN A,(C) at HL (kernel code), HL after it
+C_INPORT:	LD	(HL),0EH
+		INC	HL
+		LD	(HL),A
+		INC	HL
+		LD	(HL),0EDH
+		INC	HL
+		LD	(HL),78H
+		INC	HL
 		RET
 
 ; Subroutine get valid boot loader

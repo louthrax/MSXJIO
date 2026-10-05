@@ -96,6 +96,11 @@ RFS_DPB:	DEFS	36,0		; unopened FCB for _SFIRST, dummy DPB for _ALLOC
 		PUBLIC	RFS_TURBO		; set at boot by C_RFSINIT (p1_main.asm), with RFS_RETRY and RFS_NJIO
 		PUBLIC	RFS_RETRY
 		PUBLIC	RFS_NJIO
+		PUBLIC	J_TXP		; setup of the serial line, patched by C_RFSINIT for an I/O port (JIO cartridge)
+		PUBLIC	J_RXP
+		PUBLIC	J_TXOR		; bit of the line (OR 4, XOR 4) and joystick port selected (OR 64), patched by
+		PUBLIC	J_TXXOR		; C_RFSINIT for joystick port 1 (OR 1, XOR 1, AND 0BFH)
+		PUBLIC	J_RXSEL
 	ELSE
 RFS_INIT:	LD	A,(EXPTBL)
 		LD	HL,IDBYT2
@@ -263,14 +268,20 @@ J_TXSEG:	EXX
 
 J_TX0:		INC	BC
 		EXX
-		LD	A,15
+; Joystick port 2. I/O port (C_RFSINIT, p1_main.asm): LD C,port / IN A,(C) / NOP x4 (same size, 8 bytes).
+; Joystick port 1 (C_RFSINIT): bit 0 instead of bit 2 (J_TXOR, J_TXXOR)
+J_TXP:		LD	A,15			; PSG register 15 (joystick port 2, pin 6)
 		OUT	(0A0H),A
 		IN	A,(0A2H)
-		OR	4
-		LD	E,A
-		XOR	4
-		LD	D,A
 		LD	C,0A1H
+J_TXP9:
+	IF J_TXP9 - J_TXP <> 8
+		ERROR	"J_TXP: 8 bytes expected (patched by C_RFSINIT)"
+	ENDIF
+J_TXOR:		OR	4
+		LD	E,A
+J_TXXOR:	XOR	4
+		LD	D,A
 
 		DEFB	3EH			; LD A,n: skip RET NZ
 J_TXLOOP:	RET	NZ
@@ -424,17 +435,22 @@ RFS_NRDY:	CALL	GET_P2			; transfer segment of RFS_RW
 J_RX1:		PUSH	DE
 		LD	DE,0
 		DEC	HL
-		LD	C,0A2H
 		LD	IX,0
 		ADD	IX,SP
-		LD	A,15
+; Joystick port 2. I/O port (C_RFSINIT, p1_main.asm): LD C,port / IN A,(C) / JR to the end (same size, 18 bytes)
+J_RXP:		LD	C,0A2H
+		LD	A,15			; PSG register 15: joystick port 2 (joystick port 1, C_RFSINIT: AND 0BFH)
 		OUT	(0A0H),A
 		IN	A,(0A2H)
-		OR	64
+J_RXSEL:	OR	64
 		OUT	(0A1H),A
-		LD	A,14
+		LD	A,14			; PSG register 14 (joystick port 2, pin 1)
 		OUT	(0A0H),A
 		IN	A,(0A2H)
+J_RXP9:
+	IF J_RXP9 - J_RXP <> 18
+		ERROR	"J_RXP: 18 bytes expected (patched by C_RFSINIT)"
+	ENDIF
 		OR	1
 		JP	PE,J_RXPE
 

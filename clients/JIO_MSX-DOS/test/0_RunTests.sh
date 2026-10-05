@@ -37,12 +37,13 @@ mkdir -p "$OUT"
 # ------------------------------------------------------------------------------
 # Build
 # ------------------------------------------------------------------------------
-build_rom() { # name kernel defines
-    local name=$1 kernel=$2 defines=$3
+build_rom() { # name kernel defines [serial lines (jio_ports.sh)]
+    local name=$1 kernel=$2 defines=$3 lines=${4:-J2}
     rm -rf "$OUT/obj_$name"
     mkdir -p "$OUT/obj_$name"
     ( cd "$SRC" &&
       date +"db \"%Y-%m-%d\"" > "$OUT/obj_$name/rdate.inc" &&
+      ./jio_ports.sh $lines > "$OUT/obj_$name/jio_ports.inc" &&
       z88dk-z80asm -b -d -l -m $defines -I"$OUT/obj_$name" -O"$OUT/obj_$name" -o=jio_$name.bin p1_main.asm p3_paging.asm drv_jio.asm "$kernel" &&
       z88dk-appmake +glue -b "$OUT/obj_$name/jio_$name" --filler 0xFF --clean > /dev/null &&
       z88dk-appmake +rom -b "$OUT/obj_$name/jio_${name}__.bin" -o "$OUT/jio_$name.rom" -s 32768 --org 0 > /dev/null
@@ -54,7 +55,7 @@ build_rom() { # name kernel defines
 make_bridge() { # map output
     local a
     a() { grep -E "^$1 " "$2" | sed -E 's/.*\$([0-9A-F]+).*/0x\1/'; }
-    sed -e "s/@J_TXSEG@/$(a J_TXSEG "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g; s/@vJIOTransmit@/$(a vJIOTransmit "$1")/g; s/@bJIOReceive@/$(a bJIOReceive "$1")/g" \
+    sed -e "s/@J_TXSEG@/$(a J_TXSEG "$1")/g; s/@J_RX1@/$(a J_RX1 "$1")/g; s/@DRIVES_Retry@/$(a DRIVES_Retry "$1")/g; s/@DRIVES_Exit@/$(a DRIVES_Exit "$1")/g; s/@vJIOTransmit@/$(a vJIOTransmit "$1")/g; s/@bJIOReceive@/$(a bJIOReceive "$1")/g; s/@JioDetect@/$(a JioDetect "$1")/g" \
         "$TEST/tcl/bridge.tcl.in" > "$2"
 }
 
@@ -425,11 +426,11 @@ test_bootloader_hybrid() { # name rom map machine slots description
 # JIOTIME.COM: date and time of the MSX set from the server (MOCK_DATE), or no answer.
 # Note: the RTC (RP5C01) of openMSX 20.0 changes some months (July is read back as May, also when written directly
 # to the chip), the default date uses a month it keeps.
-test_jiotime() { # name rom map machine slots description [mock date]
+test_jiotime() { # name rom map machine slots description [mock date] [parameters of JIOTIME]
     wanted "$1" || return
     [ -n "${REAL_SERVER:-}" ] && return     # date of the mock server (or no answer)
     local date=${7:-"2031-10-25 13:45:30"}
-    MOCK_DATE="$date" run_scenario "$1" "$2" "$3" "$4" "$5" 'JIOTIME\r\n' "$TEST/tcl/screens.tcl" "" "" 1 "15"
+    MOCK_DATE="$date" run_scenario "$1" "$2" "$3" "$4" "$5" "JIOTIME${8:+ $8}\r\n" "$TEST/tcl/screens.tcl" "" "" 1 "15"
     local d="$OUT/$1"
     begin_checks "$1"
     check "date and time requested" "$(grep -q '^DATE TIME' "$d/server.log" && echo ok)"
@@ -438,6 +439,8 @@ test_jiotime() { # name rom map machine slots description [mock date]
     else
         check "MSX date and time set (read back)" "$(has_text "$d/screen_15.txt" 'Date and time set:' && has_text "$d/screen_15.txt" "${date%?}" && echo ok)"
     fi
+    [ "${8:-}" = C30 ] && check "JIO cartridge option (port 30H)" "$(has_text "$d/screen_15.txt" 'JIO cartridge, port 30H' && echo ok)"
+    [ "${8:-}" = J1 ] && check "joystick port 1 option" "$(has_text "$d/screen_15.txt" 'Joystick port 1' && echo ok)"
     end_checks "$1" "$6"
 }
 
@@ -446,12 +449,12 @@ test_jiotime() { # name rom map machine slots description [mock date]
 # reloaded, the batch file is not continued): the commands are in NFSTEST.BAT, typed at the prompt.
 # Not tested: redirection to the JIO drive (_DUP of a file handle of the server is not supported by JIO.COM).
 NFS_CMDS='D:\r\nDIR /W\r\nTYPE HELLO.TXT\r\nA:FCBREAD\r\nA:P2TEST\r\nCOPY A:COMMAND2.COM X.COM\r\nMD SUB\r\nCD SUB\r\nCOPY \\HELLO.TXT\r\nCD \\\r\nCOPY HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDIR /W\r\n'
-test_nfs() { # name machine "slots" description
+test_nfs() { # name machine "slots" description [options of JIO.COM] [serial line shown by JIO S]
     wanted "$1" || return
     rm -rf "$OUT/floppy_nfs"; mkdir -p "$OUT/floppy_nfs"
     cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/FCBREAD.COM "$OUT"/base/P2TEST.COM "$OUT/floppy_nfs/"
-    printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
-    printf "$NFS_CMDS" > "$OUT/floppy_nfs/NFSTEST.BAT"
+    printf "JIO ${5:+$5 }+D\r\n" > "$OUT/floppy_nfs/AUTOEXEC.BAT"
+    printf "$NFS_CMDS${5:+A:JIO S\r\n}" > "$OUT/floppy_nfs/NFSTEST.BAT"
     TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D run_scenario "$1" "$R" "$RM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
     local d="$OUT/$1"
     begin_checks "$1"
@@ -464,6 +467,7 @@ test_nfs() { # name machine "slots" description
     check "SUB/HELLO.TXT copied" "$([ -f "$d/drive/SUB/HELLO.TXT" ] && echo ok)"
     check "REN and MOVE (SUB/R2.TXT)" "$([ ! -e "$d/drive/R1.TXT" ] && [ ! -e "$d/drive/R2.TXT" ] && [ -f "$d/drive/SUB/R2.TXT" ] && echo ok)"
     check "ATTRIB +R (host file read only)" "$([ -f "$d/drive/SUB/R2.TXT" ] && [ ! -w "$d/drive/SUB/R2.TXT" ] && echo ok)"
+    [ -n "${6:-}" ] && check "serial line of the installed driver (JIO S)" "$(has_text "$d/screens.txt" "$6" && echo ok)"
     end_checks "$1" "$4"
 }
 
@@ -487,8 +491,12 @@ command -v z88dk-z80asm > /dev/null || { echo "z88dk not found"; exit 1; }
 echo "Build:"
 prepare_files
 build_rom dos2 p0_kernel.asm "-DJIO -DHYBRID"
+build_rom dos2_cart p0_kernel.asm "-DJIO -DHYBRID" "00 20 30 J2"
+build_rom dos2_joy1 p0_kernel.asm "-DJIO -DHYBRID" "J1"
 
 R="$OUT/jio_dos2.rom"; RM="$OUT/obj_dos2/jio_dos2.map"
+RC="$OUT/jio_dos2_cart.rom"; RCM="$OUT/obj_dos2_cart/jio_dos2_cart.map"
+RJ="$OUT/jio_dos2_joy1.rom"; RJM="$OUT/obj_dos2_joy1/jio_dos2_joy1.map"
 
 echo "MSX-DOS 2 ROM (JIO drive A: + floppy B:):"
 test_dos_hybrid      dos2_vg8235      "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235 (360 KB drive), both drives"
@@ -506,14 +514,21 @@ test_bootloader_hybrid dos2_bootsector "$R" "$RM" Philips_VG_8235 "-carta $R" "V
 test_image_hybrid    dos2_image       "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
 test_retry           dos2_retry_auto "$R" "$RM" Philips_VG_8235  "-carta $R" auto "VG-8235, answer lost, auto retry: request sent again"
 test_retry           dos2_retry_ask  "$R" "$RM" Philips_VG_8235   "-carta $R" ask  "VG-8235, answer lost, no auto retry: Not ready, Retry"
+# JIO cartridge ROM (I/O port 30H): the serial routines are intercepted, the port is not tested (not emulated)
+JIO_CART=1 test_dos_hybrid dos2_cart        "$RC" "$RCM" Philips_VG_8235 "-carta $RC" 360 "VG-8235, JIO cartridge ROM (port 30H, not emulated), both drives"
+test_dos_hybrid      dos2_joy1        "$RJ" "$RJM" Philips_VG_8235 "-carta $RJ" 360 "VG-8235, ROM on joystick port 1 (J1, serial line intercepted), both drives"
 test_retry           dos2_retry_write "$R" "$RM" Panasonic_FS-A1ST "-carta $R" ask "turbo R, answer of a write lost: Not ready, Retry" 'Hello from' "$RETRY_WRITE"
 
 echo "Clients:"
 test_jiotime   jiotime      "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM sets the date and time"
 test_jiotime   jiotime_tr   "$R" "$RM" Panasonic_FS-A1ST "-carta $R"   "turbo R, JIOTIME.COM sets the date and time (Z80 mode)"
 test_jiotime   jiotime_none "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM without answer of the server" none
+test_jiotime   jiotime_cart "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME C30 (JIO cartridge option, port not emulated)" "" C30
+test_jiotime   jiotime_joy1 "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME J1 (joystick port 1, serial line intercepted)" "" J1
 test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM (JIO_NFS) on the original MSX-DOS 2, drive D:"
 test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
+test_nfs       nfs_cart     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM with the JIO cartridge option (JIO C30 +D, port not emulated)" C30 'JIO cartridge, port 30H'
+test_nfs       nfs_joy1     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM on joystick port 1 (JIO J1 +D, serial line intercepted)" J1 'joystick port 1'
 
 echo
 echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"
