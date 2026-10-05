@@ -65,7 +65,6 @@ private:
     void        vUpdateDrivePathsTexts();
     void        vUpdateMediaIcon();
     void        vUpdateDriveRowsHeight();
-    void        vSetImagePath(const QString &_roPath);
     QString     szCommandLine();
 
 #ifdef Q_OS_ANDROID
@@ -80,7 +79,6 @@ private:
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
     QString                         m_oSelectedSerialID;
     QString                         m_oSelectedBlueToothID;
-    QString                         m_oImagePath;           // the line edit may only show the file name (Android)
     QString                         &roSelectedID();
     QSettings                       *m_poSettings;
 };

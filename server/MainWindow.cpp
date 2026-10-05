@@ -10,11 +10,85 @@
 #include <QGuiApplication>
 #include <QDir>
 #include <QUrl>
+#ifdef Q_OS_ANDROID
+#include <QJniObject>
+#endif
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 
+/*
+ =======================================================================================================================
+    Android: the file dialogs give content:// URIs, that the file functions of the server (QDir, rename, mkdir,
+    file times...) cannot use, and whose access is lost when the application restarts. The URIs of the shared storage
+    are converted to paths, accessed with the "All files access" permission (MANAGE_EXTERNAL_STORAGE):
+    content://com.android.externalstorage.documents/tree/primary%3ADownload%2Fsdcard -> /storage/emulated/0/Download/sdcard
+    Other platforms: unchanged
+ =======================================================================================================================
+ */
+static QString szLocalPath(const QString &_roPath)
+{
 #ifdef Q_OS_ANDROID
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    QUrl	oUrl(_roPath);
+    // last segment of the URI path (tree/<id> or document/<id>), "primary:Download/sdcard"
+    QString oDocumentID = QUrl::fromPercentEncoding(oUrl.path(QUrl::FullyEncoded).section('/', -1).toUtf8());
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    if(oUrl.scheme() != "content")
+        return _roPath;
+
+    if(oUrl.host() == "com.android.externalstorage.documents")
+    {
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+        QString oVolume = oDocumentID.section(':', 0, 0);           // "primary" or the ID of an SD card ("1234-ABCD")
+        QString oPath = oDocumentID.section(':', 1);
+        QString oRoot = (oVolume == "primary") ? "/storage/emulated/0" : "/storage/" + oVolume;
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+        return oPath.isEmpty() ? oRoot : oRoot + "/" + oPath;
+    }
+
+    if((oUrl.host() == "com.android.providers.downloads.documents") && oDocumentID.startsWith("raw:"))
+        return oDocumentID.mid(4);                                  // "raw:/storage/emulated/0/Download/Game.dsk"
+
+    return _roPath;                                                 // other providers: the URI is kept
+#else
+    return _roPath;
+#endif
+}
+
+#ifdef Q_OS_ANDROID
+
+/*
+ =======================================================================================================================
+    "All files access" (Android 11+), needed by the paths of szLocalPath(): opens its page of the system settings when
+    it is not granted
+ =======================================================================================================================
+ */
+static bool bRequestAllFilesAccess()
+{
+    if(QNativeInterface::QAndroidApplication::sdkVersion() < 30)
+        return true;                                                // WRITE_EXTERNAL_STORAGE is enough
+
+    if(QJniObject::callStaticMethod<jboolean>("android/os/Environment", "isExternalStorageManager"))
+        return true;
+
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    QJniObject	oContext = QNativeInterface::QAndroidApplication::context();
+    QJniObject	oPackage = oContext.callObjectMethod("getPackageName", "()Ljava/lang/String;");
+    QJniObject	oUri = QJniObject::callStaticObjectMethod(
+        "android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;",
+        QJniObject::fromString("package:" + oPackage.toString()).object<jstring>());
+    QJniObject	oIntent(
+        "android/content/Intent", "(Ljava/lang/String;Landroid/net/Uri;)V",
+        QJniObject::fromString("android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION").object<jstring>(),
+        oUri.object());
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    oContext.callMethod<void>("startActivity", "(Landroid/content/Intent;)V", oIntent.object());
+    return false;
+}
 
 /*
  =======================================================================================================================
@@ -25,6 +99,11 @@ void MainWindow::vRequestAndroidPermissionsAndSetInterface(QObject *parent)
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
     QBluetoothPermission	oBluetoothPermission;
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    if(!bRequestAllFilesAccess())
+    {
+        vLog(eLogWarning, "\"All files access\" is needed to serve the disk images and the directories: allow it, then come back\n");
+    }
 
     qApp->requestPermission(oBluetoothPermission, parent, [this] (const QPermission &perm)
                             {
@@ -116,10 +195,6 @@ MainWindow::MainWindow() :
     vUpdateDriveRowsHeight();
     setFocusPolicy(Qt::StrongFocus);
 
-#ifdef Q_OS_ANDROID
-    m_poUI->imagePathLineEdit->setReadOnly(true);   // content:// URI from the file picker, only its name is shown
-#endif
-
     onRedLightTimer();
     m_poRedLightOffTimer->setSingleShot(true);
     connect(m_poRedLightOffTimer, &QTimer::timeout, this, &MainWindow::onRedLightTimer);
@@ -151,12 +226,12 @@ MainWindow::MainWindow() :
 
     m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
     m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
-    vSetImagePath(m_poSettings->value("LastMediaInserted").toString());
+    m_poUI->imagePathLineEdit->setText(szLocalPath(m_poSettings->value("LastMediaInserted").toString()));
     onImagePathValidated();
     m_poServer->roDrive().m_oLastPathBrowsed = m_poSettings->value("LastPathBrowsed").toString();
 
     for(int iDrive = 0; iDrive < 8; iDrive++)
-        m_poServer->vSetDrivePath(iDrive, m_poSettings->value(QString("DrivePath%1").arg(QChar('A' + iDrive))).toString());
+        m_poServer->vSetDrivePath(iDrive, szLocalPath(m_poSettings->value(QString("DrivePath%1").arg(QChar('A' + iDrive))).toString()));
 
 
 #ifdef Q_OS_ANDROID
@@ -681,7 +756,7 @@ void MainWindow::onButtonClicked()
 
         if(!oImagePath.isEmpty())
         {
-            vSetImagePath(oImagePath);
+            m_poUI->imagePathLineEdit->setText(szLocalPath(oImagePath));
             onImagePathValidated();
         }
     }
@@ -716,6 +791,7 @@ void MainWindow::onButtonClicked()
             );
         /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
+        oDrivePath = szLocalPath(oDrivePath);
         if(!oDrivePath.isEmpty())
         {
             if (poSender == m_poUI->fileSelectDriveA_PushButton) m_poServer->vSetDrivePath(0, oDrivePath); else
@@ -767,7 +843,7 @@ void MainWindow::onButtonClicked()
         if(!m_poServer->roDrive().oMediaPath().isEmpty())
         {
             m_poServer->vEjectMedia();
-            vSetImagePath("");
+            m_poUI->imagePathLineEdit->setText("");
             vUpdateMediaIcon();
         }
     }
@@ -898,39 +974,9 @@ void MainWindow::vLog(tdLogType _eLogType, const QString &_szMessage)
  */
 void MainWindow::onImagePathValidated()
 {
-#ifndef Q_OS_ANDROID
-    m_oImagePath = m_poUI->imagePathLineEdit->text();       // path can be typed
-#endif
-    m_poServer->bInsertMedia(m_oImagePath);
+    m_poServer->bInsertMedia(m_poUI->imagePathLineEdit->text());
     vUpdateMediaIcon();
 }
-
-/*
- =======================================================================================================================
-    Android: the file picker gives a content:// URI (".../document/primary%3ADocuments%2FGame.dsk"), only the file name
-    is shown
- =======================================================================================================================
- */
-void MainWindow::vSetImagePath(const QString &_roPath)
-{
-    m_oImagePath = _roPath;
-#ifdef Q_OS_ANDROID
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    QString oName = QFileInfo(_roPath).fileName();         // display name given by the content provider
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-    if(oName.isEmpty() || oName.contains('%'))
-    {
-        oName = QUrl::fromPercentEncoding(_roPath.toUtf8());
-        oName = oName.mid(oName.lastIndexOf('/') + 1);
-        oName = oName.mid(oName.lastIndexOf(':') + 1);
-    }
-    m_poUI->imagePathLineEdit->setText(oName);
-#else
-    m_poUI->imagePathLineEdit->setText(_roPath);
-#endif
-}
-
 
 void MainWindow::vUpdateMediaIcon()
 {
