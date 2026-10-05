@@ -71,6 +71,8 @@
 		EXTERN	J_TXOR
 		EXTERN	J_TXXOR
 		EXTERN	J_RXSEL
+		EXTERN	W_HOOK		; Offset in the driver work area: H_BDOS hook for _FORMAT
+		EXTERN	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606	; Kernel: routines used by _FORMAT
 	ENDIF
 
 		; Additional symbol defined by the ide driver module
@@ -4583,7 +4585,305 @@ J_RFI3:
 		JR	Z,J_RFI2
 		LD	A,(HL)
 J_RFI2:		LD	(RFS_NJIO),A
+
+		; _FORMAT (BDOS function 67H): no room left in the kernel, P1_FORMAT of this ROM is called through the
+		; H_BDOS hook (called by the kernel at each BDOS function), code of the hook in the work area
+		PUSH	IX
+		POP	HL
+		LD	DE,W_HOOK
+		ADD	HL,DE
+		LD	A,(H_BDOS)		; hook already installed (second initialization): kept
+		CP	0C3H
+		JR	NZ,J_RFI6
+		LD	DE,(H_BDOS+1)
+		RST	R_DCOMPR
+		RET	Z
+J_RFI6:		CALL	C4E05			; slot of this ROM
+		EX	DE,HL			; DE = hook in the work area
+		PUSH	AF
+		PUSH	DE
+		LD	HL,I_HOOK
+		LD	BC,I_HOOKOLD-I_HOOK
+		LDIR
+		LD	HL,H_BDOS		; previous hook (5 bytes), when not _FORMAT
+		LD	BC,5
+		LDIR
+		LD	HL,I_HOOKOLD
+		LD	BC,I_HOOKEND-I_HOOKOLD
+		LDIR
+		POP	HL
+		POP	AF
+		PUSH	HL
+		LD	DE,HOOK_SLOT
+		ADD	HL,DE
+		LD	(HL),A			; slot of this ROM
+		POP	HL
+		DI
+		LD	A,0C3H			; H_BDOS: JP hook
+		LD	(H_BDOS),A
+		LD	(H_BDOS+1),HL
+		EI
 		RET
+
+; Hook H_BDOS (copied to the work area W_HOOK, 24 bytes): BDOS function 67H (_FORMAT) -> P1_FORMAT of this ROM, the
+; function is not done by the kernel (return of K_BDOS dropped, result stored as K_BDOS does)
+I_HOOK:		DEFB	0F5H			; PUSH AF
+		DEFB	79H			; LD A,C
+		DEFB	0FEH,67H		; CP 67H
+		DEFB	28H,6			; JR Z,format (POP AF and the previous hook: 6 bytes)
+		DEFB	0F1H			; POP AF
+I_HOOKOLD:					; previous hook (5 bytes)
+		DEFB	0F1H			; POP AF
+		DEFB	33H,33H			; INC SP x2: return to K_BDOS dropped
+		DEFB	0F7H			; RST 30H (CALLF)
+I_HOOKSLOT:	DEFB	0			; slot of this ROM
+		DEFW	P1_FORMAT
+		DEFB	32H			; LD (DSBBFD),A (as K_BDOS)
+		DEFW	DSBBFD
+		DEFB	0C9H			; RET
+I_HOOKEND:
+HOOK_SLOT	EQU	I_HOOKSLOT-I_HOOK+5	; I_HOOK + previous hook: 24 bytes (W_HOOK of drv_jio.asm)
+
+; ---------------------------------------------------------
+; Function $67 _FORMAT (kernel code, moved to the disk ROM page: no room left in the kernel)
+; Called by the H_BDOS hook (CALLF): kernel in page 0, data segment in page 2
+; ---------------------------------------------------------
+P1_FORMAT:	LD	IY,D_BB80		; base of the IY relative kernel variables
+		EX	AF,AF'
+		PUSH	HL
+		POP	IX
+		LD	A,B
+		CALL	C3606			; logical to physical drive
+		LD	A,(HL)
+		INC	HL
+		LD	H,(HL)
+		LD	L,A
+		OR	H
+		LD	A,C
+		RET	Z			; invalid drive
+		EX	AF,AF'
+		OR	A
+		JR	NZ,J_FM1
+		CALL	C_FMCHOICE		; choice 0: choice string of the driver
+		PUSH	HL
+		POP	IX
+		LD	B,(IX+0)
+		EX	DE,HL
+		OR	A
+		RET
+
+J_FM1:		EX	AF,AF'
+		CALL	C2C49			; flush sector buffers of drive table
+		CALL	C2C59			; mark sector buffers of drive table unused
+		PUSH	HL
+J_FM2:		PUSH	DE
+		PUSH	IX
+		POP	DE
+		XOR	A
+		CALL	C2731			; buffer: segment and page 2 address
+		LD	HL,04000H
+		OR	A
+		SBC	HL,DE
+		EX	(SP),HL
+		POP	BC
+		SBC	HL,BC
+		JR	C,J_FM3
+		SBC	HL,BC
+		JR	C,J_FM4
+		ADD	HL,BC
+		EX	DE,HL
+		ADD	IX,BC
+		JR	J_FM2
+
+J_FM3:		ADD	HL,BC
+		LD	B,H
+		LD	C,L
+J_FM4:		SET	7,D
+		PUSH	DE
+		POP	IX
+		LD	D,A
+		EX	AF,AF'
+		POP	HL
+		CALL	C_FMDISK
+		LD	BC,9
+		ADD	HL,BC
+		LD	(HL),00H
+		RET
+
+; Subroutine choice string of the disk driver
+C_FMCHOICE:	LD	A,4			; CHOICE
+		CALL	C34D4			; call disk driver function
+		RET	NZ
+		LD	A,E
+		OR	D
+		RET	Z
+		PUSH	HL
+		EX	(SP),IX
+		EX	DE,HL
+		LD	A,(IX+0)
+		CALL	RDSLT
+		EX	DE,HL
+		EX	(SP),IX
+		POP	HL
+		OR	A
+		LD	A,0F0H
+		RET	Z
+		XOR	A
+		RET
+
+; Subroutine format disk
+C_FMDISK:	BIT	7,A
+		JR	NZ,J_FD1
+		LD	E,C
+		LD	C,D
+		LD	D,B
+		LD	B,A
+		LD	A,5			; DSKFMT
+		CALL	C34D4			; call disk driver function
+		RET	NZ
+		INC	A
+J_FD1:		PUSH	AF
+		LD	IX,I_B6D4
+		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		PUSH	BC
+		CALL	C334E
+		LD	DE,1
+		JR	NZ,J_FD2
+		LD	E,(IX+14)
+		LD	D,(IX+15)
+J_FD2:		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		LD	A,(IX+1)
+		AND	(IX+2)
+		INC	A
+		JR	NZ,J_FD6
+		LD	A,(IX+0)
+		CP	0F8H
+		JR	C,J_FD6
+		LD	C,A
+		PUSH	BC
+		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		PUSH	BC
+		LD	A,C
+		CALL	C3382
+		POP	BC
+		RET	NZ
+		BIT	0,B
+		JR	Z,J_FD5
+		PUSH	HL
+		CALL	C32CB
+		JR	Z,J_FD4
+		LD	HL,I_BOOTCODE
+		LD	DE,ISB6F2
+		LD	BC,I_BOOTEND-I_BOOTCODE
+		LDIR				; copy bootsector code
+		EX	DE,HL
+		LD	DE,0FFB7H
+J_FD3:		LD	(HL),B
+		INC	HL
+		INC	DE
+		LD	A,D
+		OR	E
+		JR	NZ,J_FD3
+J_FD4:		LD	HL,(RANDOM+0)
+		LD	A,(RANDOM+2)
+		LD	B,A
+		XOR	A
+		SRL	L
+		RLA
+		SRL	H
+		RLA
+		SRL	B
+		RLA
+		LD	C,A
+		LD	(DSB6FB),HL
+		LD	(DSB6FD),BC
+		XOR	A
+		LD	(DSB6FA),A
+		POP	HL
+J_FD5:		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,1			; DSKIO write
+		JP	C34D4			; call disk driver function
+
+J_FD6:		LD	A,_NDOS
+		RET
+
+; MSXDOS 2.2 boot sector code starting at offset 0x1e, written by _FORMAT
+I_BOOTCODE:
+		PHASE	0C01EH
+
+RC01E:		JR	RC030
+		DEFB	"VOL_ID"
+		DEFB	0
+		DEFW	0FFFFH,0FFFFH
+		DEFS	5,0
+RC030:		RET	NC
+		LD	(RC069+1),DE
+		LD	(RC071+1),A
+		LD	(HL),RC067 % 256
+		INC	HL
+		LD	(HL),RC067 / 256
+RC03D:		LD	SP,KBUF+256
+		LD	DE,RC0AB
+		LD	C,00FH
+		CALL	BDOS
+		INC	A
+		JR	Z,RC071
+		LD	DE,00100H
+		LD	C,01AH
+		CALL	BDOS
+		LD	HL,1
+		LD	(RC0AB+14),HL
+		LD	HL,04000H-00100H
+		LD	DE,RC0AB
+		LD	C,027H
+		CALL	BDOS
+		JP	00100H
+
+RC067:		DEFW	RC069
+
+RC069:		CALL	0
+		LD	A,C
+		AND	0FEH
+		SUB	002H
+RC071:		OR	000H
+		JP	Z,BASENT
+		LD	DE,RC085
+		LD	C,009H
+		CALL	BDOS
+		LD	C,007H
+		CALL	BDOS
+		JR	RC03D
+
+RC085:		DEFB	"Boot error",13,10
+		DEFB	"Press any key for retry",13,10
+		DEFB	"$"
+
+RC0AB:		DEFB	0,"MSXDOS  SYS"
+		DEPHASE
+I_BOOTEND:
 
 ; Write LD C,<port A> / IN A,(C) at HL (kernel code), HL after it
 C_INPORT:	LD	(HL),0EH

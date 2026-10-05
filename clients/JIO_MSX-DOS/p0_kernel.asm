@@ -33,6 +33,10 @@
 
 		PUBLIC	K1_BEGIN		; begin of kernel code
 		PUBLIC	K1_END			; end of kernel code
+	IFDEF HYBRID
+		; used by _FORMAT, in the disk ROM page (P1_FORMAT, p1_main.asm: no room left in the kernel)
+		PUBLIC	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606
+	ENDIF
 
 ; ------------------------------------------------------------------------------
 ; Following kernel code is copied to ram in page 0

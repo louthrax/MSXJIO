@@ -211,6 +211,7 @@ def dos_name(path):
 
 class Server:
     def __init__(self):
+        self.arch_reset = set()     # files with the archive attribute reset by the MSX (kept at RESET, as the server)
         self.reset()
 
     def reset(self):
@@ -304,7 +305,8 @@ class Server:
         return E_OK, d, p
 
     def attributes(self, p):
-        a = 0x10 if os.path.isdir(p) else 0x20
+        # archive attribute: none on the host, the files reset by the MSX are kept in self.arch_reset (as the server)
+        a = 0x10 if os.path.isdir(p) else (0 if os.path.abspath(p) in self.arch_reset else 0x20)
         if not os.access(p, os.W_OK):
             a |= 1
         return a
@@ -387,6 +389,11 @@ class Server:
         if os.path.exists(np):
             return E_DUPF
         os.rename(p, np)
+        old, newp = os.path.abspath(p), os.path.abspath(np)
+        for a in list(self.arch_reset):
+            if a == old or a.startswith(old + os.sep):
+                self.arch_reset.discard(a)
+                self.arch_reset.add(newp + a[len(old):])
         return E_OK
 
     def handle_drive(self, p):
@@ -529,6 +536,7 @@ class Server:
                         e = E_WPROT
                     else:
                         h = self.add_file(open(p, 'w+b')) or 0xFF
+                        self.arch_reset.discard(os.path.abspath(p))
             LOG.write('  -> %02X handle %02X\n' % (e, h))
             return [bytes([e, h])]
         if func == 0x45:
@@ -564,6 +572,7 @@ class Server:
                     data = data[:max(0, old * 512 + free - pos)]
             f.write(data)
             f.flush()
+            self.arch_reset.discard(os.path.abspath(f.name))
             return [struct.pack('<BH', E_OK if len(data) == n else E_DKFUL, len(data))]
         if func == 0x68:
             b = r.byte()
@@ -611,6 +620,7 @@ class Server:
                     e = E_FILRO             # read-only attribute
                 else:
                     os.remove(p)
+                    self.arch_reset.discard(os.path.abspath(p))
             return [bytes([e])]
         if func in (0x4E, 0x4F):
             path, fib = r.path_or_fib()
@@ -636,6 +646,10 @@ class Server:
             if e == E_OK and st and not os.path.isdir(p):
                 mode = os.stat(p).st_mode
                 os.chmod(p, (mode & ~0o222) if na & 1 else (mode | 0o200))
+                if na & 0x20:
+                    self.arch_reset.discard(os.path.abspath(p))
+                else:
+                    self.arch_reset.add(os.path.abspath(p))
             LOG.write('ATTR %s set=%d attr=%02X -> %02X\n' % (p, st, na, self.attributes(p) if e == E_OK else 0))
             return [bytes([e, self.attributes(p) if e == E_OK else 0])]
         if func in (0x51, 0x56):

@@ -225,6 +225,24 @@ test_longnames() { # name rom map machine slots description
     end_checks "$1" "$6"
 }
 
+# SofaCopy (SC.COM, not in this repository: SOFACOPY environment, default the SD card folder of the author): it
+# resets the archive attribute of the source files (_ATTR), then copies the files whose archive attribute is reset
+# (the server keeps this attribute, not stored on the host)
+SOFACOPY=${SOFACOPY:-/mnt/DataLinux/Projects/MSX/sdcard/SOFARUN/SC.COM}
+setup_sofacopy() { # drive directory
+    cp "$SOFACOPY" "$1/SC.COM"
+}
+test_sofacopy() { # name rom map machine slots description
+    wanted "$1" || return
+    if [ ! -f "$SOFACOPY" ]; then echo "  SKIP  $1: $SOFACOPY not found"; return; fi
+    SETUP=setup_sofacopy run_scenario "$1" "$2" "$3" "$4" "$5" 'MD SUB\r\nCD SUB\r\nA:\\SC \\HELLO.TXT\r\nDIR\r\nCD \\\r\n' "$TEST/tcl/screens.tcl" "" "" 1 "40"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "SUB/HELLO.TXT copied by SofaCopy" "$(cmp -s "$d/drive/SUB/HELLO.TXT" "$OUT/base/hello.txt" && echo ok)"
+    mock_check "archive attribute reset by SofaCopy" "$(grep -q 'ATTR .*hello.txt set=1 attr=00 -> 00' "$d/server.log" && echo ok)"
+    end_checks "$1" "$6"
+}
+
 # REN, MOVE, ATTRIB (_RENAME, _MOVE, _ATTR): on drive A: (JIO), and on the floppy B:
 renmove_cmds() { # drive (same escapes as the other command strings: run_scenario uses printf)
     echo -n "$1:"'\r\nCOPY A:HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nMD SUB\r\nMOVE R2.TXT SUB\r\nATTRIB +R SUB\\R2.TXT\r\nDEL SUB\\R2.TXT\r\nATTRIB -R SUB\\R2.TXT\r\nCOPY SUB\\R2.TXT R3.TXT\r\nDIR /W\r\n'
@@ -273,6 +291,7 @@ RETRY_CMDS='TYPE HELLO.TXT\r\nDIR /W\r\n'
 RETRY_WRITE='COPY HELLO.TXT X.TXT\r\nTYPE X.TXT\r\nDIR /W\r\n'
 test_retry() { # name rom map machine slots auto|ask description [text of the dropped request] [commands]
     wanted "$1" || return
+    [ -n "${REAL_SERVER:-}" ] && return     # answer dropped by the mock server (MOCK_DROP)
     local d="$OUT/$1" drop=${8:-HELLO.TXT} cmds=${9:-$RETRY_CMDS}
     if [ "$6" = auto ]; then
         MOCK_DROP=$drop JIO_AUTORETRY=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/screens.tcl" "" "" 1 "25"
@@ -293,6 +312,18 @@ test_retry() { # name rom map machine slots auto|ask description [text of the dr
     fi
     check "TYPE output" "$(has_text "$d/screens.txt" 'Hello' && echo ok)"
     check "DIR after the retry" "$(has_text "$d/screens.txt" 'FCBTEST' && echo ok)"
+    end_checks "$1" "$7"
+}
+
+# FORMAT B: (_FORMAT, in the disk ROM page, called through the H_BDOS hook): floppy formatted, then listed
+test_format() { # name rom map machine slots floppy size description [unused] [choice of the driver]
+    wanted "$1" || return
+    FORMAT_CHOICE=${9:-} run_scenario "$1" "$2" "$3" "$4" "$5" 'REM\r\n' "$TEST/tcl/format.tcl" "$6" "$OUT/floppy_base" 1 "23 27 40 130"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "no error" "$( ! grep -qi 'invalid\|error\|abort' "$d/screens.txt" && echo ok)"
+    check "formatted B: holds only the file copied after FORMAT" "$(has_text "$d/screen_130.txt" 'HELLO' && has_text "$d/screen_130.txt" '1 file' && echo ok)"
+    check "floppy read back: only HELLO.TXT" "$([ "$(ls -A "$d/floppy_out" 2> /dev/null)" = hello.txt ] && echo ok)"
     end_checks "$1" "$7"
 }
 
@@ -439,6 +470,7 @@ test_jiotime() { # name rom map machine slots description [mock date] [parameter
     else
         check "MSX date and time set (read back)" "$(has_text "$d/screen_15.txt" 'Date and time set:' && has_text "$d/screen_15.txt" "${date%?}" && echo ok)"
     fi
+    [ -z "${8:-}" ] && [ "$date" != none ] && check "automatic: serial line of the server shown" "$(has_text "$d/screen_15.txt" 'Joystick port 2' && echo ok)"
     [ "${8:-}" = C30 ] && check "JIO cartridge option (port 30H)" "$(has_text "$d/screen_15.txt" 'JIO cartridge, port 30H' && echo ok)"
     [ "${8:-}" = J1 ] && check "joystick port 1 option" "$(has_text "$d/screen_15.txt" 'Joystick port 1' && echo ok)"
     end_checks "$1" "$6"
@@ -468,6 +500,7 @@ test_nfs() { # name machine "slots" description [options of JIO.COM] [serial lin
     check "REN and MOVE (SUB/R2.TXT)" "$([ ! -e "$d/drive/R1.TXT" ] && [ ! -e "$d/drive/R2.TXT" ] && [ -f "$d/drive/SUB/R2.TXT" ] && echo ok)"
     check "ATTRIB +R (host file read only)" "$([ -f "$d/drive/SUB/R2.TXT" ] && [ ! -w "$d/drive/SUB/R2.TXT" ] && echo ok)"
     [ -n "${6:-}" ] && check "serial line of the installed driver (JIO S)" "$(has_text "$d/screens.txt" "$6" && echo ok)"
+    [ -z "${5:-}" ] && check "automatic serial line shown at install" "$(has_text "$d/screens.txt" 'Serial line: joystick port 2' && echo ok)"
     end_checks "$1" "$4"
 }
 
@@ -507,6 +540,7 @@ test_basic           dos2_basic_jio   "$R" "$RM" Philips_VG_8235   "-carta $R" A
 test_basic           dos2_basic_flop  "$R" "$RM" Philips_VG_8235   "-carta $R" B "VG-8235, Disk BASIC on the floppy" 360
 test_renmove         dos2_renmove     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, REN, MOVE, ATTRIB on JIO drive A: and floppy B:" 360
 test_longnames       dos2_longnames   "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, long host names and 8.3 aliases"
+test_sofacopy        dos2_sofacopy    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, SofaCopy (SC.COM) from A: to A:\\SUB (archive attribute)"
 test_ramdisk         dos2_ramdisk     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
 test_takeover_hybrid dos2_takeover    "$R" "$RM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
 test_readonly        dos2_readonly    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, read only server, floppy B: writable" 360
@@ -518,6 +552,8 @@ test_retry           dos2_retry_ask  "$R" "$RM" Philips_VG_8235   "-carta $R" as
 JIO_CART=1 test_dos_hybrid dos2_cart        "$RC" "$RCM" Philips_VG_8235 "-carta $RC" 360 "VG-8235, JIO cartridge ROM (port 30H, not emulated), both drives"
 test_dos_hybrid      dos2_joy1        "$RJ" "$RJM" Philips_VG_8235 "-carta $RJ" 360 "VG-8235, ROM on joystick port 1 (J1, serial line intercepted), both drives"
 test_retry           dos2_retry_write "$R" "$RM" Panasonic_FS-A1ST "-carta $R" ask "turbo R, answer of a write lost: Not ready, Retry" 'Hello from' "$RETRY_WRITE"
+test_format          dos2_format_vg   "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, FORMAT B: (360 KB floppy), then COPY to B:" 354K
+test_format          dos2_format_nms  "$R" "$RM" Philips_NMS_8255  "-carta $R" 720 "NMS 8255, FORMAT B: (720 KB floppy, double sided), then COPY to B:" 713K 2
 
 echo "Clients:"
 test_jiotime   jiotime      "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME.COM sets the date and time"

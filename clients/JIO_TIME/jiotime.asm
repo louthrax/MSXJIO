@@ -6,8 +6,10 @@
 ; Works with MSX-DOS 1 and MSX-DOS 2 (_SDATE and _STIME), whatever the mode of the
 ; server (disk image or directories). On turbo R, the transfer is done in Z80 mode.
 ; Usage: JIOTIME [J1|J2|C[<port>]]
-;   J1, J2     joystick port 1 or 2 (default: 2)
-;   C          JIO cartridge (herraa1/msx-jio-cart-v1) instead of joystick port 2, port detected
+;   (none)     automatic: JIO cartridge (if its I/O register is found), joystick port 2, joystick port 1, one
+;              request on each until the server answers (the joystick ports can not be detected otherwise)
+;   J1, J2     joystick port 1 or 2
+;   C          JIO cartridge (herraa1/msx-jio-cart-v1), port detected
 ;   C<port>    JIO cartridge at this I/O port (hex: 00, 20 or 30)
 ; 115K2 transmit/receive routines based on code by Nyyrikki (clients/JIO_NFS)
 ; ------------------------------------------------------------------------------
@@ -20,7 +22,7 @@ MSXVER		equ	002Dh		; main ROM: MSX version (3 = turbo R)
 CHGCPU		equ	0180h
 GETCPU		equ	0183h
 
-TRIES		equ	3		; tries before "no answer" (time-out about 1 s each)
+TRIES		equ	3		; tries before "no answer" (time-out about 1 s each), serial line given
 
 INCLUDE "../../common/drv_jio.inc"
 
@@ -39,7 +41,7 @@ INCLUDE "../../common/drv_jio.inc"
 		ld	(hl),0			; end of the parameters
 		pop	hl
 		call	SkipSpaces
-		jr	z,ArgsDone		; no parameter: joystick port 2
+		jp	z,ArgsAuto		; no parameter: automatic
 		and	0DFh			; upper case
 		cp	'J'
 		jr	z,ParseJoystick
@@ -101,8 +103,36 @@ SetPort:	ld	(_JioPort),a
 		call	PrintHex
 		ld	de,MSG_PORT_END
 		call	PrintString
-ArgsDone:
+ArgsDone:	ld	a,(_JioPort)		; serial line given: 3 tries
+		ld	(LINES),a
+		ld	a,1
+		ld	(NLINES),a
+		ld	a,TRIES
+		ld	(NTRIES),a
+		jr	Transfer
 
+ArgsAuto:	ld	hl,LINES		; automatic: cartridge (if found), joystick port 2, joystick port 1
+		push	hl
+		call	DetectPort
+		pop	hl
+		cp	0FFh
+		jr	z,AutoJoy
+		ld	(hl),a
+		inc	hl
+AutoJoy:	ld	(hl),0FFh
+		inc	hl
+		ld	(hl),0FEh
+		inc	hl
+		ld	de,LINES
+		or	a
+		sbc	hl,de
+		ld	a,l
+		ld	(NLINES),a
+		ld	a,1
+		ld	(NTRIES),a
+		ld	(AUTO),a
+
+Transfer:
 		; turbo R: Z80 mode for the transfer
 		ld	a,(EXPTBL)
 		ld	hl,MSXVER
@@ -118,7 +148,15 @@ ArgsDone:
 		ld	ix,CHGCPU
 		call	CallBIOS
 NoTurbo:
-		ld	b,TRIES
+		ld	hl,LINES		; each serial line until the server answers
+		ld	a,(NLINES)
+		ld	b,a
+LineLoop:	push	bc
+		push	hl
+		ld	a,(hl)
+		ld	(_JioPort),a
+		ld	a,(NTRIES)
+		ld	b,a
 Retry:		push	bc
 		di
 		ld	hl,COMMAND
@@ -132,12 +170,21 @@ Retry:		push	bc
 		or	a
 		jr	nz,Received
 		djnz	Retry
+		pop	hl
+		pop	bc
+		inc	hl
+		djnz	LineLoop
 
 		call	RestoreCPU
 		ld	de,MSG_NO_ANSWER
 		jp	PrintString
 
-Received:	call	RestoreCPU
+Received:	pop	hl
+		pop	bc
+		call	RestoreCPU
+		ld	a,(AUTO)		; automatic: serial line of the server
+		or	a
+		call	nz,PrintLine
 
 		ld	hl,(A_YEAR)
 		ld	a,(A_MONTH)
@@ -205,6 +252,21 @@ Invalid:	ld	de,MSG_INVALID
 		jp	PrintString
 
 Usage:		ld	de,MSG_USAGE
+		jp	PrintString
+
+; Print the serial line (_JioPort)
+PrintLine:	ld	a,(_JioPort)
+		ld	de,MSG_JOY2
+		inc	a
+		jp	z,PrintString
+		ld	de,MSG_JOY1
+		inc	a
+		jp	z,PrintString
+		ld	de,MSG_CART
+		call	PrintString
+		ld	a,(_JioPort)
+		call	PrintHex
+		ld	de,MSG_PORT_END
 		jp	PrintString
 
 ; ------------------------------------------------------------------------------
@@ -361,6 +423,10 @@ A_SECOND:	defb	0
 ANSWER_END:
 
 IS_TURBO:	defb	0
+LINES:		defs	3,0		; serial lines tried, in this order
+NLINES:		defb	0
+NTRIES:		defb	0		; requests on each serial line
+AUTO:		defb	0		; not 0: automatic (no parameter)
 CPU_MODE:	defb	0
 
 POW4:		defw	1000,100
@@ -375,7 +441,9 @@ MSG_CART:	defb	"JIO cartridge, port $"
 MSG_PORT_END:	defb	"H",13,10,"$"
 MSG_NO_CART:	defb	"JIO cartridge not found (IOSEL switches: 00, 20 or 30)",13,10,"$"
 MSG_JOY1:	defb	"Joystick port 1",13,10,"$"
+MSG_JOY2:	defb	"Joystick port 2",13,10,"$"
 MSG_USAGE:	defb	"Usage: JIOTIME [J1|J2|C[<port>]]",13,10
-		defb	"  J1, J2     joystick port 1 or 2 (default: 2)",13,10
+		defb	"  (none)     automatic: JIO cartridge, joystick port 2, joystick port 1",13,10
+		defb	"  J1, J2     joystick port 1 or 2",13,10
 		defb	"  C          JIO cartridge instead of joystick port 2 (port detected)",13,10
 		defb	"  C<port>    JIO cartridge at this I/O port (hex: 00, 20 or 30)",13,10,"$"

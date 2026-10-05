@@ -304,7 +304,10 @@ unsigned char Server::ucGetAttributes(const QString &_szHostPath)
     QFileInfo       oInfo(_szHostPath);
     unsigned char   ucAttributes;
 
-    ucAttributes = oInfo.isDir() ? ATTRIBUTE_DIRECTORY : ATTRIBUTE_ARCHIVE_BIT;
+    if (oInfo.isDir())
+        ucAttributes = ATTRIBUTE_DIRECTORY;
+    else
+        ucAttributes = m_oArchiveCleared.contains(oInfo.absoluteFilePath()) ? 0 : ATTRIBUTE_ARCHIVE_BIT;
 
     if (!oInfo.isWritable())
         ucAttributes |= ATTRIBUTE_READ_ONLY;
@@ -313,6 +316,45 @@ unsigned char Server::ucGetAttributes(const QString &_szHostPath)
         ucAttributes |= ATTRIBUTE_HIDDEN_FILE;
 
     return ucAttributes;
+}
+
+/*
+ =======================================================================================================================
+    Archive attribute of a host file (no such attribute on the host): set again when the file is written, created
+    or deleted, reset by _ATTR / _HATTR (used by programs to mark the files done, e.g. SofaCopy)
+ =======================================================================================================================
+ */
+void Server::vSetArchive(const QString &_szHostPath, bool _bSet)
+{
+    if (_bSet)
+        m_oArchiveCleared.remove(QFileInfo(_szHostPath).absoluteFilePath());
+    else
+        m_oArchiveCleared.insert(QFileInfo(_szHostPath).absoluteFilePath());
+}
+
+/*
+ =======================================================================================================================
+    Rename / move: the archive attribute follows the file (and the files of a directory)
+ =======================================================================================================================
+ */
+void Server::vRenameArchive(const QString &_szHostPath, const QString &_szNewHostPath)
+{
+    QString szOld = QFileInfo(_szHostPath).absoluteFilePath();
+    QString szNew = QFileInfo(_szNewHostPath).absoluteFilePath();
+
+    for (const QString &szPath : m_oArchiveCleared.values())
+    {
+        if (szPath == szOld)
+        {
+            m_oArchiveCleared.remove(szPath);
+            m_oArchiveCleared.insert(szNew);
+        }
+        else if (szPath.startsWith(szOld + "/"))
+        {
+            m_oArchiveCleared.remove(szPath);
+            m_oArchiveCleared.insert(szNew + szPath.mid(szOld.length()));
+        }
+    }
 }
 
 /*
@@ -902,6 +944,8 @@ void Server::vDOS_CREATE_FILE_HANDLE(const tdFileInfoBlock &_roFIB, const QStrin
 
             if (!poFile->open(QIODevice::ReadWrite | QIODevice::Truncate))
                 ucError = DOS_ERR_FILRO;
+            else
+                vSetArchive(szPath, true);          // new (or truncated) file
         }
     }
 
@@ -1008,6 +1052,7 @@ void Server::vDOS_WRITE_TO_FILE_HANDLE(unsigned char _ucFileHandle, const QByteA
         }
 
         iWritten = poFile->write(acData);
+        vSetArchive(poFile->fileName(), true);      // file modified
 
         if (iWritten < _racData.size())
             s.ucError = DOS_ERR_DKFUL;
@@ -1096,6 +1141,7 @@ unsigned char Server::ucDelete(unsigned char _ucDrive, const QString &_szPath)
     if (!oInfo.isWritable())
         return DOS_ERR_FILRO;
 
+    vSetArchive(_szPath, true);
     return QFile::remove(_szPath) ? DOS_ERR_OK : DOS_ERR_FILRO;
 }
 
@@ -1200,6 +1246,8 @@ void Server::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QString &_
     {
         vLog(eLogBDOSDetails, "%s -> %s\n", qPrintable(szPath), qPrintable(szNewPath));
         ucError = ucRename(szPath, szNewPath);
+        if (ucError == DOS_ERR_OK)
+            vRenameArchive(szPath, szNewPath);
     }
 
     vBDOSError(ucError);
@@ -1207,7 +1255,7 @@ void Server::vDOS_RENAME_OR_MOVE(const tdFileInfoBlock &_roFIB, const QString &_
 
 /*
  =======================================================================================================================
-    Get or set attributes (only read-only can be changed)
+    Get or set attributes (read-only: permissions of the host file, archive: kept by the server)
  =======================================================================================================================
  */
 void Server::vAttributes(unsigned char _ucError, const QString &_szPath, unsigned char _ucSet, unsigned char _ucNewAttributes)
@@ -1241,6 +1289,7 @@ void Server::vAttributes(unsigned char _ucError, const QString &_szPath, unsigne
                 ePermissions |= QFileDevice::WriteOwner | QFileDevice::WriteUser;
 
             QFile::setPermissions(_szPath, ePermissions);
+            vSetArchive(_szPath, _ucNewAttributes & ATTRIBUTE_ARCHIVE_BIT);
         }
 
         s.ucAttributes = ucGetAttributes(_szPath);
@@ -1370,6 +1419,7 @@ void Server::vDOS_DELETE_FILE_HANDLE(unsigned char _ucFileHandle)
     if (ucError == DOS_ERR_OK)
     {
         m_apoOpenedFiles[_ucFileHandle]->close();
+        vSetArchive(szPath, true);
         ucError = QFile::remove(szPath) ? DOS_ERR_OK : DOS_ERR_FILRO;
     }
 
@@ -1412,7 +1462,10 @@ void Server::vDOS_RENAME_OR_MOVE_FILE_HANDLE(unsigned char _ucFileHandle, const 
         poFile->close();
         ucError = ucRename(szPath, szNewPath);
         if (ucError == DOS_ERR_OK)
+        {
+            vRenameArchive(szPath, szNewPath);
             poFile->setFileName(szNewPath);
+        }
         poFile->open(eMode);
         poFile->seek(iPos);
     }

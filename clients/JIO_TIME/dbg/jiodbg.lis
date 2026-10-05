@@ -1,0 +1,660 @@
+jiodbg.asm:
+     1                          ; ------------------------------------------------------------------------------
+     2                          ; jiodbg.asm
+     3                          ; JIODBG.COM: diagnostic of the serial line of the JIO cartridge (temporary test tool)
+     4                          ; Usage: JIODBG [<port>]     port in hex (default: first port found among 00, 20, 30), J2 = joystick port 2
+     5                          ; 1. ports 00H, 20H, 30H: values read back after writing 2FH, DBH, F7H (cartridge: CC, 88, 44 with bits 1-0
+     6                          ;    masked) and value of the register at rest
+     7                          ; 2. date and time request (as JIOTIME), answer received by the receive routine, or time-out
+     8                          ; 3. same request, then changes of bit 0 (receive line) counted during about 0.5 s
+     9                          ; ------------------------------------------------------------------------------
+    10                          
+    11                          BDOS		equ	0005h
+    12                          COMMAND_DATE_TIME equ	23
+    13                          
+    14                          		org	0100h
+    15                          
+    16  0000  115903            		ld	de,MSG_TITLE
+    17  0003  cdcf01            		call	PrintString
+    18                          
+    19                          		; 1. registers
+    20  0006  215503            		ld	hl,PORTS
+    21  0009  7e                Probe:		ld	a,(hl)
+    22  000a  feff              		cp	0FFh
+    23  000c  2875              		jr	z,ProbeEnd
+    24  000e  e5                		push	hl
+    25  000f  4f                		ld	c,a
+    26  0010  119c03            		ld	de,MSG_PORT
+    27  0013  cdc901            		call	PrintStringC
+    28  0016  79                		ld	a,c
+    29  0017  cdaa01            		call	PrintHexC
+    30  001a  119d03            		ld	de,MSG_IDLE
+    31  001d  cdc901            		call	PrintStringC
+    32  0020  ed78              		in	a,(c)
+    33  0022  cdaa01            		call	PrintHexC
+    34  0025  0600              		ld	b,0
+    35  0027  3e2f              		ld	a,2Fh
+    36  0029  cd6100            		call	ProbeValue
+    37  002c  3edb              		ld	a,0DBh
+    38  002e  cd6100            		call	ProbeValue
+    39  0031  3ef7              		ld	a,0F7h
+    40  0033  cd6100            		call	ProbeValue
+    41  0036  78                		ld	a,b
+    42  0037  fe03              		cp	3
+    43  0039  200a              		jr	nz,ProbeNo
+    44  003b  3a5403            		ld	a,(FOUND)
+    45  003e  3c                		inc	a
+    46  003f  2004              		jr	nz,ProbeNo
+    47  0041  79                		ld	a,c
+    48  0042  325403            		ld	(FOUND),a
+    49  0045  c5                ProbeNo:	push	bc
+    50  0046  11a203            		ld	de,MSG_OK
+    51  0049  78                		ld	a,b
+    52  004a  fe03              		cp	3
+    53  004c  2803              		jr	z,ProbeMsg
+    54  004e  11af03            		ld	de,MSG_NO
+    55  0051  cdcf01            ProbeMsg:	call	PrintString
+    56  0054  c1                		pop	bc
+    57                          		; register back to the idle state of a serial line: bit 2 = 1 (transmit line at rest), bit 3 kept
+    58  0055  ed78              		in	a,(c)
+    59  0057  e608              		and	08h
+    60  0059  f604              		or	04h
+    61  005b  ed79              		out	(c),a
+    62  005d  e1                		pop	hl
+    63  005e  23                		inc	hl
+    64  005f  18a8              		jr	Probe
+    65                          
+    66                          ; Write A to port C, print the value read back, B + 1 if it is the value of the cartridge
+    67                          ; (bits 3 and 2 written read back in bits 7, 3 and 6, 2; bits 1 and 0 masked)
+    68  0061  f5                ProbeValue:	push	af			; value written
+    69  0062  ed79              		out	(c),a
+    70  0064  ed78              		in	a,(c)
+    71  0066  f5                		push	af			; value read
+    72  0067  11a003            		ld	de,MSG_SPACE
+    73  006a  cdc901            		call	PrintStringC
+    74  006d  f1                		pop	af
+    75  006e  f5                		push	af
+    76  006f  cdaa01            		call	PrintHexC
+    77  0072  f1                		pop	af
+    78  0073  e6fc              		and	0FCh
+    79  0075  5f                		ld	e,a
+    80  0076  f1                		pop	af
+    81  0077  e60c              		and	0Ch
+    82  0079  57                		ld	d,a
+    83  007a  07                		rlca
+    84  007b  07                		rlca
+    85  007c  07                		rlca
+    86  007d  07                		rlca
+    87  007e  b2                		or	d
+    88  007f  bb                		cp	e
+    89  0080  c0                		ret	nz
+    90  0081  04                		inc	b
+    91  0082  c9                		ret
+    92                          
+    93                          ProbeEnd:	; port to test: parameter, else the first cartridge found
+    94  0083  218000            		ld	hl,0080h
+    95  0086  5e                		ld	e,(hl)
+    96  0087  1600              		ld	d,0
+    97  0089  23                		inc	hl
+    98  008a  e5                		push	hl
+    99  008b  19                		add	hl,de
+   100  008c  3600              		ld	(hl),0
+   101  008e  e1                		pop	hl
+   102  008f  7e                SkipSp:		ld	a,(hl)
+   103  0090  fe20              		cp	' '
+   104  0092  2003              		jr	nz,ArgEnd
+   105  0094  23                		inc	hl
+   106  0095  18f8              		jr	SkipSp
+   107  0097  b7                ArgEnd:		or	a
+   108  0098  2821              		jr	z,UseFound
+   109  009a  e6df              		and	0DFh
+   110  009c  fe4a              		cp	'J'
+   111  009e  2004              		jr	nz,ArgHex
+   112  00a0  3eff              		ld	a,0FFh			; J2: joystick port 2
+   113  00a2  1826              		jr	SetPort
+   114  00a4  7e                ArgHex:		ld	a,(hl)
+   115  00a5  cd9701            		call	HexDigit
+   116  00a8  da9101            		jp	c,Usage
+   117  00ab  07                		rlca
+   118  00ac  07                		rlca
+   119  00ad  07                		rlca
+   120  00ae  07                		rlca
+   121  00af  47                		ld	b,a
+   122  00b0  23                		inc	hl
+   123  00b1  7e                		ld	a,(hl)
+   124  00b2  cd9701            		call	HexDigit
+   125  00b5  da9101            		jp	c,Usage
+   126  00b8  b0                		or	b
+   127  00b9  180f              		jr	SetPort
+   128  00bb  3a5403            UseFound:	ld	a,(FOUND)
+   129  00be  feff              		cp	0FFh
+   130  00c0  2008              		jr	nz,SetPort
+   131  00c2  11b403            		ld	de,MSG_NOCART
+   132  00c5  cdcf01            		call	PrintString
+   133  00c8  3e30              		ld	a,30h			; nothing found: tested on 30H anyway
+   134  00ca  32d401            SetPort:	ld	(_JioPort),a
+   135  00cd  11d503            		ld	de,MSG_TEST
+   136  00d0  cdc901            		call	PrintStringC
+   137  00d3  3ad401            		ld	a,(_JioPort)
+   138  00d6  cdb001            		call	PrintHex
+   139  00d9  112104            		ld	de,MSG_CRLF
+   140  00dc  cdcf01            		call	PrintString
+   141                          
+   142                          		; 2. request and answer
+   143  00df  0603              		ld	b,3
+   144  00e1  c5                Try:		push	bc
+   145  00e2  f3                		di
+   146  00e3  214703            		ld	hl,COMMAND
+   147  00e6  110500            		ld	de,COMMAND_END-COMMAND
+   148  00e9  cdd501            		call	vJIOTransmit
+   149  00ec  214c03            		ld	hl,ANSWER
+   150  00ef  110700            		ld	de,ANSWER_END-ANSWER
+   151  00f2  cd7202            		call	bJIOReceive
+   152  00f5  fb                		ei
+   153  00f6  c1                		pop	bc
+   154  00f7  b7                		or	a
+   155  00f8  200c              		jr	nz,Answer
+   156  00fa  c5                		push	bc
+   157  00fb  11eb03            		ld	de,MSG_TIMEOUT
+   158  00fe  cdcf01            		call	PrintString
+   159  0101  c1                		pop	bc
+   160  0102  10dd              		djnz	Try
+   161  0104  1821              		jr	Raw
+   162  0106  11f603            Answer:		ld	de,MSG_ANSWER
+   163  0109  cdcf01            		call	PrintString
+   164  010c  214c03            		ld	hl,ANSWER
+   165  010f  0607              		ld	b,ANSWER_END-ANSWER
+   166  0111  7e                AnsLoop:	ld	a,(hl)
+   167  0112  e5                		push	hl
+   168  0113  c5                		push	bc
+   169  0114  cdaa01            		call	PrintHexC
+   170  0117  3e20              		ld	a,' '
+   171  0119  cdc301            		call	PrintChar
+   172  011c  c1                		pop	bc
+   173  011d  e1                		pop	hl
+   174  011e  23                		inc	hl
+   175  011f  10f0              		djnz	AnsLoop
+   176  0121  112104            		ld	de,MSG_CRLF
+   177  0124  cdcf01            		call	PrintString
+   178                          
+   179                          		; 3. raw activity of the receive line after the request
+   180  0127  11ff03            Raw:		ld	de,MSG_RAW
+   181  012a  cdcf01            		call	PrintString
+   182  012d  f3                		di
+   183  012e  214703            		ld	hl,COMMAND
+   184  0131  110500            		ld	de,COMMAND_END-COMMAND
+   185  0134  cdd501            		call	vJIOTransmit
+   186  0137  3ad401            		ld	a,(_JioPort)
+   187  013a  4f                		ld	c,a
+   188  013b  3c                		inc	a
+   189  013c  2010              		jr	nz,RawCart
+   190  013e  3e0f              		ld	a,15			; joystick port 2: PSG register 14
+   191  0140  d3a0              		out	(0A0h),a
+   192  0142  dba2              		in	a,(0A2h)
+   193  0144  f640              		or	64
+   194  0146  d3a1              		out	(0A1h),a
+   195  0148  3e0e              		ld	a,14
+   196  014a  d3a0              		out	(0A0h),a
+   197  014c  0ea2              		ld	c,0A2h
+   198  014e  ed78              RawCart:	in	a,(c)
+   199  0150  325303            		ld	(FIRST),a
+   200  0153  e601              		and	1
+   201  0155  57                		ld	d,a			; last level
+   202  0156  210000            		ld	hl,0			; changes
+   203  0159  fd210000          		ld	iy,0			; samples (65536, about 0.5 s)
+   204  015d  ed78              RawLoop:	in	a,(c)
+   205  015f  e601              		and	1
+   206  0161  ba                		cp	d
+   207  0162  2802              		jr	z,RawSame
+   208  0164  57                		ld	d,a
+   209  0165  23                		inc	hl
+   210  0166  fd2b              RawSame:	dec	iy
+   211  0168  fd7c              		ld	a,iyh
+   212  016a  fdb5              		or	iyl
+   213  016c  20ef              		jr	nz,RawLoop
+   214  016e  fb                		ei
+   215  016f  e5                		push	hl
+   216  0170  110504            		ld	de,MSG_FIRST
+   217  0173  cdcf01            		call	PrintString
+   218  0176  3a5303            		ld	a,(FIRST)
+   219  0179  cdaa01            		call	PrintHexC
+   220  017c  110c04            		ld	de,MSG_CHANGES
+   221  017f  cdcf01            		call	PrintString
+   222  0182  e1                		pop	hl
+   223  0183  7c                		ld	a,h
+   224  0184  cdaa01            		call	PrintHexC
+   225  0187  7d                		ld	a,l
+   226  0188  cdaa01            		call	PrintHexC
+   227  018b  111d04            		ld	de,MSG_HEXEND
+   228  018e  c3cf01            		jp	PrintString
+   229                          
+   230  0191  112404            Usage:		ld	de,MSG_USAGE
+   231  0194  c3cf01            		jp	PrintString
+   232                          
+   233                          ; ------------------------------------------------------------------------------
+   234  0197  d630              HexDigit:	sub	'0'
+   235  0199  d8                		ret	c
+   236  019a  fe0a              		cp	10
+   237  019c  3f                		ccf
+   238  019d  d0                		ret	nc
+   239  019e  e6df              		and	0DFh
+   240  01a0  d611              		sub	'A'-'0'
+   241  01a2  d8                		ret	c
+   242  01a3  fe06              		cp	6
+   243  01a5  3f                		ccf
+   244  01a6  d8                		ret	c
+   245  01a7  c60a              		add	a,10
+   246  01a9  c9                		ret
+   247                          
+   248                          ; Print A in hex (2 digits), keeps BC
+   249  01aa  c5                PrintHexC:	push	bc
+   250  01ab  cdb001            		call	PrintHex
+   251  01ae  c1                		pop	bc
+   252  01af  c9                		ret
+   253  01b0  f5                PrintHex:	push	af
+   254  01b1  0f                		rrca
+   255  01b2  0f                		rrca
+   256  01b3  0f                		rrca
+   257  01b4  0f                		rrca
+   258  01b5  cdb901            		call	PrintDigit
+   259  01b8  f1                		pop	af
+   260  01b9  e60f              PrintDigit:	and	0Fh
+   261  01bb  c630              		add	a,'0'
+   262  01bd  fe3a              		cp	'9'+1
+   263  01bf  3802              		jr	c,PrintChar
+   264  01c1  c607              		add	a,'A'-'9'-1
+   265  01c3  5f                PrintChar:	ld	e,a
+   266  01c4  0e02              		ld	c,02h
+   267  01c6  c30500            		jp	BDOS
+   268                          
+   269  01c9  c5                PrintStringC:	push	bc
+   270  01ca  cdcf01            		call	PrintString
+   271  01cd  c1                		pop	bc
+   272  01ce  c9                		ret
+   273  01cf  0e09              PrintString:	ld	c,09h
+   274  01d1  c30500            		jp	BDOS
+   275                          
+   276                          ; ------------------------------------------------------------------------------
+   277  01d4  ff                _JioPort:	defb	0FFh
+   278                          INCLUDE "../../JIO_NFS/transmit.asm"
+../../JIO_NFS/transmit.asm:
+     1                          vJIOTransmit:
+     2  01d5  42                                                ld                              b,d
+     3  01d6  4b                                                ld                              c,e
+     4                          
+     5  01d7  d9                                                exx
+     6  01d8  c5                                                push                            bc
+     7  01d9  d5                                                push                            de
+     8  01da  d9                                                exx
+     9                          
+    10  01db  cde301                                            call                            vJIOTransmit2
+    11                          
+    12  01de  d9                                                exx
+    13  01df  d1                                                pop                             de
+    14  01e0  c1                                                pop                             bc
+    15  01e1  d9                                                exx
+    16  01e2  c9                                                ret
+    17                          
+    18                          ; _JioPort (defined by the program): 0xFF = joystick port 2, 0xFE = joystick port 1 (PSG), else I/O register of the
+    19                          ; JIO cartridge
+    20                          vJIOTransmit2:
+    21  01e3  03                                                inc	bc
+    22  01e4  d9                                                exx
+    23  01e5  3ad401                                            ld	a,(_JioPort)
+    24  01e8  4f                                                ld	c,a
+    25  01e9  0604                                              ld	b,4	; bit 2: joystick port 2 pin 6, JIO cartridge
+    26  01eb  3c                                                inc	a
+    27  01ec  2805                                              jr	z,TransmitPSG
+    28  01ee  3c                                                inc	a
+    29  01ef  200c                                              jr	nz,TransmitCart
+    30  01f1  0601                                              ld	b,1	; bit 0: joystick port 1 pin 6
+    31                          TransmitPSG:
+    32  01f3  3e0f                                              ld	a,15	; PSG register 15
+    33  01f5  d3a0                                              out	(0xa0),a
+    34  01f7  dba2                                              in	a,(0xa2)
+    35  01f9  0ea1                                              ld	c,0xa1
+    36  01fb  1802                                              jr	TransmitLevels
+    37                          TransmitCart:
+    38  01fd  ed78                                              in	a,(c)	; I/O register of the JIO cartridge
+    39                          TransmitLevels:
+    40  01ff  b0                                                or	b
+    41  0200  5f                                                ld	e,a
+    42  0201  a8                                                xor	b
+    43  0202  57                                                ld	d,a
+    44                          
+    45  0203  3e                                                defb	0x3e
+    46                          JIOTransmitLoop:
+    47  0204  c0                                                ret	nz
+    48  0205  ed59                                              out	(c),e
+    49  0207  d9                                                exx
+    50  0208  7e                                                ld	a,(hl)
+    51  0209  eda1                                              cpi
+    52  020b  e0                                                ret	po
+    53  020c  d9                                                exx
+    54  020d  0f                                                rrca
+    55  020e  ed51                                              out	(c),d	; =0
+    56  0210  c0                                                ret	nz
+    57  0211  da4302                                            jp	c,TRANSMIT10
+    58  0214  ed51                                              out	(c),d	; -0
+    59  0216  0f                                                rrca
+    60  0217  da4902                                            jp	c,TRANSMIT11
+    61                          ;________________________________________________________________________________________________________________________________
+    62                          
+    63                          TRANSMIT01:
+    64  021a  ed51                                              out	(c),d	; -1
+    65  021c  0f                                                rrca
+    66  021d  3830                                              jr	c,TRANSMIT12
+    67  021f  00                                                nop
+    68                          
+    69                          TRANSMIT02:
+    70  0220  ed51                                              out	(c),d	; -0
+    71  0222  0f                                                rrca
+    72  0223  da5502                                            jp	c,TRANSMIT13
+    73                          
+    74                          TRANSMIT03:
+    75  0226  ed51                                              out	(c),d	; -1
+    76  0228  0f                                                rrca
+    77  0229  3830                                              jr	c,TRANSMIT14
+    78  022b  00                                                nop
+    79                          
+    80                          TRANSMIT04:
+    81  022c  ed51                                              out	(c),d	; -0
+    82  022e  0f                                                rrca
+    83  022f  da6102                                            jp	c,TRANSMIT15
+    84                          
+    85                          TRANSMIT05:
+    86  0232  ed51                                              out	(c),d	; -1
+    87  0234  0f                                                rrca
+    88  0235  3830                                              jr	c,TRANSMIT16
+    89  0237  00                                                nop
+    90                          
+    91                          TRANSMIT06:
+    92  0238  ed51                                              out	(c),d	; -0
+    93  023a  0f                                                rrca
+    94  023b  da6d02                                            jp	c,TRANSMIT17
+    95                          
+    96                          TRANSMIT07:
+    97  023e  ed51                                              out	(c),d	; -1
+    98  0240  c30402                                            jp	JIOTransmitLoop
+    99                          ;________________________________________________________________________________________________________________________________
+   100                          
+   101                          TRANSMIT10:
+   102  0243  ed59              	out	(c),e	; -0
+   103  0245  0f                                                rrca
+   104  0246  d21a02                                            jp	nc,TRANSMIT01
+   105                          
+   106                          TRANSMIT11:
+   107  0249  ed59              	out	(c),e	; -1
+   108  024b  0f                                                rrca
+   109  024c  30d2                                              jr	nc,TRANSMIT02
+   110  024e  00                                                nop
+   111                          
+   112                          TRANSMIT12:
+   113  024f  ed59                                              out	(c),e	; -0
+   114  0251  0f                                                rrca
+   115  0252  d22602                                            jp	nc,TRANSMIT03
+   116                          
+   117                          TRANSMIT13:
+   118  0255  ed59                                              out	(c),e	; -1
+   119  0257  0f                                                rrca
+   120  0258  30d2                                              jr	nc,TRANSMIT04
+   121  025a  00                                                nop
+   122                          
+   123                          TRANSMIT14:
+   124  025b  ed59                                              out	(c),e	; -0
+   125  025d  0f                                                rrca
+   126  025e  d23202                                            jp	nc,TRANSMIT05
+   127                          
+   128                          TRANSMIT15:
+   129  0261  ed59                                              out	(c),e	; -1
+   130  0263  0f                                                rrca
+   131  0264  30d2                                              jr	nc,TRANSMIT06
+   132  0266  00                                                nop
+   133                          
+   134                          TRANSMIT16:
+   135  0267  ed59                                              out	(c),e	; -0
+   136  0269  0f                                                rrca
+   137  026a  d23e02                                            jp	nc,TRANSMIT07
+   138                          
+   139                          TRANSMIT17:
+   140  026d  ed59                                              out	(c),e	; -1
+   141  026f  c30402                                            jp	JIOTransmitLoop
+   142                          
+jiodbg.asm:
+   279                          INCLUDE "../../JIO_NFS/receive.asm"
+../../JIO_NFS/receive.asm:
+     1                          bJIOReceive:
+     2  0272  d5                	push	de
+     3                          
+     4  0273  110000            	ld	de,0
+     5                          
+     6  0276  2b                	dec	hl
+     7  0277  dd210000          	ld	ix,0
+     8  027b  dd39              	add	ix,sp
+     9  027d  3ad401            	ld	a,(_JioPort)	; 0xFF = joystick port 2, 0xFE = joystick port 1 (PSG), else I/O register of the cartridge
+    10  0280  4f                	ld	c,a
+    11  0281  fefe              	cp	0xfe
+    12  0283  3004              	jr	nc,ReceivePSG
+    13  0285  ed78              	in	a,(c)	; JIO cartridge: bit 0
+    14  0287  1818              	jr	ReceiveLevel
+    15                          ReceivePSG:
+    16  0289  0ea2              	ld	c,0xa2
+    17  028b  3e0f              	ld	a,15	; PSG register 15: bit 6 = joystick port selected (0 = port 1)
+    18  028d  d3a0              	out	(0xa0),a
+    19  028f  dba2              	in	a,(0xa2)
+    20  0291  2804              	jr	z,ReceiveJoy1	; Z (CP 0xFE above, flags kept): joystick port 1
+    21  0293  f640              	or	64	; joystick port 2
+    22  0295  1802              	jr	ReceiveSelect
+    23                          ReceiveJoy1:
+    24  0297  e6bf              	and	0xbf
+    25                          ReceiveSelect:
+    26  0299  d3a1              	out	(0xa1),a
+    27  029b  3e0e              	ld	a,14	; PSG register 14 (pin 1 of the joystick port selected)
+    28  029d  d3a0              	out	(0xa0),a
+    29  029f  dba2              	in	a,(0xa2)
+    30                          ReceiveLevel:
+    31  02a1  f601              	or	1
+    32  02a3  eafa02            	jp	pe,HeaderPE
+    33                          ;________________________________________________________________________________________________________________________________
+    34                          
+    35                          HeaderPO:
+    36  02a6  1b                	dec	de	;  7
+    37  02a7  7a                	ld	a,d	;  5
+    38  02a8  b3                	or	e	;  5
+    39  02a9  284c              	jr	z,RxTimeOut 	;  8
+    40                          
+    41  02ab  ed70              	in	f,(c)	; 14
+    42  02ad  e2a602            	jp	po,HeaderPO	; 11	 LOOP=50 (2-CLOCKS)
+    43  02b0  cb07              	rlc	a	; 10
+    44  02b2  ed70              	in	f,(c)	; 14
+    45  02b4  e2a602            	jp	po,HeaderPO	; 11	 At least 2 clocks needed to be down
+    46                          
+    47  02b7  ed70              WU_PO:	in	f,(c)	; 14
+    48  02b9  eab702            	jp	pe,WU_PO	; 11	 LOOP=25
+    49  02bc  d1                	pop	de	; 11
+    50  02bd  d5                	push	de	; 11
+    51                          
+    52  02be  ed70              RX_PO:	in	f,(c)	; 14
+    53  02c0  e2be02            	jp	po,RX_PO	; 11	 LOOP=25
+    54  02c3  46                	ld                              b,(hl)	;  8 = 33 CYCLES
+    55                          
+    56  02c4  ed78              	in	a,(c)	; 14	 Bit 0
+    57  02c6  00                	nop
+    58                                                                                                                          ;  5
+    59  02c7  0f                	rrca	                                ;  5
+    60  02c8  1b                	dec	de	;  7 = 31 CYCLES
+    61                          
+    62  02c9  ed40              	in	b,(c)	; 14	 Bit 1
+    63  02cb  a8                	xor	b	;  5
+    64  02cc  0f                	rrca	                                ;  5
+    65  02cd  23                	inc	hl	;  7 = 31 CYCLES
+    66                          
+    67  02ce  ed40              	in	b,(c)	; 14	 Bit 2
+    68  02d0  a8                	xor	b	;  5
+    69  02d1  0f                	rrca	                                ;  5
+    70  02d2  f9                	ld	sp,hl	;  7 = 31 CYCLES
+    71                          
+    72  02d3  ed40              	in	b,(c)	; 14	 Bit 3
+    73  02d5  a8                	xor	b	;  5
+    74  02d6  0f                	rrca	                                ;  5
+    75  02d7  f9                	ld	sp,hl	;  7 = 31 CYCLES
+    76                          
+    77  02d8  ed40              	in	b,(c)	; 14	 Bit 4
+    78  02da  a8                	xor	b	;  5
+    79  02db  0f                	rrca	                                ;  5
+    80  02dc  f9                	ld	sp,hl	;  7 = 31 CYCLES
+    81                          
+    82  02dd  ed40              	in	b,(c)	; 14	 Bit 5
+    83  02df  a8                	xor	b	;  5
+    84  02e0  0f                	rrca	                                ;  5
+    85  02e1  f9                	ld	sp,hl	;  7 = 31 CYCLES
+    86                          
+    87  02e2  ed40              	in	b,(c)	; 14	 Bit 6
+    88  02e4  a8                	xor	b	;  5
+    89  02e5  0f                	rrca	                                ;  5
+    90  02e6  f9                	ld	sp,hl	;  7 = 31 CYCLES
+    91                          
+    92  02e7  ed40              	in	b,(c)	; 14	 Bit 7
+    93  02e9  a8                	xor	b	;  5
+    94  02ea  0f                	rrca	                                ;  5
+    95                          
+    96  02eb  77                	ld	(hl),a	;  8
+    97                          
+    98  02ec  7a                	ld	a,d	;  5
+    99  02ed  b3                	or	e	;  5
+   100  02ee  c2be02            	jp	nz,RX_PO	; 11
+   101                          
+   102                          ; ------------------------------------------------------------------------------
+   103                          
+   104                          ReceiveOK:
+   105  02f1  ddf9              	ld	sp,ix
+   106  02f3  d1                	pop	de
+   107  02f4  3e01              	ld	a,1
+   108  02f6  c9                	ret
+   109                          
+   110                          RxTimeOut:
+   111  02f7  d1                	pop	de
+   112  02f8  af                	xor	 a
+   113  02f9  c9                	ret
+   114                          
+   115                          ; ------------------------------------------------------------------------------
+   116                          
+   117                          HeaderPE:
+   118  02fa  1b                	dec	de	;  7
+   119  02fb  7a                	ld	a,d	;  5
+   120  02fc  b3                	or	e	;  5
+   121  02fd  28f8              	jr	z,RxTimeOut	;  8
+   122                          
+   123  02ff  ed70              	in	f,(c)	; 14
+   124  0301  eafa02            	jp	pe,HeaderPE	; 11	 LOOP= 50 (2-CLOCKS)
+   125  0304  cb07              	rlc	a	; 10
+   126  0306  ed70              	in	f,(c)	; 14
+   127  0308  eafa02            	jp	pe,HeaderPE	; 11	 At least 2 clocks needed to be down
+   128                          
+   129  030b  ed70              WU_PE:	in	f,(c)	; 14
+   130  030d  e20b03            	jp	po,WU_PE	; 11	 LOOP=25
+   131  0310  d1                	pop	de	; 11
+   132  0311  d5                	push	de	; 11
+   133                          
+   134  0312  ed70              RX_PE:	in	f,(c)	; 14
+   135  0314  ea1203            	jp	pe,RX_PE	; 11	 LOOP=25
+   136  0317  46                	ld                              b,(hl)                          ;  8 = 33 CYCLES
+   137                          
+   138  0318  ed78              	in	a,(c)	; 14	 Bit 0
+   139  031a  2f                	cpl	                                ;  5
+   140  031b  0f                	rrca	                                ;  5
+   141  031c  1b                	dec	de	;  7 = 31 CYCLES
+   142                          
+   143  031d  ed40              	in	b,(c)	; 14	 Bit 1
+   144  031f  a8                	xor	b	;  5
+   145  0320  0f                	rrca	                                ;  5
+   146  0321  23                	inc	hl	;  7 = 31 CYCLES
+   147                          
+   148  0322  ed40              	in	b,(c)	; 14	 Bit 2
+   149  0324  a8                	xor	b	;  5
+   150  0325  0f                	rrca	                                ;  5
+   151  0326  f9                	ld	sp,hl	;  7 = 31 CYCLES
+   152                          
+   153  0327  ed40              	in	b,(c)	; 14	 Bit 3
+   154  0329  a8                	xor	b	;  5
+   155  032a  0f                	rrca	                                ;  5
+   156  032b  f9                	ld	sp,hl	;  7 = 31 CYCLES
+   157                          
+   158  032c  ed40              	in	b,(c)	; 14	 Bit 4
+   159  032e  a8                	xor	b	;  5
+   160  032f  0f                	rrca	                                ;  5
+   161  0330  f9                	ld	sp,hl	;  7 = 31 CYCLES
+   162                          
+   163  0331  ed40              	in	b,(c)	; 14	 Bit 5
+   164  0333  a8                	xor	b	;  5
+   165  0334  0f                	rrca	                                ;  5
+   166  0335  f9                	ld	sp,hl	;  7 = 31 CYCLES
+   167                          
+   168  0336  ed40              	in	b,(c)	; 14	 Bit 6
+   169  0338  a8                	xor	b	;  5
+   170  0339  0f                	rrca	                                ;  5
+   171  033a  f9                	ld	sp,hl	;  7 = 31 CYCLES
+   172                          
+   173  033b  ed40              	in	b,(c)	; 14	 Bit 7
+   174  033d  a8                	xor	b	;  5
+   175  033e  0f                	rrca	                                ;  5
+   176                          
+   177  033f  77                	ld	(hl),a	;  8                            Instruction uses data bus write
+   178                          
+   179  0340  7a                	ld	a,d	;  5
+   180  0341  b3                	or	e	;  5
+   181  0342  c21203            	jp	nz,RX_PE	; 11
+   182                          
+   183  0345  18aa              	jr	ReceiveOK
+   184                          
+jiodbg.asm:
+   280                          
+   281  0347  4a494f0017        COMMAND:	defb	"JIO",0,COMMAND_DATE_TIME
+   282                          COMMAND_END:
+   283  034c  00000000000000    ANSWER:		defs	7,0
+   284                          ANSWER_END:
+   285  0353  00                FIRST:		defb	0
+   286  0354  ff                FOUND:		defb	0FFh
+   287  0355  002030ff          PORTS:		defb	00h,20h,30h,0FFh
+   288                          
+   289  0359  4a494f4442473a20  MSG_TITLE:	defb	"JIODBG: JIO cartridge diagnostic",13,10
+              4a494f2063617274  
+              7269646765206469  
+              61676e6f73746963  
+              0d0a              
+   290  037b  706f72743a206964  		defb	"port: idle, 2F DB F7 read back",13,10,"$"
+              6c652c2032462044  
+              4220463720726561  
+              64206261636b0d0a  
+              24                
+   291  039c  24                MSG_PORT:	defb	"$"
+   292  039d  3a2024            MSG_IDLE:	defb	": $"
+   293  03a0  2024              MSG_SPACE:	defb	" $"
+   294  03a2  2063617274726964  MSG_OK:		defb	" cartridge",13,10,"$"
+              67650d0a24        
+   295  03af  202d0d0a24        MSG_NO:		defb	" -",13,10,"$"
+   296  03b4  4e6f206361727472  MSG_NOCART:	defb	"No cartridge found, test on 30",13,10,"$"
+              6964676520666f75  
+              6e642c2074657374  
+              206f6e2033300d0a  
+              24                
+   297  03d5  4461746520726571  MSG_TEST:	defb	"Date request on port $"
+              75657374206f6e20  
+              706f72742024      
+   298  03eb  54696d652d6f7574  MSG_TIMEOUT:	defb	"Time-out",13,10,"$"
+              0d0a24            
+   299  03f6  416e737765723a20  MSG_ANSWER:	defb	"Answer: $"
+              24                
+   300  03ff  5261773a2024      MSG_RAW:	defb	"Raw: $"
+   301  0405  66697273742024    MSG_FIRST:	defb	"first $"
+   302  040c  2c20626974203020  MSG_CHANGES:	defb	", bit 0 changes $"
+              6368616e67657320  
+              24                
+   303  041d  480d0a24          MSG_HEXEND:	defb	"H",13,10,"$"
+   304  0421  0d0a24            MSG_CRLF:	defb	13,10,"$"
+   305  0424  55736167653a204a  MSG_USAGE:	defb	"Usage: JIODBG [<port in hex>|J2]",13,10,"$"
+              494f444247205b3c  
+              706f727420696e20  
+              6865783e7c4a325d  
+              0d0a24            
+   306                          

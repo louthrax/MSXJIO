@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QFile>
 #include <QMap>
+#include <QSet>
 #include <QTimer>
 #include <QTemporaryDir>
 #include <functional>
@@ -154,6 +155,8 @@ private:
     unsigned char       ucGetFindTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char &_rucDrive, QString &_rszDirectory, QString &_rszItem);
     unsigned char       ucGetHandlePath(unsigned char _ucFileHandle, QString &_rszPath);
     unsigned char       ucGetAttributes(const QString &_szHostPath);
+    void                vSetArchive(const QString &_szHostPath, bool _bSet);
+    void                vRenameArchive(const QString &_szHostPath, const QString &_szNewHostPath);
     void                vFillFIB(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive);
     void                vSetFindEntry(tdFileInfoBlock &_roFIB, const QString &_szHostPath, unsigned char _ucDrive);
     unsigned char       ucDelete(unsigned char _ucDrive, const QString &_szPath);
@@ -222,6 +225,8 @@ private:
     quint64                         m_uiReceiveErrors = 0;
     quint64                         m_uiTransmitErrors = 0;
     QFile*                          m_apoOpenedFiles[256] = {0};
+    QSet<QString>                   m_oArchiveCleared;      // host files with the archive attribute reset by the MSX
+                                                            // (no archive attribute on the host, kept while running)
     QString                         m_szBDOSRootDir[8] = { "", "", "", "", "", "", "", "" };
     QString                         m_szBDOSCurrentDir[8] = { "", "", "", "", "", "", "", "" };
     unsigned char                   m_ucCurrentPhysicalDrive = 0;

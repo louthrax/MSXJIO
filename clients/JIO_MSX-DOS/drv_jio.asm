@@ -29,7 +29,8 @@ W_DSKCHG	equ	$6	; Partition changed flags
 W_RFS		equ	$7	; Hybrid: not 0 if the server serves directories (files served by the kernel, no sectors)
 W_PORT		equ	$8	; Serial line (found by JioDetect): 0FFh = joystick port 2, 0FEh = joystick port 1,
 				; else I/O port (JIO cartridge)
-MYSIZE		equ	$9
+W_HOOK		equ	$9	; Hybrid: H_BDOS hook for _FORMAT (24 bytes, see C_RFSINIT in p1_main.asm)
+MYSIZE		equ	$9+24
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
@@ -56,6 +57,7 @@ ENDIF
 IFDEF HYBRID
         PUBLIC	W_RFS
         PUBLIC	W_PORT
+        PUBLIC	W_HOOK
         PUBLIC	W_FLAGS
 ENDIF
 	PUBLIC	MYSIZE

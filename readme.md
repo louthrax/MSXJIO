@@ -135,6 +135,8 @@ Bluetooth module, and an I/O register for the serial line: joystick port 2 stays
   without cartridge (all the IOSEL switches off) joystick port 2 is used.
 - JIO.COM and JIOTIME.COM: option `C` (port detected) or `C<port>` (hex: `C00`, `C20`, `C30`), e.g. `JIO C +`,
   `JIOTIME C`. `JIO S` shows the serial line of the installed driver.
+- JIO.COM (at install) and JIOTIME.COM without `J1`, `J2` or `C` option: JIO cartridge (if found), then joystick
+  port 2, then joystick port 1, until the server answers; the serial line used is shown (JIO.COM keeps it).
 - The I/O register works whatever the position of the ROMDIS switch (it only disables the flash ROM): with the ROM
   disabled, JIO.COM and JIOTIME.COM can use the cartridge from another boot device.
 

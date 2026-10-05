@@ -415,6 +415,7 @@ unsigned char g_ucAutoRetry = 0;
 unsigned char JioPort = 0xFF;               // serial line (transmit.asm, receive.asm, stub STUB_PORT): 0xFF = joystick
                                             // port 2, 0xFE = joystick port 1 (J1 option), else I/O register of the
                                             // JIO cartridge (C option)
+bool g_bAutoLine = true;                    // no J1, J2 or C option: serial line found at install (bGetServerInfo)
 
 // Serial routines of the driver (transmit.asm, receive.asm): HL = data, DE = size, interrupts disabled.
 // receive.asm changes IX (frame pointer of the C code): kept by bInfoReceive
@@ -635,14 +636,48 @@ bool bAddServedDrives()
     return true;
 }
 
-// false if cancelled with [ESC]
+void vPrintSerialLine()
+{
+    if (JioPort == 0xFF)
+        vPrint("Serial line: joystick port 2\r\n");
+    else if (JioPort == 0xFE)
+        vPrint("Serial line: joystick port 1\r\n");
+    else
+    {
+        vPrint("Serial line: JIO cartridge, port ");
+        vPutChar("0123456789ABCDEF"[JioPort >> 4]);
+        vPutChar("0123456789ABCDEF"[JioPort & 15]);
+        vPrint("H\r\n");
+    }
+}
+
+// false if cancelled with [ESC]. Serial line not given (g_bAutoLine): one request on each line in turn, JIO cartridge
+// (if its I/O register is found), joystick port 2, joystick port 1 (as JIOTIME), the line of the answer is kept
 bool bGetServerInfo()
 {
-    bool    bWaiting = false;
-    bool    bReceived;
+    bool            bWaiting = false;
+    bool            bReceived;
+    unsigned char   aucLines[3];
+    unsigned char   ucLines = 0;
+    unsigned char   ucLine = 0;
+
+    if (g_bAutoLine)
+    {
+        aucLines[0] = ucDetectCartPort();
+        if (aucLines[0] != 0xFF)
+            ucLines++;
+        aucLines[ucLines++] = 0xFF;
+        aucLines[ucLines++] = 0xFE;
+    }
 
     for (;;)
     {
+        if (g_bAutoLine)
+        {
+            JioPort = aucLines[ucLine];
+            if (++ucLine == ucLines)
+                ucLine = 0;
+        }
         bReceived = bServerExchange(g_aucInfoCommand, sizeof(g_aucInfoCommand), g_aucInfo, sizeof(g_aucInfo), g_aucInfoCRC);
         if (bReceived && bInfoCRCOK())
             break;
@@ -667,6 +702,8 @@ bool bGetServerInfo()
     if (!bReceived)
         return false;
 
+    if (g_bAutoLine)
+        vPrintSerialLine();
     g_aucInfo[sizeof(g_aucInfo) - 1] = 0;
     g_ucAutoRetry = (g_aucInfo[0] & FLAG_AUTO_RETRY) ? 1 : 0;
     puts((char *) g_aucInfo + 3);           // description of the server (as the JIO ROM)
@@ -844,7 +881,8 @@ void vUsage(void)
     vPrint("  +          Add / handle all the drives served by the server\r\n");
     vPrint("  +<drive>   Add / handle drive (A..H)\r\n");
     vPrint("  -<drive>   Remove / unhandle drive (A..H)\r\n");
-    vPrint("  J1, J2     Joystick port 1 or 2 (default: 2)\r\n");
+    vPrint("  J1, J2     Joystick port 1 or 2 (default: JIO\r\n");
+    vPrint("             cartridge, joystick 2, joystick 1)\r\n");
     vPrint("  C[<port>]  JIO cartridge instead of joystick port 2,\r\n");
     vPrint("             I/O port in hex (00, 20 or 30, detected\r\n");
     vPrint("             if not given)\r\n");
@@ -934,6 +972,7 @@ int main(int argc, char **argv)
             {
                 // joystick port 1 or 2
                 JioPort = (szArg[1] == '1') ? 0xFE : 0xFF;
+                g_bAutoLine = false;
                 if (bInstalled)
                     pcBase[STUB_PORT] = JioPort;
             }
@@ -975,6 +1014,7 @@ int main(int argc, char **argv)
                 else
                 {
                     JioPort = ucPort;
+                    g_bAutoLine = false;
                     if (bInstalled)
                         pcBase[STUB_PORT] = ucPort;
                 }
@@ -1019,17 +1059,7 @@ int main(int argc, char **argv)
             {
                 if (bInstalled)
                 {
-                    if (JioPort == 0xFF)
-                        vPrint("Serial line: joystick port 2\r\n");
-                    else if (JioPort == 0xFE)
-                        vPrint("Serial line: joystick port 1\r\n");
-                    else
-                    {
-                        vPrint("Serial line: JIO cartridge, port ");
-                        vPutChar("0123456789ABCDEF"[JioPort >> 4]);
-                        vPutChar("0123456789ABCDEF"[JioPort & 15]);
-                        vPrint("H\r\n");
-                    }
+                    vPrintSerialLine();
                     vPrint("Disks handled:");
                     for(int iIndex = 0; iIndex < 8; iIndex++)
                     {
