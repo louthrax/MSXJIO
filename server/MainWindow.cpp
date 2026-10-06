@@ -134,6 +134,11 @@ MainWindow::MainWindow() :
 
     m_poUI->setupUi(this);
 
+    m_poLogTimer = new QTimer(this);
+    m_poLogTimer->setSingleShot(true);
+    m_poLogTimer->setInterval(50);
+    connect(m_poLogTimer, &QTimer::timeout, this, &MainWindow::onLogTimer);
+    m_poUI->logWidget->setMaximumBlockCount(LOG_LINES);
     connect(m_poServer, &Server::log, this, &MainWindow::onLog);
     connect(m_poServer, &Server::stateChanged, this, &MainWindow::onStateChanged);
     connect(m_poServer, &Server::deviceDiscovered, this, &MainWindow::onDeviceDiscovered);
@@ -294,7 +299,7 @@ MainWindow::MainWindow() :
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
     m_poUI->imagePathLineEdit->setToolTip("Path to the disk image to serve.");
     m_poUI->redLightLabel->setToolTip("Indicates transmission activity on the MSX.\nFirst line: total bytes transmitted.\nSecond line: total transmission errors.");
-    m_poUI->greenLightLabel->setToolTip("Indicates reception activity on the MSX.\nFirst line: total bytes received.\nSecond line: total reception errors.");
+    m_poUI->greenLightLabel->setToolTip("Indicates reception activity on the MSX.\nFirst line: total bytes received.\nSecond line: total reception errors\n(CRC errors, time-outs, requests sent again by the MSX).");
     m_poUI->namesListWidget->setToolTip("List of available communication devices.");
     m_poUI->bluetoothButton->setToolTip("Select the Bluetooth interface.");
     m_poUI->USBButton->setToolTip("Select the USB interface.");
@@ -304,7 +309,7 @@ MainWindow::MainWindow() :
     m_poUI->unlockPushButton->setToolTip("Send repeated data to the MSX until it responds.\nUseful when the MSX is stuck waiting for data.");
     m_poUI->RxCRC->setToolTip("Enable CRC checking for incoming data on the MSX.\nApplied at MSX startup.");
     m_poUI->TxCRC->setToolTip("Enable CRC for outgoing data to the MSX.\nApplied at MSX startup.");
-    m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.\nDirectories: used by JIO.COM (otherwise \"Not ready\" after 1 s without answer).\nApplied at MSX startup (JIO.COM: at install).");
+    m_poUI->autoRetry->setToolTip("Automatically retry all MSX commands indefinitely.\nApplied at MSX startup.");
     m_poUI->timeout->setToolTip("If enabled, abort the command after a timeout.\nIf disabled, wait indefinitely for a response.");
     m_poUI->readOnly->setToolTip("Prevent writes to the disk image, or to the served directories\n(the RAM disk H: stays writable).");
     m_poUI->fileEjectPushButton->setToolTip("Eject disk image.");
@@ -412,7 +417,7 @@ void MainWindow::onStateChanged(tdConnectionState _eState)
 void MainWindow::onDataReceived(int _iSize)
 {
     m_poUI->unlockPushButton->setChecked(false);
-    vSetFrameColor(m_poUI->redLightLabel, 255, 0, 0);
+    vSetFrameColor(m_poUI->redLightLabel, 120, 190, 255);  // light blue
     m_poRedLightOffTimer->start(m_poRedLightOffTimer->remainingTime() + qMax(16, _iSize / 9));
 }
 
@@ -911,11 +916,11 @@ void MainWindow::vSetServeMode(tdServeMode _eServeMode)
     m_poUI->serveImageButton->setChecked(bImage);
     m_poUI->serveDirectoriesButton->setChecked(!bImage);
 
-    // CRC, timeout and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings are kept.
-    // "Read only" and "Auto retry" (JIO.COM for the directories) are used in both modes.
+    // CRC, timeout, auto retry and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings
+    // are kept. "Read only" is used in both modes.
     m_poUI->RxCRC->setEnabled(bImage);
     m_poUI->TxCRC->setEnabled(bImage);
-    m_poUI->autoRetry->setEnabled(true);          // also used by JIO.COM (directories)
+    m_poUI->autoRetry->setEnabled(bImage);
     m_poUI->timeout->setEnabled(bImage);
     m_poUI->slowTx->setEnabled(bImage);
 
@@ -927,6 +932,43 @@ void MainWindow::vSetServeMode(tdServeMode _eServeMode)
  =======================================================================================================================
  */
 void MainWindow::onLog(tdLogType _eLogType, const QString &_roMessage, bool _bModify)
+{
+    m_aoPendingLog.append({ _eLogType, _roMessage, _bModify });
+    if (!m_poLogTimer->isActive())
+        m_poLogTimer->start();
+}
+
+/*
+ =======================================================================================================================
+    Lines of the log added to the log widget (at most LOG_LINES lines kept)
+ =======================================================================================================================
+ */
+void MainWindow::onLogTimer()
+{
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+    QScrollBar	*scrollBar = m_poUI->logWidget->verticalScrollBar();
+    bool		atBottom = (scrollBar->value() == scrollBar->maximum());
+    QTextCursor oCursor(m_poUI->logWidget->document());
+    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    oCursor.beginEditBlock();
+    oCursor.movePosition(QTextCursor::End);
+    for (const tdLogLine &roLine : m_aoPendingLog)
+        oCursor.insertText(roLine.m_szMessage, oLogFormat(roLine.m_eLogType, roLine.m_bModify));
+    oCursor.endEditBlock();
+    m_aoPendingLog.clear();
+
+    if(atBottom)
+    {
+        scrollBar->setValue(scrollBar->maximum());
+    }
+}
+
+/*
+ =======================================================================================================================
+ =======================================================================================================================
+ */
+QTextCharFormat MainWindow::oLogFormat(tdLogType _eLogType, bool _bModify)
 {
     /*~~~~~~~~~~~~~~~~~~~~*/
     QTextCharFormat oFormat;
@@ -947,19 +989,7 @@ void MainWindow::onLog(tdLogType _eLogType, const QString &_roMessage, bool _bMo
     case eLogClient:      oFormat.setForeground(QColor(  0, 140, 140)); break;
     }
 
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    QScrollBar	*scrollBar = m_poUI->logWidget->verticalScrollBar();
-    bool		atBottom = (scrollBar->value() == scrollBar->maximum());
-    QTextCursor oCursor(m_poUI->logWidget->document());
-    /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-    oCursor.movePosition(QTextCursor::End);
-    oCursor.insertText(_roMessage, oFormat);
-
-    if(atBottom)
-    {
-        scrollBar->setValue(scrollBar->maximum());
-    }
+    return oFormat;
 }
 
 // Log of the user interface
@@ -1040,6 +1070,7 @@ QString MainWindow::szCommandLine()
         if(!m_poServer->m_bTxCRC) aszArguments << "--no-tx-crc";
         if(m_poServer->m_bTimeout) aszArguments << "--timeout";
         if(m_poServer->m_bSlowTx) aszArguments << "--slow-tx";
+        if(!m_poServer->m_bAutoRetry) aszArguments << "--no-auto-retry";
     }
     else
     {
@@ -1052,7 +1083,6 @@ QString MainWindow::szCommandLine()
     }
 
     if(m_poServer->m_bReadOnly) aszArguments << "-r";
-    if(!m_poServer->m_bAutoRetry) aszArguments << "--no-auto-retry";
 
     if(!roSelectedID().isEmpty())
         aszArguments << (m_eSelectedInterface == eInterfaceBluetooth ? "-b" : "-p") << roSelectedID();

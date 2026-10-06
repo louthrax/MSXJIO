@@ -7,6 +7,7 @@
 # JIO_HANDSHAKE (environment): if not empty, the handshake is not skipped (COMMAND_DRIVE_INFO and _LOGIN
 # of the driver, sent to the mock server like the commands of DSKIO).
 # JIO_AUTORETRY (environment): if not empty, "Auto retry" flag of the server in the skipped handshake.
+# JIO_TXBLOCKS (environment): if not empty, "TX blocks" flag of the server (Bluetooth link) in the skipped handshake.
 set jio_drives [expr {[info exists ::env(JIO_DRIVES)] ? $::env(JIO_DRIVES) : 1}]
 set mock_port  [expr {[info exists ::env(MOCK_PORT)] ? $::env(MOCK_PORT) : 9876}]
 
@@ -114,8 +115,11 @@ if {![info exists ::env(JIO_HANDSHAKE)] || $::env(JIO_HANDSHAKE) eq ""} {
     debug set_bp @DRIVES_Retry@ {[sig @DRIVES_Retry@ {0x3E 0x07 0xCD}]} {
         poke [expr {([reg ix] + 2) & 0xFFFF}] $::jio_drives
         poke [expr {([reg ix] + 7) & 0xFFFF}] [expr {$::jio_drives ? 1 : 0}]
-        if {[info exists ::env(JIO_AUTORETRY)] && $::env(JIO_AUTORETRY) ne ""} {
-            poke [expr {([reg ix] + 3) & 0xFFFF}] 8
+        set flags 0
+        if {[info exists ::env(JIO_AUTORETRY)] && $::env(JIO_AUTORETRY) ne ""} { set flags [expr {$flags | 8}] }
+        if {[info exists ::env(JIO_TXBLOCKS)] && $::env(JIO_TXBLOCKS) ne ""} { set flags [expr {$flags | 32}] }
+        if {$flags} {
+            poke [expr {([reg ix] + 3) & 0xFFFF}] $flags
         }
         if {$::jio_drives} {
             puts -nonewline $::sock [binary format a1s T 6]
@@ -126,10 +130,11 @@ if {![info exists ::env(JIO_HANDSHAKE)] || $::env(JIO_HANDSHAKE) eq ""} {
     }
 }
 
-# JIO_CART (environment): JIO cartridge ROM, detection of the port of the cartridge (not emulated) -> W_PORT = 30H
-if {[info exists ::env(JIO_CART)] && $::env(JIO_CART) ne ""} {
+# JIO_LINE (environment): serial line found at boot, faked (the I/O register of the JIO cartridge is not emulated, the
+# joystick ports are not probed): W_PORT = JIO_LINE (hex, e.g. 30 = JIO cartridge at port 30H, FE = joystick port 1)
+if {[info exists ::env(JIO_LINE)] && $::env(JIO_LINE) ne ""} {
     debug set_bp @JioDetect@ {[peek @JioDetect@] == 0xDD && [peek [expr {@JioDetect@ + 1}]] == 0x7E} {
-        poke [expr {([reg ix] + 8) & 0xFFFF}] 0x30
+        poke [expr {([reg ix] + 8) & 0xFFFF}] [expr {"0x$::env(JIO_LINE)"}]
         do_ret
     }
 }

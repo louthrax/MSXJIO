@@ -91,6 +91,22 @@ public:
 		}
 	}
 
+    // Size of the data waited for (bytes received so far: size of the buffer)
+    int iGetSize() const
+    {
+        return m_iSize;
+    }
+
+    // Coroutine waiting for data destroyed (parser restarted, see Server::vRestartParser)
+    static void vDestroy()
+    {
+        if(m_soHandle)
+        {
+            m_soHandle.destroy();
+            m_soHandle = nullptr;
+        }
+    }
+
 private:
     QByteArray						&m_acBuffer;
     int								m_iSize;

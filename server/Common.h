@@ -14,6 +14,9 @@ typedef enum {
     eLogBDOSDetails
 } tdLogType;
 
+#define LOG_LINES                       5000    // lines kept in the log of the graphical server
+#define REQUEST_TIMEOUT                 2000    // ms without data in a request: request abandoned at the next data
+
 #if defined(Q_OS_ANDROID) || defined(Q_OS_MAC)
     #define APPLICATION_FONT_SIZE       15
     #define LOG_WIDGET_FONT_SIZE        12

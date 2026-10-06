@@ -145,11 +145,9 @@ Bluetooth module, and an I/O register for the serial line: joystick port 2 stays
 Joystick port 1 (the adapter wired as for port 2, on port 1): found automatically, or option `J1` of JIO.COM and
 JIOTIME.COM (`J2`: port 2).
 
-Serial lines of the ROMs (`clients/JIO_MSX-DOS/0_Build.sh`, list of `jio_ports.sh`, tried in turn at boot until the
-server answers: hex = I/O port of a JIO cartridge, used if the cartridge is found there; `J1`, `J2` = joystick ports,
-after the I/O ports):
-- `JIO_PORTS`: `dos1`, `dos2`, default `"00 20 30 J2 J1"`, e.g. `JIO_PORTS="00 J2" ./0_Build.sh dos2`
-- `JIOSAFE_PORTS`: `dos1safe`, `dos2safe`, default `"J2 J1"`, e.g. `JIOSAFE_PORTS="J1" ./0_Build.sh dos2safe`
+Serial lines of the ROMs: `JioPorts` in `clients/JIO_MSX-DOS/drv_jio.asm` (I/O ports of the JIO cartridge, probed,
+then joystick ports 2 and 1), tried in turn at boot until the server answers; the safe ROMs (`JIOSAFE`) keep only the
+joystick ports.
 
 ## Usage instructions for the MSX-DOS clients
 
@@ -232,7 +230,7 @@ JIOServerCLI --list                                       # serial ports (and th
 | `-d`, `--drive [X=]<dir>` | serve a directory as drive X: (A to H, next free drive without `X=`), can be repeated |
 | `-r`, `--read-only` | refuse all writes (the RAM disk H: stays writable) |
 | `--no-rx-crc`, `--no-tx-crc`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways) |
-| `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry): disk image, and directories ("Not ready" after 1 s, with JIO.COM and the MSX-DOS 2 ROM) |
+| `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry), disk image |
 | `-p`, `--port <port>` | serial port (`ttyUSB0`, `/dev/ttyUSB0`, `/dev/serial/by-id/...`, `COM3`) |
 | `-b`, `--bluetooth <address>` | Bluetooth device instead of a serial port (`--scan-bluetooth` lists them) |
 | `-l`, `--log <file>` | also write the log to a file (appended) |

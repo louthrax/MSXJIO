@@ -86,11 +86,12 @@ typedef union
 unsigned char *        g_pucStub = 0;                   // resident stub (stub.h)
 char *                 g_pcDiskTransferAddress = 0x80;
 tdRegisters            g_aoRegisters = { { 0,0,0,0,0 } };   // registers of the BDOS function (copy of the stub)
-tdRegisters            g_aoRegistersIn = { { 0,0,0,0,0 } }; // input registers of the BDOS function (retry)
 tdCommonHeader	       g_oCommonHeader = {'J', 'I', 'O', 0, COMMAND_BDOS, 0};
+// Sequence number of the requests (m_ucFlags of the header, not 0): the server does not execute again a request sent
+// again with the same number (requests not sent again for now: "Not ready" error without answer, see vNoAnswer)
+unsigned char          g_ucSequence = 0;
 unsigned char          g_ucPreviousErrorCode = 0;
 bool                   g_bResult = 0;
-unsigned int           g_uiAbortSP = 0;     // stack of vCallHandler: a BDOS function is abandoned there (no answer)
 const char             g_acDevicesNames[] = "CON\0PRN\0LST\0AUX\0NUL\0";
 unsigned char          g_ucCurrentDisk = 0xFF;  // current drive if it is a drive of the server, FFH: drive of MSX-DOS
 unsigned char          g_ucDosDrive = 0xFF;     // current drive of MSX-DOS (_SELDSK, _CURDRV), FFH: unknown
@@ -402,23 +403,18 @@ static void vStringFromCaller(unsigned char *_pucDestination, const unsigned cha
 
 /*
  =======================================================================================================================
-    No answer of the server after a time-out of the receive routine (about 0.9 s at 3.58 MHz): server not started, or
-    started after the request was sent (the request is lost), or disconnected.
-    - "Auto retry" of the server (COMMAND_DRIVE_INFO at install, STUB_AUTO_RETRY): the BDOS function is done again
-      (request sent again), its input registers restored, until the server answers.
-    - Otherwise the BDOS function returns "Not ready" (FFH for the FCB functions), as for a drive without disk.
-    The handler is abandoned at the stack of vCallHandler.
+    Handler of the BDOS function
  =======================================================================================================================
  */
 static void (*g_pHandler)(void) = 0;        // handler of the BDOS function (vCallHandler)
+unsigned int           g_uiAbortSP = 0;     // stack of vCallHandler: the handler is abandoned there (no answer)
 
-// Handler g_pHandler, called again from the start by vRetryCommand: IX (frame pointer of the C code) restored
+// Handler g_pHandler: IX (frame pointer of the C code) restored
 static void vCallHandler() __naked
 {
 __asm
     push    ix
     ld      (_g_uiAbortSP),sp
-call_handler_start:
     ld      de,call_handler_end
     push    de
     ld      hl,(_g_pHandler)
@@ -437,22 +433,18 @@ __asm
 __endasm;
 }
 
-static void vRetryCommand() __naked
-{
-__asm
-    ld      sp,(_g_uiAbortSP)
-    jp      call_handler_start
-__endasm;
-}
+/*
+ =======================================================================================================================
+    No answer of the server after NO_ANSWER_TRIES time-outs of the receive routine (about 0.9 s each at 3.58 MHz):
+    server stopped or disconnected, or bytes of the request lost on the link (the server waits for them). The BDOS
+    function returns "Not ready" (FFH for the FCB functions), as for a drive without disk, instead of waiting forever.
+    The request is not sent again: the server abandons an incomplete request when the next one arrives.
+ =======================================================================================================================
+ */
+#define NO_ANSWER_TRIES 6
 
 static void vNoAnswer()
 {
-    if (g_pucStub[STUB_AUTO_RETRY])
-    {
-        vCopy((unsigned char *) &g_aoRegisters, (const unsigned char *) &g_aoRegistersIn, sizeof(g_aoRegisters));
-        vRetryCommand();
-    }
-
     if ((C == 0x0F) || (C == 0x10) || (C == 0x27))
         A = L = 0xFF;                       // FCB functions: error
     else
@@ -470,10 +462,17 @@ static void vCallerTransmit(void *_pvSource, unsigned int _uiSize)
         vStubTransmit(_pvSource, _uiSize);
 }
 
+// Answer of the server: waited for (time-out of the receive routine: the server is not ready yet), up to
+// NO_ANSWER_TRIES time-outs
 static void vCallerReceive(void *_pvDestination, unsigned int _uiSize)
 {
-    if (!(bInPage2(_pvDestination, _uiSize) ? bStubXferReceive(_pvDestination, _uiSize) : bStubReceive(_pvDestination, _uiSize)))
-        vNoAnswer();
+    unsigned char ucTries = NO_ANSWER_TRIES;
+
+    while (!(bInPage2(_pvDestination, _uiSize) ? bStubXferReceive(_pvDestination, _uiSize) : bStubReceive(_pvDestination, _uiSize)))
+    {
+        if (!--ucTries)
+            vNoAnswer();
+    }
 }
 
 /*
@@ -493,8 +492,13 @@ static void vTransmitString(char *_pcString)
 
 static void vReceive(void *_pvAddress, unsigned int _uiLength)
 {
-    if (!bStubReceive(_pvAddress, _uiLength))
-        vNoAnswer();
+    unsigned char ucTries = NO_ANSWER_TRIES;
+
+    while (!bStubReceive(_pvAddress, _uiLength))
+    {
+        if (!--ucTries)
+            vNoAnswer();
+    }
 }
 
 /*
@@ -556,6 +560,9 @@ bool bIsDeviceName(const char *s)
  */
 static void vSendCommonHeader()
 {
+    if (!++g_ucSequence)
+        g_ucSequence = 1;
+    g_oCommonHeader.m_ucFlags = g_ucSequence;
     vJIOTransmit((void*)&g_oCommonHeader, sizeof(g_oCommonHeader));
     g_bResult = true;
 }
@@ -774,19 +781,40 @@ static void vDOS_READ_FROM_FILE_HANDLE()
 
 /*
  =======================================================================================================================
+    Bluetooth link (STUB_TX_BLOCKS, FLAG_TX_BLOCKS of the server): data written in requests of WRITE_BLOCK_SIZE bytes at
+    most, each one answered before the next one is sent, a long continuous transmission can be lost by the Bluetooth
+    serial module (no flow control on the MSX side). Otherwise (USB serial) one request. HL returned = total of the bytes
+    written, stopped at the first error or short write.
  =======================================================================================================================
  */
+#define WRITE_BLOCK_SIZE 8192
+
 static void vDOS_WRITE_TO_FILE_HANDLE()
 {
     if (B >= START_HANDLE)
     {
-        vSendCommonHeader();
-        vJIOTransmit(&B, sizeof(B));
-        vJIOTransmit(&HL, sizeof(HL));
-        if (HL)
-            vCallerTransmit(DE, (unsigned int)HL);
+        unsigned char *pucSource = DE;
+        unsigned int   uiLeft = HLi;
+        unsigned int   uiWritten = 0;
+        unsigned int   uiBlock = g_pucStub[STUB_TX_BLOCKS] ? WRITE_BLOCK_SIZE : 0xFFFF;
+        unsigned int   uiSize;
 
-        vReceive(&A, sizeof(A) + sizeof(HL));
+        do
+        {
+            uiSize = (uiLeft > uiBlock) ? uiBlock : uiLeft;
+            vSendCommonHeader();
+            vJIOTransmit(&B, sizeof(B));
+            vJIOTransmit(&uiSize, sizeof(uiSize));
+            if (uiSize)
+                vCallerTransmit(pucSource, uiSize);
+
+            vReceive(&A, sizeof(A) + sizeof(HL));   // error, bytes written
+            uiWritten += HLi;
+            pucSource += uiSize;
+            uiLeft -= uiSize;
+        } while (uiLeft && !A && (HLi == uiSize));
+
+        HLi = uiWritten;
     }
 }
 
@@ -1426,7 +1454,6 @@ __endasm;
 
     g_oCommonHeader.m_ucFunction = C;
     g_pHandler = pEntry->handler;
-    vCopy((unsigned char *) &g_aoRegistersIn, (const unsigned char *) &g_aoRegisters, sizeof(g_aoRegisters));   // input registers, for a retry
     vCallHandler();
     g_ucPreviousErrorCode = A;
 

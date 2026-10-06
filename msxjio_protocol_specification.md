@@ -99,13 +99,17 @@ Count * 512 bytes of raw data
 |   2 | TIMEOUT        |
 |   3 | RETRY          |
 |   4 | SLOW TX        |
-|   5 | RESERVED       |
+|   5 | TX BLOCKS      |
 |   6 | RESERVED       |
 |   7 | RESERVED       |
 
-RETRY ("Auto retry" of the server) also applies to the served directories: JIO.COM sends again a request without
-answer (receive time-out, about 1 s) until the server answers; without it, the BDOS function returns "Not ready"
-(FFH for the FCB functions), as a drive without disk.
+RETRY ("Auto retry" of the server) only applies to the disk image (`COMMAND_DRIVE_*`): for the served directories, no
+request is sent again for now (see `COMMAND_BDOS`). JIO.COM returns a "Not ready" error when the server does not answer
+within about 5 s.
+
+TX BLOCKS is set by the server on a Bluetooth link: JIO.COM then sends its large writes (`_WRITE`) as several requests
+of 8192 bytes at most, each one answered before the next one is sent (a long continuous transmission can be lost by
+the Bluetooth serial module, there is no flow control on the MSX side).
   
   
 #### 0x13 — COMMAND DRIVE DISK CHANGED
@@ -120,7 +124,12 @@ answer (receive time-out, about 1 s) until the server answers; without it, the B
 #### 0x16 — COMMAND BDOS
 
 **Description:** Remote file system. MSX-DOS 2 file functions are executed by the server on the directories it serves as drives A: to H: (JIO MSX-DOS 2 ROM, no FAT or sectors on the MSX side).  
-CRC is not used: the flags byte is `0x00` and no CRC follows the payload.  
+CRC is not used and no CRC follows the payload. The flags byte is the sequence number of the request (`0x00`: not
+numbered), incremented by the client for each new request (skipping `0x00`). The server keeps the last 16 numbered
+requests with their answers: a request sent again with a kept number and the same bytes is not executed again, its
+answers are sent again (a write is not done twice). The requests are forgotten at the reset (function `0x1D`, sent by
+the clients at boot / install). The clients (MSX-DOS 2 ROM, JIO.COM) do not send requests again for now: they wait for
+the answers.  
 The server answers with zero, one or more response packets (sync bytes `0xFF ... 0xF0` followed by the data). Empty packets are not sent.
 
 **Payload:**

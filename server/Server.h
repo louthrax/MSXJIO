@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QSet>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QTemporaryDir>
 #include <functional>
 #include <memory>
@@ -202,6 +203,27 @@ private:
         return *m_poCurrentByteReader;
     }
     std::unique_ptr<ByteReader>     m_poCurrentByteReader;
+
+    // Request received incompletely (bytes lost on the link): abandoned when data arrives more than REQUEST_TIMEOUT ms
+    // after the previous data, the parser looks for the next request (otherwise its bytes, e.g. COMMAND_DRIVE_INFO at
+    // the boot of the MSX, would be taken as the missing data)
+    bool                            m_bInRequest = false;
+    QElapsedTimer                   m_oLastData;            // time of the last data received
+    void                            vRestartParser();
+
+    // Requests sent again by the MSX (answer late or lost): BDOS requests numbered by the client (flags of the
+    // header, not 0), the last ones are kept with their answers, a request sent again with the same number and the
+    // same bytes is not executed again, its answers are sent again
+    struct tdRequest
+    {
+        QByteArray                      m_acRequest;        // bytes after the command (function, parameters, data)
+        QList<QPair<QByteArray, int>>   m_aoAnswers;        // answer packets, transmission delay
+    };
+    QMap<unsigned char, tdRequest>  m_oRequests;
+    QList<unsigned char>            m_aucRequestOrder;      // numbers of m_oRequests, oldest first
+    bool                            m_bRecordRequest = false;
+    tdRequest                       m_oRequest;             // request being executed
+    void                            vEndRequest(unsigned char _ucNumber);
     QTimer                          *m_poRetryTimer = nullptr;
     QTimer                          *m_poUnlockTimer = nullptr;
     Interface                       *m_poInterface = nullptr;

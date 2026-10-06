@@ -54,6 +54,9 @@ static QString szFindEntry(const QString &_szDirectory, const QString &_szName)
  */
 void Server::vResetNFS()
 {
+    m_oRequests.clear();            // numbers of the requests restarted by the client
+    m_aucRequestOrder.clear();
+
     for (int i = 0; i < 256; i++)
     {
         if (m_apoOpenedFiles[i])
@@ -431,13 +434,39 @@ static bool bAttributesMatch(const QString &_szHostPath, unsigned char _ucSearch
 void Server::vBDOSAnswer(const void *_pvData, unsigned int _uiSize)
 {
     if (_uiSize)
+    {
+        if (m_bRecordRequest)
+            m_oRequest.m_aoAnswers.append(qMakePair(QByteArray((const char *) _pvData, _uiSize), TRANSMIT_DELAY_NORMAL));
         uiTransmit(_pvData, _uiSize, 0, 0, false, TRANSMIT_DELAY_NORMAL);
+    }
 }
 
 void Server::vBDOSData(const void *_pvData, unsigned int _uiSize)
 {
     if (_uiSize)
+    {
+        if (m_bRecordRequest)
+            m_oRequest.m_aoAnswers.append(qMakePair(QByteArray((const char *) _pvData, _uiSize), TRANSMIT_DELAY_ACKNOWLEDGE));
         uiTransmit(_pvData, _uiSize, 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
+    }
+}
+
+/*
+ =======================================================================================================================
+    End of a BDOS request: numbered request kept with its answers (the last 16), see the parser
+ =======================================================================================================================
+ */
+void Server::vEndRequest(unsigned char _ucNumber)
+{
+    if (m_bRecordRequest)
+    {
+        m_bRecordRequest = false;
+        m_aucRequestOrder.removeAll(_ucNumber);
+        m_aucRequestOrder.append(_ucNumber);
+        m_oRequests[_ucNumber] = m_oRequest;
+        while (m_aucRequestOrder.size() > 16)
+            m_oRequests.remove(m_aucRequestOrder.takeFirst());
+    }
 }
 
 void Server::vBDOSError(unsigned char _ucError)

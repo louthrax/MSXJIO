@@ -37,13 +37,12 @@ mkdir -p "$OUT"
 # ------------------------------------------------------------------------------
 # Build
 # ------------------------------------------------------------------------------
-build_rom() { # name kernel defines [serial lines (jio_ports.sh)]
-    local name=$1 kernel=$2 defines=$3 lines=${4:-00 20 30 J2 J1}
+build_rom() { # name kernel defines
+    local name=$1 kernel=$2 defines=$3
     rm -rf "$OUT/obj_$name"
     mkdir -p "$OUT/obj_$name"
     ( cd "$SRC" &&
       date +"db \"%Y-%m-%d\"" > "$OUT/obj_$name/rdate.inc" &&
-      ./jio_ports.sh $lines > "$OUT/obj_$name/jio_ports.inc" &&
       z88dk-z80asm -b -d -l -m $defines -I"$OUT/obj_$name" -O"$OUT/obj_$name" -o=jio_$name.bin p1_main.asm p3_paging.asm drv_jio.asm "$kernel" &&
       z88dk-appmake +glue -b "$OUT/obj_$name/jio_$name" --filler 0xFF --clean > /dev/null &&
       z88dk-appmake +rom -b "$OUT/obj_$name/jio_${name}__.bin" -o "$OUT/jio_$name.rom" -s 32768 --org 0 > /dev/null
@@ -285,35 +284,6 @@ test_basic() { # name rom map machine slots drive description [floppy size]
     end_checks "$1" "$7"
 }
 
-# Answer of the server lost (MOCK_DROP): the request is sent again (auto retry), or "Not ready" error, then Retry
-RETRY_CMDS='TYPE HELLO.TXT\r\nDIR /W\r\n'
-# lost answer of a write (data in the TPA segment, page 2): the request and the data are sent again
-RETRY_WRITE='COPY HELLO.TXT X.TXT\r\nTYPE X.TXT\r\nDIR /W\r\n'
-test_retry() { # name rom map machine slots auto|ask description [text of the dropped request] [commands]
-    wanted "$1" || return
-    [ -n "${REAL_SERVER:-}" ] && return     # answer dropped by the mock server (MOCK_DROP)
-    local d="$OUT/$1" drop=${8:-HELLO.TXT} cmds=${9:-$RETRY_CMDS}
-    if [ "$6" = auto ]; then
-        MOCK_DROP=$drop JIO_AUTORETRY=1 run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/screens.tcl" "" "" 1 "25"
-    else
-        MOCK_DROP=$drop TYPE_TIME=20 TYPE_TEXT=${RETRY_KEY:-r} run_scenario "$1" "$2" "$3" "$4" "$5" "$cmds" "$TEST/tcl/typecmd.tcl" "" "" 1 "19 30"
-    fi
-    begin_checks "$1"
-    mock_check "answer dropped once" "$([ "$(count_text "$d/server.log" 'DROPPED')" = 1 ] && echo ok)"
-    if [ "$6" != auto ]; then
-        check "Not ready error (Abort, Retry)" "$(has_text "$d/screen_19.txt" 'Not ready' && echo ok)"
-    else
-        check "no error shown" "$( ! has_text "$d/screens.txt" 'Not ready' && echo ok)"
-    fi
-    if [ -z "${9:-}" ]; then
-        mock_check "request sent again" "$([ "$(grep -c "^FFIRST 'A:HELLO.TXT'" "$d/server.log")" = 2 ] && echo ok)"
-    else
-        check "file written (X.TXT)" "$(has_text "$d/drive/X.TXT" 'Hello' && echo ok)"
-    fi
-    check "TYPE output" "$(has_text "$d/screens.txt" 'Hello' && echo ok)"
-    check "DIR after the retry" "$(has_text "$d/screens.txt" 'FCBTEST' && echo ok)"
-    end_checks "$1" "$7"
-}
 
 # FORMAT B: (_FORMAT, in the disk ROM page, called through the H_BDOS hook): floppy formatted, then listed
 test_format() { # name rom map machine slots floppy size description [unused] [choice of the driver]
@@ -524,12 +494,10 @@ command -v z88dk-z80asm > /dev/null || { echo "z88dk not found"; exit 1; }
 echo "Build:"
 prepare_files
 build_rom dos2 p0_kernel.asm "-DJIO -DHYBRID"
-build_rom dos2_safe p0_kernel.asm "-DJIO -DHYBRID" "J2 J1"
-build_rom dos2_joy1 p0_kernel.asm "-DJIO -DHYBRID" "J1"
+build_rom dos2_safe p0_kernel.asm "-DJIO -DJIOSAFE -DHYBRID"
 
 R="$OUT/jio_dos2.rom"; RM="$OUT/obj_dos2/jio_dos2.map"
 RS="$OUT/jio_dos2_safe.rom"; RSM="$OUT/obj_dos2_safe/jio_dos2_safe.map"
-RJ="$OUT/jio_dos2_joy1.rom"; RJM="$OUT/obj_dos2_joy1/jio_dos2_joy1.map"
 
 echo "MSX-DOS 2 ROM (JIO drive A: + floppy B:):"
 test_dos_hybrid      dos2_vg8235      "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235 (360 KB drive), both drives"
@@ -546,13 +514,10 @@ test_takeover_hybrid dos2_takeover    "$R" "$RM" Philips_NMS_8255  720 "NMS 8255
 test_readonly        dos2_readonly    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, read only server, floppy B: writable" 360
 test_bootloader_hybrid dos2_bootsector "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, disk image mode: self-booting image (boot loader of the boot sector)"
 test_image_hybrid    dos2_image       "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, server in disk image mode: image A: (sectors) + floppy B:"
-test_retry           dos2_retry_auto "$R" "$RM" Philips_VG_8235  "-carta $R" auto "VG-8235, answer lost, auto retry: request sent again"
-test_retry           dos2_retry_ask  "$R" "$RM" Philips_VG_8235   "-carta $R" ask  "VG-8235, answer lost, no auto retry: Not ready, Retry"
-# JIO cartridge (I/O port 30H, faked by the bridge): the serial routines are intercepted, the port is not tested (not emulated)
-JIO_CART=1 test_dos_hybrid dos2_cart  "$R" "$RM" Philips_VG_8235 "-carta $R" 360 "VG-8235, JIO cartridge found at boot (port 30H, not emulated), both drives"
+# JIO cartridge (I/O port 30H, JIO_LINE: faked by the bridge): the serial routines are intercepted, the port is not tested (not emulated)
+JIO_LINE=30 test_dos_hybrid dos2_cart "$R" "$RM" Philips_VG_8235 "-carta $R" 360 "VG-8235, JIO cartridge found at boot (port 30H, not emulated), both drives"
 test_dos_hybrid      dos2_safe        "$RS" "$RSM" Philips_VG_8235 "-carta $RS" 360 "VG-8235, safe ROM (joystick ports only), both drives"
-test_dos_hybrid      dos2_joy1        "$RJ" "$RJM" Philips_VG_8235 "-carta $RJ" 360 "VG-8235, ROM on joystick port 1 (J1, serial line intercepted), both drives"
-test_retry           dos2_retry_write "$R" "$RM" Panasonic_FS-A1ST "-carta $R" ask "turbo R, answer of a write lost: Not ready, Retry" 'Hello from' "$RETRY_WRITE"
+JIO_LINE=FE test_dos_hybrid dos2_joy1 "$R" "$RM" Philips_VG_8235 "-carta $R" 360 "VG-8235, joystick port 1 found at boot (kernel patched, serial line intercepted), both drives"
 test_format          dos2_format_vg   "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, FORMAT B: (360 KB floppy), then COPY to B:" 354K
 test_format          dos2_format_nms  "$R" "$RM" Philips_NMS_8255  "-carta $R" 720 "NMS 8255, FORMAT B: (720 KB floppy, double sided), then COPY to B:" 713K 2
 

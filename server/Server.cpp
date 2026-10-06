@@ -69,7 +69,9 @@ quint16 Server::uiTransmit
  */
 #define vReceive(_pvAddress, _uiSize, _ucFlags, _uiCRC)                                \
 {                                                                                      \
-    memcpy(_pvAddress, (((QByteArray) co_await oRead(_uiSize)).constData()), _uiSize); \
+    QByteArray _acRead = co_await oRead(_uiSize);                                      \
+    if(m_bRecordRequest) m_oRequest.m_acRequest += _acRead;                            \
+    memcpy(_pvAddress, _acRead.constData(), _uiSize);                                  \
     if(_ucFlags & FLAG_TX_CRC)                                                         \
     {                                                                                  \
             _uiCRC = uiXModemCRC16(_pvAddress, _uiSize, _uiCRC);                       \
@@ -124,13 +126,13 @@ QString Server::szGetServerInfo()
     QString oFlags;
     /*~~~~~~~~~~~*/
 
-    // only "Read only" and "Auto retry" (JIO.COM) are used for the served directories (COMMAND_BDOS)
+    // only "Read only" is used for the served directories (COMMAND_BDOS)
     bool bImage = m_eServeMode == eServeDiskImage;
 
     if(m_bRxCRC && bImage) oFlags += "RxCRC ";
     if(m_bTxCRC && bImage) oFlags += "TxCRC ";
     if(m_bTimeout && bImage) oFlags += "Timeout ";
-    if(m_bAutoRetry) oFlags += "AutoRetry ";
+    if(m_bAutoRetry && bImage) oFlags += "AutoRetry ";
     if(m_bReadOnly || (bImage && m_oDrive.bIsMediaWriteProtected())) oFlags += "ReadOnly ";
     if(m_bSlowTx && bImage) oFlags += "SlowTx";
 
@@ -368,6 +370,7 @@ Task Server::oParser()
 
         iSigPos = 0;
         uiCRC = 0;
+        m_bInRequest = false;
 
         while(iSigPos < uiSignatureLength)
         {
@@ -388,6 +391,7 @@ Task Server::oParser()
             }
         }
 
+        m_bInRequest = true;            // "JIO" received: the rest of the request is expected (onDeviceReadyRead)
         vReceive(&ucFlags, sizeof(ucFlags), FLAG_TX_CRC, uiCRC);
         vReceive(&ucCommand, sizeof(ucCommand), FLAG_TX_CRC, uiCRC);
 
@@ -407,6 +411,35 @@ Task Server::oParser()
             QString               szString;
             QByteArray            acData;
             char                  acTemplate[14];
+
+            // request sent again by the MSX (same number, same bytes): previous answers sent again
+            if (ucFlags && m_oRequests.contains(ucFlags))
+            {
+                const tdRequest &roPrevious = m_oRequests[ucFlags];
+                QByteArray      acRead;
+                bool            bSame = true;
+
+                while (bSame && (acRead.size() < roPrevious.m_acRequest.size()))
+                {
+                    acRead += (QByteArray) co_await oRead(1);
+                    bSame = acRead.back() == roPrevious.m_acRequest[acRead.size() - 1];
+                }
+
+                if (bSame)
+                {
+                    vLog(eLogWarning, "Request %d sent again by the MSX (answer late or lost): answer sent again\n", ucFlags);
+                    m_uiReceiveErrors++;        // the MSX did not receive the answer in time (time-out)
+                    emit statisticsChanged();
+                    for (const QPair<QByteArray, int> &roAnswer : roPrevious.m_aoAnswers)
+                        uiTransmit(roAnswer.first.constData(), roAnswer.first.size(), 0, 0, false, roAnswer.second);
+                    break;
+                }
+
+                m_acBuffer.prepend(acRead);     // another request with this number: executed
+            }
+
+            m_oRequest = tdRequest();
+            m_bRecordRequest = ucFlags != 0;
 
             vReceive(&ucFunction, sizeof(ucFunction), 0, uiCRC);
             if (!bIsGetSetFunction(ucFunction))
@@ -597,6 +630,8 @@ Task Server::oParser()
                 vLog(eLogWarning, "Unsupported BDOS function %02Xh\n", ucFunction);
                 break;
             }
+
+            vEndRequest(ucFlags);
         }
         break;
 
@@ -700,7 +735,10 @@ Task Server::oParser()
                     (m_bTxCRC     ? FLAG_TX_CRC : 0)         |
                     (m_bTimeout   ? FLAG_TIMEOUT : 0)      |
                     (m_bAutoRetry ? FLAG_AUTO_RETRY : 0) |
-                    (m_bSlowTx    ? FLAG_SLOW_TX : 0);
+                    (m_bSlowTx    ? FLAG_SLOW_TX : 0)    |
+                    // Bluetooth: long transmissions of the MSX can be lost by the serial module (no flow control),
+                    // JIO.COM sends its large writes in blocks
+                    ((m_eInterface == eInterfaceBluetooth) ? FLAG_TX_BLOCKS : 0);
                 bool        bImage = m_eServeMode == eServeDiskImage;
                 quint8		W_DRIVES = bImage ? m_oDrive.uiPartitionCount() : 0;
                 quint8		W_BOOTDRV = bImage ? m_oDrive.uiFirstActivePartition() : 0;
@@ -923,6 +961,21 @@ Server::Server(QObject *_poParent) :
 
 /*
  =======================================================================================================================
+    Parser restarted: request being received and data received abandoned, next request looked for ("JIO")
+ =======================================================================================================================
+ */
+void Server::vRestartParser()
+{
+    ByteReader::vDestroy();
+    m_poCurrentByteReader.reset();
+    m_acBuffer.clear();
+    m_bInRequest = false;
+    m_bRecordRequest = false;
+    oParser();
+}
+
+/*
+ =======================================================================================================================
  =======================================================================================================================
  */
 Server::~Server()
@@ -1053,6 +1106,7 @@ void Server::onDeviceConnected()
     vLog(eLogConnected, "Connected to " + m_poInterface->oGetName() + "\n");
     m_bConnectedOnce = true;
     vSetState(eCStateConnected);
+    vRestartParser();               // data of a previous connection abandoned
 
     // Unlock: the opening of the port may disturb the line, the MSX may then wait for the data of an answer that is
     // never sent (no time-out in the data of an answer). FFH bytes complete such a reception (its CRC fails, or FFH =
@@ -1098,6 +1152,27 @@ void Server::onDeviceReadyRead()
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
     QByteArray	acData = m_poInterface->acReadAll();
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+    // request incomplete, no data for a while:
+    // - the new data is the start of another request ("JIO"): bytes of the request lost on the link, request abandoned
+    // - otherwise the rest of the request, late (link stalled, e.g. Bluetooth): request continued
+    if(m_bInRequest && m_oLastData.isValid() && (m_oLastData.elapsed() > REQUEST_TIMEOUT))
+    {
+        if(acData.startsWith("JIO"))
+        {
+            vLog(eLogError, "Incomplete request abandoned (no data for %.1f s): %d of %d bytes received, bytes lost on the link\n",
+                 m_oLastData.elapsed() / 1000.0, (int) m_acBuffer.size(), m_poCurrentByteReader ? m_poCurrentByteReader->iGetSize() : 0);
+            m_uiReceiveErrors++;
+            vRestartParser();
+        }
+        else
+        {
+            vLog(eLogWarning, "Data late (no data for %.1f s): %d of %d bytes received, %d more bytes now, request continued\n",
+                 m_oLastData.elapsed() / 1000.0, (int) m_acBuffer.size(), m_poCurrentByteReader ? m_poCurrentByteReader->iGetSize() : 0,
+                 (int) acData.size());
+        }
+    }
+    m_oLastData.start();
 
     m_acBuffer.append(acData);
 

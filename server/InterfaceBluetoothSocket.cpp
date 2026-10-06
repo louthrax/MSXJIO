@@ -57,6 +57,15 @@ void InterfaceBluetoothSocket::vConnectDevice(const QString &_roID)
 	vDisconnectDevice();
 	delete m_poBluetoothSocket;
 
+    // A device discovery (inquiry) on the adapter disturbs the RFCOMM connection (delays, lost bytes): stopped
+    if (m_poDiscoveryAgent)
+    {
+        m_poDiscoveryAgent->stop();
+        delete m_poDiscoveryAgent;
+        m_poDiscoveryAgent = nullptr;
+        emit log(eLogInfo, "Bluetooth discovery stopped (connection to the device)");
+    }
+
 	m_poBluetoothSocket = new QBluetoothSocket(QBluetoothServiceInfo::RfcommProtocol);
 
     if (m_poBluetoothSocket)
@@ -208,6 +217,8 @@ void InterfaceBluetoothSocket::vScanDevices()
         m_poDiscoveryAgent->start();
 
         emit log(eLogInfo, "Bluetooth discovery started...");
+        if (m_poBluetoothSocket && (m_poBluetoothSocket->state() == QBluetoothSocket::SocketState::ConnectedState))
+            emit log(eLogWarning, "The connection to the MSX is slowed down during the discovery (errors possible)");
     }
     else
     {

@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
     QCommandLineOption oReadOnlyOption({"r", "read-only"}, "Refuse all writes (disk image, or served directories; the RAM disk H: stays writable).");
     QCommandLineOption oNoRxCRCOption("no-rx-crc", "Disk image: no CRC check of the data received by the MSX.");
     QCommandLineOption oNoTxCRCOption("no-tx-crc", "Disk image: no CRC of the data sent by the MSX.");
-    QCommandLineOption oNoAutoRetryOption("no-auto-retry", "The MSX does not retry the commands automatically (disk image; directories with JIO.COM: \"Not ready\" after 1 s without answer).");
+    QCommandLineOption oNoAutoRetryOption("no-auto-retry", "The MSX does not retry the commands automatically (disk image).");
     QCommandLineOption oTimeoutOption("timeout", "Disk image: the MSX aborts a command after a time-out.");
     QCommandLineOption oSlowTxOption("slow-tx", "Disk image: slow transmission from the MSX.");
     QCommandLineOption oPortOption({"p", "port"}, "Serial port to use (e.g. ttyUSB0, /dev/ttyUSB0, COM3). Default: first USB serial adapter (FTDI first).", "port");

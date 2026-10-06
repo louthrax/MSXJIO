@@ -412,6 +412,7 @@ static const unsigned char g_aucInfoCommand[] = { 'J', 'I', 'O', FLAG_RX_CRC, CO
 unsigned char g_aucInfo[512] = { 0 };       // answer: flags, drives, boot drive, description (never on the stack)
 unsigned char g_aucInfoCRC[2] = { 0 };      // CRC of the answer (separate packet), low byte first
 unsigned char g_ucAutoRetry = 0;
+unsigned char g_ucTxBlocks = 0;             // large writes sent in blocks (FLAG_TX_BLOCKS: Bluetooth link)
 unsigned char JioPort = 0xFF;               // serial line (transmit.asm, receive.asm, stub STUB_PORT): 0xFF = joystick
                                             // port 2, 0xFE = joystick port 1 (J1 option), else I/O register of the
                                             // JIO cartridge (C option)
@@ -706,8 +707,10 @@ bool bGetServerInfo()
         vPrintSerialLine();
     g_aucInfo[sizeof(g_aucInfo) - 1] = 0;
     g_ucAutoRetry = (g_aucInfo[0] & FLAG_AUTO_RETRY) ? 1 : 0;
+    g_ucTxBlocks = (g_aucInfo[0] & FLAG_TX_BLOCKS) ? 1 : 0;
     puts((char *) g_aucInfo + 3);           // description of the server (as the JIO ROM)
     vVerbose("Auto retry: ", g_ucAutoRetry, 2);
+    vVerbose("Writes in blocks: ", g_ucTxBlocks, 2);
     return true;
 }
 
@@ -719,6 +722,7 @@ void vInstallStub()
     HIMSAV[STUB_SEGMENT] = g_ucDriverSegment;
     HIMSAV[STUB_AUTO_RETRY] = g_ucAutoRetry;
     HIMSAV[STUB_PORT] = JioPort;
+    HIMSAV[STUB_TX_BLOCKS] = g_ucTxBlocks;
     *((unsigned int*)(HIMSAV + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
     *((unsigned int*)(HIMSAV + STUB_GET_P2 + 1)) = (unsigned int) g_pucMapper + 0x27;
     HIMSAV[STUB_HOOK_ORIGINAL + 1] = *((unsigned char*)0xF37B);

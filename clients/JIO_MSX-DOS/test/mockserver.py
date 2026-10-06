@@ -20,6 +20,9 @@ MOCK_READONLY (environment): "Read only" button of the server, the served direct
 
 MOCK_DROP (environment): the answer of the first BDOS request containing this text is not sent (lost answer, the
 client sends the request again).
+
+MOCK_TX_BLOCKS (environment): if not empty, "TX blocks" flag in the answer of COMMAND_DRIVE_INFO (Bluetooth link of the
+C++ server: JIO.COM sends its large writes in blocks).
 """
 import os, re, socket, struct, sys, shutil, datetime, tempfile, atexit, signal
 
@@ -215,6 +218,7 @@ class Server:
         self.reset()
 
     def reset(self):
+        self.requests = {}          # numbered BDOS requests: number -> (bytes, answers), the last 16
         self.files = {}
         self.cwd = {d: '' for d in range(8)}
         self.finds = {}
@@ -761,11 +765,13 @@ def main():
                             out = drive_command(r, flags, cmd)
                         elif cmd == CMD_INFO:
                             # directories (JIO.COM at install): flags of the server ("Auto retry", MOCK_AUTORETRY,
-                            # default on as the C++ server), no drive, description
+                            # default on as the C++ server; "TX blocks" of a Bluetooth link, MOCK_TX_BLOCKS), no drive,
+                            # description
                             retry = os.environ.get('MOCK_AUTORETRY', '1') != '0'
-                            LOG.write('INFO (auto retry %s)\n' % ('on' if retry else 'off'))
+                            blocks = bool(os.environ.get('MOCK_TX_BLOCKS'))
+                            LOG.write('INFO (auto retry %s%s)\n' % ('on' if retry else 'off', ', TX blocks' if blocks else ''))
                             info = b'\r\nMock server: directories\r\n'
-                            data = (bytes([8 if retry else 0, 0, 0]) + info + b'\0' * 512)[:512]
+                            data = (bytes([(8 if retry else 0) | (32 if blocks else 0), 0, 0]) + info + b'\0' * 512)[:512]
                             out = [data] + ([struct.pack('<H', crc16(data))] if flags & FLAG_RX_CRC else [])
                         elif cmd == CMD_LOG:
                             LOG.write('MSX: %s\n' % r.string())
@@ -787,7 +793,23 @@ def main():
                             stream = stream[r.pos:]
                             continue
                         else:
-                            out = srv.command(r)
+                            # numbered request (flags not 0) sent again with the same bytes: answers sent again,
+                            # not executed again (as the server)
+                            start = r.pos
+                            prev = srv.requests.get(flags) if flags else None
+                            if prev and prev[0].startswith(stream[start:]) and len(stream) - start < len(prev[0]):
+                                raise Incomplete()
+                            if prev and stream[start:start + len(prev[0])] == prev[0]:
+                                r.pos = start + len(prev[0])
+                                LOG.write('RESENT %d (answer sent again)\n' % flags)
+                                out = list(prev[1])
+                            else:
+                                out = srv.command(r)
+                                if flags:
+                                    srv.requests.pop(flags, None)
+                                    srv.requests[flags] = (bytes(stream[start:r.pos]), list(out))
+                                    while len(srv.requests) > 16:
+                                        srv.requests.pop(next(iter(srv.requests)))
                             if DROP and DROP in stream[:r.pos]:
                                 LOG.write('DROPPED (answer not sent)\n')
                                 DROP = b''

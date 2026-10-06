@@ -23,11 +23,12 @@
 ;   STUB_DRIVES         8 bytes: drives handled (A: to H:)
 ;   STUB_HAS_TURBO      turbo R: Z80 mode during the transfers
 ;   STUB_SEGMENT        mapper segment of the driver
-;   STUB_AUTO_RETRY     not 0: "Auto retry" of the server (COMMAND_DRIVE_INFO), the BDOS functions without answer are
-;                       done again; 0: they return "Not ready"
+;   STUB_AUTO_RETRY     "Auto retry" of the server (COMMAND_DRIVE_INFO), not used for now (no answer: "Not ready"
+;                       error, see vNoAnswer in driver.c)
 ;   STUB_PORT           serial line: 0FFh = joystick port 2, 0FEh = joystick port 1, else I/O register of the JIO
 ;                       cartridge
-;   STUB_BOUNCE         bounce buffer (STUB_BOUNCE_SIZE bytes), to copy TPA data of page 2
+;   STUB_TX_BLOCKS      large writes sent in blocks (FLAG_TX_BLOCKS of the server: Bluetooth link)
+;   STUB_BOUNCE        bounce buffer (STUB_BOUNCE_SIZE bytes), to copy TPA data of page 2
 ;   STUB_DPB            dummy DPB returned in IX by _ALLOC: the kernel only takes the sector size at +2, the rest of
 ;                       a DPB is not kept (no program uses it on a drive of the server)
 ;   DRIVER_BASE         address of the driver (page 2), DRIVER_STACK its stack (top of its segment)
@@ -58,6 +59,7 @@ HasTurbo:	defb	0			; STUB_HAS_TURBO
 Segment:	defb	0			; STUB_SEGMENT
 AutoRetry:	defb	0			; STUB_AUTO_RETRY
 _JioPort:	defb	0FFh			; STUB_PORT (transmit.asm, receive.asm)
+TxBlocks:	defb	0			; STUB_TX_BLOCKS
 Bounce:		defs	STUB_BOUNCE_SIZE,0	; STUB_BOUNCE
 Dpb:		defb	0,0			; STUB_DPB
 		defw	512			; sector size
@@ -72,6 +74,9 @@ IF AutoRetry <> STUB_AUTO_RETRY
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 IF _JioPort <> STUB_PORT
+		ERROR	"stub.asm layout does not match stub.h"
+ENDIF
+IF TxBlocks <> STUB_TX_BLOCKS
 		ERROR	"stub.asm layout does not match stub.h"
 ENDIF
 IF Bounce <> STUB_BOUNCE

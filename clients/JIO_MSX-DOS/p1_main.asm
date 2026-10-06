@@ -61,9 +61,7 @@
 	IFDEF HYBRID
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
 		EXTERN	W_RFS		; Offset in the driver work area: not 0 if the server serves directories
-		EXTERN	W_FLAGS		; Offset in the driver work area: flags of the server (COMMAND_DRIVE_INFO)
 		EXTERN	RFS_TURBO	; Kernel (rfs.asm): turbo R flag
-		EXTERN	RFS_RETRY	; Kernel (rfs.asm): not 0 for auto retry
 		EXTERN	RFS_NJIO	; Kernel (rfs.asm): number of JIO drives
 		EXTERN	W_PORT		; Offset in the driver work area: serial line (0FFh = joystick port 2, else I/O port)
 		EXTERN	J_TXP		; Kernel (rfs.asm): setup of the serial line (transmit, receive)
@@ -72,6 +70,8 @@
 		EXTERN	J_TXXOR
 		EXTERN	J_RXSEL
 		EXTERN	W_HOOK		; Offset in the driver work area: H_BDOS hook for _FORMAT
+		EXTERN	W_FLAGS		; Offset in the driver work area: flags of the server (COMMAND_DRIVE_INFO)
+		EXTERN	RFS_WMASK	; Kernel (rfs.asm): mask of the write blocks in a 16KB page
 		EXTERN	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606	; Kernel: routines used by _FORMAT
 	ENDIF
 
@@ -4546,9 +4546,6 @@ C_RFSINIT:	LD	A,(EXPTBL)
 		DEC	A
 J_RFI1:		LD	(RFS_TURBO),A
 		CALL	GETWRK			; IX = work area of the JIO driver
-		LD	A,(IX+W_FLAGS)
-		AND	8			; FLAG_AUTO_RETRY
-		LD	(RFS_RETRY),A
 		LD	A,(IX+W_PORT)		; serial line found by DRIVES
 		CP	0FFH
 		JR	Z,J_RFI3		; joystick port 2: code of the kernel
@@ -4585,6 +4582,14 @@ J_RFI3:
 		JR	Z,J_RFI2
 		LD	A,(HL)
 J_RFI2:		LD	(RFS_NJIO),A
+
+		; Bluetooth link (FLAG_TX_BLOCKS of the server, bit 5): writes sent in blocks of 8KB at most (RFS_RW), a
+		; long continuous transmission can be lost by the Bluetooth serial module
+		BIT	5,(IX+W_FLAGS)
+		LD	A,3FH			; 16KB (pages)
+		JR	Z,J_RFI7
+		LD	A,1FH			; 8KB
+J_RFI7:		LD	(RFS_WMASK),A
 
 		; _FORMAT (BDOS function 67H): no room left in the kernel, P1_FORMAT of this ROM is called through the
 		; H_BDOS hook (called by the kernel at each BDOS function), code of the hook in the work area

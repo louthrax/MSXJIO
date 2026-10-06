@@ -46,6 +46,7 @@ public slots:
     void        onImagePathValidated();
     void        onAddressLineValidated();
 
+    void        onLogTimer();
     void        onRedLightTimer();
     void        onGreenLightTimer();
 
@@ -65,6 +66,7 @@ private:
     void        vUpdateDrivePathsTexts();
     void        vUpdateMediaIcon();
     void        vUpdateDriveRowsHeight();
+    QTextCharFormat oLogFormat(tdLogType _eLogType, bool _bModify);
     QString     szCommandLine();
 
 #ifdef Q_OS_ANDROID
@@ -75,6 +77,16 @@ private:
     Server                          *m_poServer = nullptr;
     QTimer							*m_poRedLightOffTimer = nullptr;
     QTimer							*m_poGreenLightOffTimer = nullptr;
+
+    // Log: lines added by a timer (the server answers the MSX without waiting for the display)
+    struct tdLogLine
+    {
+        tdLogType   m_eLogType;
+        QString     m_szMessage;
+        bool        m_bModify;
+    };
+    QList<tdLogLine>                m_aoPendingLog;
+    QTimer                          *m_poLogTimer = nullptr;
 
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
     QString                         m_oSelectedSerialID;

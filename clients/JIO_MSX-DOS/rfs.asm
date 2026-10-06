@@ -32,7 +32,10 @@ RFS_RESET	EQU	1DH		; reset server file system state
 ; ---------------------------------------------------------
 ; Variables
 ; ---------------------------------------------------------
-RFS_HDR:	DEFB	"JIO",0,RFS_COMMAND
+RFS_HDR:	DEFB	"JIO",0,RFS_COMMAND	; "JIO", sequence number (flags, see RFS_CMD), command
+	IF (RFS_HDR & 0FF00H) <> ((RFS_HDR+3) & 0FF00H)
+		ERROR	"RFS_HDR: header in one 256 bytes page expected (RFS_CMD)"
+	ENDIF
 RFS_FUNC:	DEFB	0
 RFS_BUF:	DEFS	8,0		; command parameters / result
 RFS_TXB:	DEFB	0		; single byte to transmit
@@ -43,9 +46,9 @@ RFS_RH:		DEFB	0		; remote file handle
 RFS_OP:		DEFB	0		; b0 = read, b2 = segment type
 RFS_TURBO:	DEFB	0		; turbo R flag
 RFS_CPU:	DEFB	0		; saved CPU mode
-RFS_RETRY:	DEFB	0		; not 0: auto retry (server setting, HYBRID: set at boot by C_RFSINIT of p1_main.asm)
-RFS_SEGP:	DEFW	RFS_SEGS	; end of RFS_SEGS
-RFS_SEGS:	DEFS	5*4,0		; parts of the request (address, size), sent again if the server does not answer
+RFS_WMASK:	DEFB	3FH		; writes in blocks of (RFS_WMASK + 1) * 256 bytes at most: 3FH = 16KB pages, 1FH = 8KB
+				; (Bluetooth link, HYBRID: set at boot by C_RFSINIT of p1_main.asm)
+RFS_TRIES:	DEFB	0		; time-outs left before the "not ready" error (RFS_RX)
 	IFNDEF HYBRID
 RFS_LOGIN:	DEFB	0		; drives served by the server (bit 0 = A:)
 	ENDIF
@@ -93,9 +96,9 @@ RFS_DPB:	DEFS	36,0		; unopened FCB for _SFIRST, dummy DPB for _ALLOC
 ; Called once by K_INIT (HYBRID: C_RFSINIT of p1_main.asm, after K_INIT)
 ; ---------------------------------------------------------
 	IFDEF HYBRID
-		PUBLIC	RFS_TURBO		; set at boot by C_RFSINIT (p1_main.asm), with RFS_RETRY and RFS_NJIO
-		PUBLIC	RFS_RETRY
+		PUBLIC	RFS_TURBO		; set at boot by C_RFSINIT (p1_main.asm), with RFS_NJIO
 		PUBLIC	RFS_NJIO
+		PUBLIC	RFS_WMASK		; set at boot by C_RFSINIT: 1FH on a Bluetooth link
 		PUBLIC	J_TXP		; setup of the serial line, patched by C_RFSINIT for an I/O port (JIO cartridge)
 		PUBLIC	J_RXP
 		PUBLIC	J_TXOR		; bit of the line (OR 4, XOR 4) and joystick port selected (OR 64), patched by
@@ -117,8 +120,7 @@ J_RI1:		LD	(RFS_TURBO),A
 		CALL	RFS_CMD
 		LD	HL,RFS_LOGIN
 		LD	BC,1
-		CALL	RFS_RX
-		CALL	RFS_END
+		CALL	RFS_RXEND
 		LD	A,(RFS_LOGIN)		; number of drives = highest drive served
 		LD	B,0
 J_RI4:		OR	A
@@ -159,11 +161,16 @@ RFS_CMD:	LD	(RFS_FUNC),A
 		CALL	K_BIOS
 		POP	IX
 J_RC1:		DI
-		LD	HL,RFS_SEGS		; new request
-		LD	(RFS_SEGP),HL
-		LD	HL,RFS_HDR
+		LD	HL,RFS_HDR+3		; flags of the header: sequence number of the request (not 0, except every
+		INC	(HL)			; 256 requests): a request sent again with the same number is not executed
+		LD	L,RFS_HDR & 0FFH	; again by the server (requests not sent again for now)
 		LD	BC,6
 		JR	RFS_TX
+
+; ---------------------------------------------------------
+; Subroutine receive answer packet and end command (see RFS_RX)
+; ---------------------------------------------------------
+RFS_RXEND:	CALL	RFS_RX
 
 ; ---------------------------------------------------------
 ; Subroutine end remote command
@@ -233,7 +240,7 @@ J_TS1:		LD	A,(HL)
 		POP	HL
 
 ; ---------------------------------------------------------
-; Subroutine transmit data, part of the request (RFS_SEGS)
+; Subroutine transmit data
 ; Input:  HL = pointer to data
 ;         BC = size
 ; May corrupt: AF,BC,HL
@@ -241,20 +248,6 @@ J_TS1:		LD	A,(HL)
 RFS_TX:		LD	A,B
 		OR	C
 		RET	Z
-		PUSH	DE
-		EX	DE,HL
-		LD	HL,(RFS_SEGP)
-		LD	(HL),E
-		INC	HL
-		LD	(HL),D
-		INC	HL
-		LD	(HL),C
-		INC	HL
-		LD	(HL),B
-		INC	HL
-		LD	(RFS_SEGP),HL
-		EX	DE,HL
-		POP	DE
 J_TXSEG:	EXX
 		PUSH	BC
 		PUSH	DE
@@ -365,7 +358,9 @@ J_TX17:		OUT	(C),E			; -1
 
 ; ---------------------------------------------------------
 ; Subroutine receive one answer packet, wait until received
-; No answer: the request is sent again (auto retry), or "not ready" disk error (abort, retry, ignore)
+; No answer after 6 time-outs of J_RX1 (about 5 s at 3.58 MHz): server stopped or disconnected, or bytes of the
+; request lost on the link (the server abandons an incomplete request when the next one arrives). "Not ready" disk
+; error (abort: the function returns the error, retry: wait again), the request is not sent again.
 ; Input:  HL = pointer to buffer
 ;         BC = size
 ; May corrupt: AF,BC,DE,HL
@@ -374,48 +369,32 @@ RFS_RX:		LD	A,B
 		OR	C
 		RET	Z
 		PUSH	IX
+J_RX2:		LD	A,6
+		LD	(RFS_TRIES),A
 J_RX0:		PUSH	HL
 		PUSH	BC
 		LD	D,B
 		LD	E,C
 		CALL	J_RX1
-		OR	A
-		JR	NZ,J_RX5		; received
-		LD	A,(RFS_RETRY)
-		OR	A
-		CALL	Z,RFS_NRDY
-		LD	HL,RFS_SEGS		; request sent again
-J_RX3:		LD	DE,(RFS_SEGP)
-		OR	A
-		SBC	HL,DE
-		ADD	HL,DE
-		JR	Z,J_RX4
-		LD	E,(HL)
-		INC	HL
-		LD	D,(HL)
-		INC	HL
-		LD	C,(HL)
-		INC	HL
-		LD	B,(HL)
-		INC	HL
-		PUSH	HL
-		EX	DE,HL
-		CALL	J_TXSEG
-		POP	HL
-		JR	J_RX3
-
-J_RX4:		POP	BC
-		POP	HL
-		JR	J_RX0
-
-J_RX5:		LD	HL,RFS_SEGS		; answer started: the request is not sent again (its buffer may be overwritten)
-		LD	(RFS_SEGP),HL
 		POP	BC
 		POP	HL
-		POP	IX
+		OR	A
+		JR	NZ,J_RX5		; received
+		LD	A,(RFS_TRIES)		; time-out: server not ready yet
+		DEC	A
+		LD	(RFS_TRIES),A
+		JR	NZ,J_RX0
+		PUSH	HL
+		PUSH	BC
+		CALL	RFS_NRDY
+		POP	BC
+		POP	HL
+		JR	J_RX2
+
+J_RX5:		POP	IX
 		RET
 
-; Server not ready: disk error of the first drive (JIO), returns on retry or ignore
+; Server not answering: disk error of the first drive (JIO), returns on retry or ignore
 ; (Z80 mode kept on turbo R, the CPU mode of the caller is restored by RFS_END)
 RFS_NRDY:	CALL	GET_P2			; transfer segment of RFS_RW
 		PUSH	AF
@@ -527,6 +506,7 @@ J_RXTO:		POP	DE
 		XOR	A
 		RET
 
+
 J_RXPE:		DEC	DE			;  7
 		LD	A,D			;  5
 		OR	E			;  5
@@ -594,6 +574,18 @@ J_RBPE:		IN	F,(C)			; 14
 		JR	J_RXOK
 
 ; ---------------------------------------------------------
+; Subroutine transmit the byte RFS_TXB
+; ---------------------------------------------------------
+RFS_TXB1:	LD	HL,RFS_TXB
+		LD	BC,1
+		JP	RFS_TX
+
+; ---------------------------------------------------------
+; Subroutine start command with a 1 byte parameter (see RFS_CMD1), receive 1 byte result and end command
+; ---------------------------------------------------------
+RFS_CMD1E:	CALL	RFS_CMD1
+
+; ---------------------------------------------------------
 ; Subroutine receive 1 byte result and end command
 ; Output: A = result
 ; ---------------------------------------------------------
@@ -605,8 +597,7 @@ RFS_RXERR:	LD	BC,1
 ; Output: A = first byte of RFS_BUF
 ; ---------------------------------------------------------
 RFS_RXBUF:	LD	HL,RFS_BUF
-		CALL	RFS_RX
-		CALL	RFS_END
+		CALL	RFS_RXEND
 		LD	A,(RFS_BUF)
 		RET
 
@@ -734,8 +725,7 @@ RFS_FCLOSE:
 		PUSH	DE
 		PUSH	BC
 		LD	C,45H
-		CALL	RFS_CMD1
-		CALL	RFS_RXERR
+		CALL	RFS_CMD1E
 		POP	BC
 		POP	DE
 		POP	HL
@@ -773,13 +763,19 @@ J_RW1:		LD	HL,(RFS_LEFT)
 		LD	A,H
 		OR	L
 		JP	Z,J_RW7
-		LD	DE,(RFS_ADDR)		; chunk = min(left, room in 16K page)
-		LD	A,D
-		AND	3FH
+		LD	DE,(RFS_ADDR)		; chunk = min(left, room in 16K page), write: room in RFS_WMASK block
+		LD	A,(RFS_OP)
+		RRCA
+		LD	A,3FH			; read: 16K page
+		JR	C,J_RW5
+		LD	A,(RFS_WMASK)		; write: 16K page, or 8K block (Bluetooth link)
+J_RW5:		PUSH	HL
+		LD	H,A
+		AND	D
 		LD	B,A
-		LD	C,E
-		PUSH	HL
-		LD	HL,4000H
+		LD	C,E			; BC = offset in the block
+		INC	H
+		LD	L,0			; HL = size of the block
 		OR	A
 		SBC	HL,BC
 		POP	BC
@@ -913,8 +909,7 @@ R_SELDSK:	LD	A,E
 		LD	(CUR_DRV),A
 		LD	A,E
 		LD	C,0EH
-		CALL	RFS_CMD1
-		CALL	RFS_RXERR
+		CALL	RFS_CMD1E
 		LD	C,0
 		DEFB	21H			; LD HL,n: skip next instruction
 J_SD1:		LD	C,_IDRV
@@ -1075,9 +1070,7 @@ J_OP2:		LD	A,(RFS_MODE)		; remote file
 		POP	DE
 		PUSH	DE
 		CALL	RFS_TXPATH
-		LD	HL,RFS_TXB
-		LD	BC,1
-		CALL	RFS_TX
+		CALL	RFS_TXB1
 		LD	BC,2
 		CALL	RFS_RXBUF
 		POP	DE
@@ -1191,8 +1184,7 @@ J_NF2:		POP	HL
 		OR	A
 		JR	Z,J_NF3
 		LD	C,45H
-		CALL	RFS_CMD1
-		CALL	RFS_RXERR
+		CALL	RFS_CMD1E
 J_NF3:		POP	AF
 		RET
 
@@ -1378,8 +1370,7 @@ R_HDELETE:	CALL	RFS_GETRH
 	ENDIF
 		SET	3,(IX+49)		; handle is dead after delete
 		LD	C,52H
-		CALL	RFS_CMD1
-		JP	RFS_RXERR
+		JP	RFS_CMD1E
 
 	IFNDEF HYBRID
 J_HD1:		OR	A
@@ -1539,9 +1530,7 @@ RFS_FFCMD:	LD	A,B
 		LD	A,(DE)
 		INC	A
 		CALL	Z,RFS_TXSTR
-		LD	HL,RFS_TXB
-		LD	BC,1
-		JP	RFS_TX
+		JP	RFS_TXB1
 
 ; ---------------------------------------------------------
 ; Function $41 _FNEXT
@@ -1565,8 +1554,7 @@ R_FNEXT:
 RFS_RXFIB:	PUSH	IX
 		POP	HL
 		LD	BC,RFS_FIBSZ
-		CALL	RFS_RX
-		CALL	RFS_END
+		CALL	RFS_RXEND
 	IFDEF HYBRID
 		LD	A,1
 		LD	(RFS_WPJIO),A
@@ -1645,8 +1633,7 @@ RFS_RXSTR:	PUSH	DE
 		LD	B,0
 		POP	HL
 		PUSH	HL
-		CALL	RFS_RX
-		CALL	RFS_END
+		CALL	RFS_RXEND
 		POP	DE
 		RET
 
@@ -1826,8 +1813,7 @@ R_FCLOSE:	PUSH	DE
 		CALL	F_CLOSE
 	ELSE
 		LD	C,45H
-		CALL	RFS_CMD1
-		CALL	RFS_RXERR
+		CALL	RFS_CMD1E
 	ENDIF
 		OR	A
 		JR	NZ,RFS_FERR

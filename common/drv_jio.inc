@@ -4,6 +4,7 @@
 #define FLAG_TIMEOUT                           (1 << 2)
 #define FLAG_AUTO_RETRY                        (1 << 3)
 #define FLAG_SLOW_TX                           (1 << 4)
+#define FLAG_TX_BLOCKS                         (1 << 5)
 
 #define COMMAND_DRIVE_REPORT_OK                0
 #define COMMAND_DRIVE_REPORT_WRITE_PROTECTED   0  + 1

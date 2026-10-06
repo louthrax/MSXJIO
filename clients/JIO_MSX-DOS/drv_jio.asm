@@ -492,10 +492,14 @@ ProbePort:	ld	c,a
 		cp	44h
 		ret
 
-; Serial lines tried in turn, ending with joystick ports (JIO_PORTS of 0_Build.sh: joystick ports 2 and 1 for the
-; standard ROMs, I/O ports 00H, 20H, 30H then joystick ports 2 and 1 for the JIO cartridge ROMs)
+; Serial lines tried in turn at boot until the server answers: I/O ports of a JIO cartridge (used only if the cartridge
+; is found there), then joystick ports (0FFh = port 2, 0FEh = port 1, last of the list). JIOSAFE (safe ROMs): joystick
+; ports only, no I/O port written to probe the cartridge (other devices could be at these ports)
 JioPorts:
-		INCLUDE	"jio_ports.inc"
+IFNDEF JIOSAFE
+		db	00h,20h,30h		; JIO cartridge (herraa1/msx-jio-cart-v1): IOSEL switches
+ENDIF
+		db	0FFh,0FEh		; joystick ports 2 and 1
 JioPortsEnd:
 
 ; Print A in hex (2 digits)
