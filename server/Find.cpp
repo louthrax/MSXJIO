@@ -204,18 +204,20 @@ QString szFindHostEntry(const QString& _szDirectory, const QString& _szName)
  =======================================================================================================================
  =======================================================================================================================
 */
+// "." and ".." first in a subdirectory, as on a MSX-DOS disk, none at the root of the drive. Not taken from the listing
+// of the host: some file systems do not list them (Android shared storage, FUSE), their paths are still resolved.
 static QStringList sortedEntriesDirsFirst(const QDir& dir, const QString& rootPath)
 {
     QString normalizedRoot = QDir(rootPath).absolutePath();
     QString currentPath = dir.absolutePath();
 
-    QStringList dirs = dir.entryList(QDir::Dirs, QDir::Name | QDir::IgnoreCase);
+    QStringList dirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name | QDir::IgnoreCase);
     QStringList files = dir.entryList(QDir::Files, QDir::Name | QDir::IgnoreCase);
 
-    if (!normalizedRoot.isEmpty() && currentPath == normalizedRoot)
+    if (normalizedRoot.isEmpty() || currentPath != normalizedRoot)
     {
-        dirs.removeAll("..");
-        dirs.removeAll(".");
+        dirs.prepend("..");
+        dirs.prepend(".");
     }
 
     dirs.append(files);
