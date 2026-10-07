@@ -1,0 +1,130 @@
+; Parameters and buffers of the BDOS functions in page 2 (JIO_NFS: driver mapped in page 2, the stub maps the TPA
+; back for these data): _FFIRST (path and FIB), _OPEN, _READ, _CLOSE, FCB _FOPEN, _RDBLK (FCB and DTA), _FCLOSE,
+; _GETCD, on HELLO.TXT of the current drive.
+; Expected: "P2TEST: 00 HELLO.TXT 00 Hello 00 00 00 04 from 00 []"
+BDOS	EQU	5
+PATH	EQU	9000H
+FIB	EQU	9100H
+BUF	EQU	9200H
+FCB	EQU	9300H
+DTA	EQU	9400H
+CD	EQU	9500H
+	ORG	100H
+	LD	DE,MSG
+	CALL	PRINT
+	LD	HL,NAME			; path in page 2
+	LD	DE,PATH
+	LD	BC,10
+	LDIR
+	LD	HL,FCBINI		; FCB in page 2
+	LD	DE,FCB
+	LD	BC,37
+	LDIR
+	LD	DE,PATH
+	LD	B,0
+	LD	IX,FIB
+	LD	C,40H			; _FFIRST
+	CALL	BDOS
+	CALL	HEX
+	LD	HL,FIB+1		; file name of the FIB
+	CALL	PRSTR
+	LD	DE,PATH
+	LD	A,1
+	LD	C,43H			; _OPEN
+	CALL	BDOS
+	PUSH	BC
+	CALL	HEX
+	POP	BC
+	PUSH	BC
+	LD	DE,BUF
+	LD	HL,5
+	LD	C,48H			; _READ
+	CALL	BDOS
+	XOR	A
+	LD	(BUF+5),A
+	LD	HL,BUF
+	CALL	PRSTR
+	POP	BC
+	LD	C,45H			; _CLOSE
+	CALL	BDOS
+	CALL	HEX
+	LD	DE,FCB
+	LD	C,0FH			; _FOPEN
+	CALL	BDOS
+	CALL	HEX
+	LD	HL,1
+	LD	(FCB+0EH),HL		; record size = 1
+	LD	HL,6
+	LD	(FCB+21H),HL		; random record = 6
+	LD	DE,DTA
+	LD	C,1AH			; _SETDTA
+	CALL	BDOS
+	LD	DE,FCB
+	LD	HL,4
+	LD	C,27H			; _RDBLK
+	CALL	BDOS
+	PUSH	HL
+	CALL	HEX
+	POP	HL
+	LD	A,L
+	CALL	HEX
+	XOR	A
+	LD	(DTA+4),A
+	LD	HL,DTA
+	CALL	PRSTR
+	LD	DE,FCB
+	LD	C,10H			; _FCLOSE
+	CALL	BDOS
+	CALL	HEX
+	LD	B,0
+	LD	DE,CD
+	LD	C,59H			; _GETCD
+	CALL	BDOS
+	LD	E,'['
+	LD	C,2
+	CALL	BDOS
+	LD	HL,CD
+	CALL	PRSTR0
+	LD	E,']'
+	LD	C,2
+	JP	BDOS
+; print the string at HL (page 2 is the TPA here) and a space
+PRSTR:	CALL	PRSTR0
+	LD	E,' '
+	LD	C,2
+	JP	BDOS
+PRSTR0:	LD	A,(HL)
+	OR	A
+	RET	Z
+	PUSH	HL
+	LD	E,A
+	LD	C,2
+	CALL	BDOS
+	POP	HL
+	INC	HL
+	JR	PRSTR0
+HEX:	PUSH	AF
+	RRCA
+	RRCA
+	RRCA
+	RRCA
+	CALL	NIB
+	POP	AF
+	CALL	NIB
+	LD	E,' '
+	LD	C,2
+	JP	BDOS
+NIB:	AND	0FH
+	ADD	A,'0'
+	CP	'9'+1
+	JR	C,NIB1
+	ADD	A,7
+NIB1:	LD	E,A
+	LD	C,2
+	JP	BDOS
+PRINT:	LD	C,9
+	JP	BDOS
+MSG:	DEFB	"P2TEST: $"
+NAME:	DEFB	"HELLO.TXT",0
+FCBINI:	DEFB	0,"HELLO   TXT"
+	DEFS	25,0

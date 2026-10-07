@@ -3,37 +3,29 @@
 
 #include <QMainWindow>
 #include <QTextEdit>
-#include <QFile>
 #include <QListWidgetItem>
 #include <QSettings>
+#include <QTimer>
 
-#include "ByteReader.h"
-#include "Interface.h"
 #include "Common.h"
-#include "Drive.h"
-
-typedef enum {
-    eInterfaceSerial,
-    eInterfaceBluetooth,
-} tdInterface;
-
-typedef enum {
-    eCStateConnecting,
-    eCStateConnected,
-    eCStateDisconnected
-} tdConnectionState;
+#include "Server.h"
 
 namespace Ui
 {
 class	MainWindow;
 }
 
+/*
+ =======================================================================================================================
+    Graphical JIO server: user interface and settings of the server (Server.h)
+ =======================================================================================================================
+ */
 class MainWindow :
                    public QMainWindow
 {
     Q_OBJECT
 
-    /*
+/*
  -----------------------------------------------------------------------------------------------------------------------
  -----------------------------------------------------------------------------------------------------------------------
  */
@@ -43,72 +35,64 @@ public:
 
 public slots:
     void        onDeviceDiscovered (const QString & _roName, const QString & _roID);
-    void        onDeviceConnected();
-    void        onDeviceReadyRead();
-    void        onLog(tdLogType _eLogType, const QString & _roMessage);
-    void        onDeviceDisconnected();
+    void        onLog(tdLogType _eLogType, const QString & _roMessage, bool _bModify);
+    void        onStateChanged(tdConnectionState _eState);
+    void        onDataReceived(int _iSize);
+    void        onDataTransmitted(int _iSize);
 
     void        onButtonClicked();
+    void        onDirectoryPathChanged();
     void        onItemActivated(QListWidgetItem *_poItem);
     void        onImagePathValidated();
     void        onAddressLineValidated();
 
+    void        onLogTimer();
     void        onRedLightTimer();
     void        onGreenLightTimer();
-    void        onUnlockTimer();
+
+protected:
+    void        changeEvent(QEvent *_poEvent) override;
 
 private:
-    void		vTransmitData(const QByteArray &_roData, int _iDelay);
-    quint16     uiTransmit(const void *_pvAddress, unsigned int	_uiLength, unsigned char _ucFlags, quint16 _uiCRC, bool _bLast, int _iDelay);
-    quint16     uiXModemCRC16(const void * _pucData, size_t _uiSize, quint16 _uiCRC);
-    QString     szGetServerInfo();
-
     void		vSetInterface(tdInterface _eInterface);
     void		vSetState(tdConnectionState _eCState);
+    void		vSetServeMode(tdServeMode _eServeMode);
 
-    void		vLog(tdLogType _eLogType, QString fmt, ...);
+    void		vLog(tdLogType _eLogType, const QString &_szMessage);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
     void		vSaveSettings();
     void        vAdjustScrollBars(QAbstractScrollArea *_poWidget);
     void		vUpdateLights();
+    void        vUpdateDrivePathsTexts();
+    void        vUpdateMediaIcon();
+    void        vUpdateDriveRowsHeight();
+    QTextCharFormat oLogFormat(tdLogType _eLogType, bool _bModify);
+    QString     szCommandLine();
+
 #ifdef Q_OS_ANDROID
     void        vRequestAndroidPermissionsAndSetInterface(QObject *parent);
 #endif
 
-    Task        oParser();
-    ByteReader  oRead(int size)
-    {
-        m_poCurrentByteReader = std::make_unique<ByteReader>(m_acBuffer, size);
-        return *m_poCurrentByteReader;
-    }
-    std::unique_ptr<ByteReader>     m_poCurrentByteReader;
     Ui::MainWindow                  *m_poUI = nullptr;
+    Server                          *m_poServer = nullptr;
     QTimer							*m_poRedLightOffTimer = nullptr;
     QTimer							*m_poGreenLightOffTimer = nullptr;
-    QTimer							*m_poUnlockTimer = nullptr;
-    Interface                       *m_poInterface = nullptr;
-    QByteArray						m_acBuffer;
-    Drive                           m_oDrive;
 
-    bool                            m_bRxCRC;
-    bool                            m_bTxCRC;
-    bool                            m_bTimeout;
-    bool                            m_bAutoRetry;
-    bool                            m_bReadOnly;
+    // Log: lines added by a timer (the server answers the MSX without waiting for the display)
+    struct tdLogLine
+    {
+        tdLogType   m_eLogType;
+        QString     m_szMessage;
+        bool        m_bModify;
+    };
+    QList<tdLogLine>                m_aoPendingLog;
+    QTimer                          *m_poLogTimer = nullptr;
 
-    bool                            m_bLastButtonClickedIsConnect = false;
-    bool                            m_bConnectedOnce = false;
-    bool                            m_bDiskChanged = false;
-    quint64                         m_uiBytesReceived = 0;
-    quint64                         m_uiBytesTransmitted = 0;
-    quint64                         m_uiReceiveErrors = 0;
-    quint64                         m_uiTransmitErrors = 0;
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
     QString                         m_oSelectedSerialID;
     QString                         m_oSelectedBlueToothID;
     QString                         &roSelectedID();
     QSettings                       *m_poSettings;
-    tdConnectionState               m_eConnectionState = eCStateDisconnected;
 };
 
 #endif

@@ -2,6 +2,11 @@
 #include <QDebug>
 #include <QSerialPortInfo>
 
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+#endif
+
 #include "InterfaceSerialPort.h"
 
 /*
@@ -63,6 +68,10 @@ void InterfaceSerialPort::onError(QSerialPort::SerialPortError _eError)
         oError += m_poSerialPort->errorString();
 
     emit log(eLogError, oError);
+
+    // device removed (USB adapter unplugged): closed, deviceDisconnected emitted (outside of the signal of the port)
+    if (_eError == QSerialPort::SerialPortError::ResourceError)
+        QMetaObject::invokeMethod(this, [this]() { vDisconnectDevice2(); }, Qt::QueuedConnection);
 }
 
 /*
@@ -113,12 +122,42 @@ void InterfaceSerialPort::vConnectDevice(const QString &_roID)
     m_poSerialPort->setFlowControl(QSerialPort::NoFlowControl);
 
     if (m_poSerialPort->open(QIODevice::ReadWrite))
+    {
+        vSetLowLatency();
         emit deviceConnected();
+    }
     else
     {
         delete m_poSerialPort;
         m_poSerialPort = nullptr;
     }
+}
+
+/*
+ =======================================================================================================================
+    USB serial adapters (FTDI) keep the received bytes up to 16 ms before passing them on: every BDOS call waits for
+    this delay. ASYNC_LOW_LATENCY sets their latency timer to 1 ms (as "setserial low_latency", no root access needed).
+ =======================================================================================================================
+ */
+void InterfaceSerialPort::vSetLowLatency()
+{
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    struct serial_struct oSerial;
+    int iHandle = m_poSerialPort->handle();
+
+    if ((ioctl(iHandle, TIOCGSERIAL, &oSerial) == 0))
+    {
+        oSerial.flags |= ASYNC_LOW_LATENCY;
+
+        if (ioctl(iHandle, TIOCSSERIAL, &oSerial) == 0)
+        {
+            emit log(eLogInfo, "Serial port set to low latency\n");
+            return;
+        }
+    }
+
+    emit log(eLogWarning, "Could not set the serial port to low latency\n");
+#endif
 }
 
 /*
@@ -180,7 +219,7 @@ QString InterfaceSerialPort::oGetName()
         "  Vendor ID: 0x%04X\n"
         "  Product ID: 0x%04X\n"
         "  System Location: %s",
-        qPrintable(info.portName()),
+        qPrintable(info.portName().isEmpty() ? m_poSerialPort->portName() : info.portName()),
         qPrintable(info.description()),
         qPrintable(info.manufacturer()),
         qPrintable(info.serialNumber()),

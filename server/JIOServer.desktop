@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=JIOServer.desktop
+Exec=JIOServer
+Icon=JIOServer
+Type=Application
+Categories=Utility;
+StartupNotify=true
+Terminal=false

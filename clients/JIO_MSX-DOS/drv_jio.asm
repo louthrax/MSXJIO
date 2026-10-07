@@ -11,7 +11,7 @@
 
 IF !(CXDOS1 || CXDOS2)
         INCLUDE	"disk.inc"	; Assembler directives
-        INCLUDE	"msx.inc"	; MSX constants and definitions
+        INCLUDE	"../../common/msx.inc"	; MSX constants and definitions
 	DEFINE	DRV_IPL		; Include driver ipl routines
 	DEFINE	DRV_SYS		; Include driver system routines
 	SECTION	DRV_JIO
@@ -26,14 +26,19 @@ W_FLAGS		equ	$3
 W_COMMAND	equ	$4
 W_DRIVE		equ	$5	; DSKIO save drive number (DOS1)
 W_DSKCHG	equ	$6	; Partition changed flags
-MYSIZE		equ	$7
+W_RFS		equ	$7	; Hybrid: not 0 if the server serves directories (files served by the kernel, no sectors)
+W_PORT		equ	$8	; Serial line (found by JioDetect): 0FFh = joystick port 2, 0FEh = joystick port 1,
+				; else I/O port (JIO cartridge)
+W_LINE		equ	$9	; Index in JioPorts of the next serial line tried
+W_HOOK		equ	$A	; Hybrid: H_BDOS hook for _FORMAT (24 bytes, see C_RFSINIT in p1_main.asm)
+MYSIZE		equ	$A+24
 
 SECLEN		equ	512
 PART_BUF	equ	TMPSTK	; Copy of disk info / Master Boot Record
 
 
 ; ----------------------------------------
-INCLUDE "drv_jio.inc"
+INCLUDE "../../common/drv_jio.inc"
 ; ----------------------------------------
 
 IFDEF DRV_IPL
@@ -47,7 +52,15 @@ IFDEF DRV_IPL
         PUBLIC	DSKFMT
         PUBLIC	MTOFF
         PUBLIC	OEMSTA
+IF (IDEDOS1 || HYBRID)
         PUBLIC	DEFDPB
+ENDIF
+IFDEF HYBRID
+        PUBLIC	W_RFS
+        PUBLIC	W_PORT
+        PUBLIC	W_HOOK
+        PUBLIC	W_FLAGS
+ENDIF
 	PUBLIC	MYSIZE
         PUBLIC	SECLEN
         PUBLIC	BOOTMBR
@@ -111,12 +124,12 @@ ENDIF
         db	"Waiting for server,",13,10
         db	"press [ESC] to cancel",0
 
-
+        call	JioDetect		; first serial line (W_PORT)
 DRIVES_Retry:
         ld	a,7
         call	SNSMAT
         and	4
-        jr      z,DRIVES_Exit
+        jp      z,DRIVES_Exit
 
         ld	a,'.'
         rst	$18
@@ -127,8 +140,27 @@ DRIVES_Retry:
         ld	hl,PART_BUF
         di
         call	DoCommand
-        jr	c,DRIVES_Retry
+        jr	nc,DRIVES_Found
+        call	JioDetect		; no answer: next serial line
+        jr	DRIVES_Retry
 
+DRIVES_Found:				; serial line of the server (kept)
+        ld	a,(ix+W_PORT)
+        inc	a
+        jr	z,DRIVES_Info		; joystick port 2
+        inc	a
+        jr	nz,DRIVES_Cart
+        call	PrintMsg
+        db	13,10,"Joystick 1",0
+        jr	DRIVES_Info
+DRIVES_Cart:
+        call	PrintMsg
+        db	13,10,"Cartridge ",0
+        ld	a,(ix+W_PORT)
+        call	PrintHex
+        ld	a,'H'
+        rst	$18
+DRIVES_Info:
         ld	hl,PART_BUF
 
         ld	a,(hl)
@@ -143,15 +175,60 @@ DRIVES_Retry:
 
         call	PrintString
 
+IFDEF HYBRID
+        ; Directories served (BDOS _LOGIN not 0): number of JIO drives = highest drive served,
+        ; the files are served by the kernel (rfs.asm).
+        ; Disk image served (_LOGIN = 0): JIO drives = partitions of the image, local FAT drives (DSKIO).
+        ld	de,ResetCmd		; reset the server file system state (no answer)
+        ld	bc,6
+        di
+        call	vJIOTransmit
+DRIVES_Login:
+        ld	a,7
+        call	SNSMAT
+        and	4
+        jr	z,DRIVES_NoJIO		; [ESC]: no JIO drive
+        ld	de,LoginCmd
+        ld	bc,6
+        di
+        call	vJIOTransmit
+        ld	de,PART_BUF
+        ld	bc,1
+        call	bJIOReceive
+        or	a
+        jr	z,DRIVES_Login		; time-out: retry
+        ld	a,(PART_BUF)
+        or	a
+        jr	z,DRIVES_Exit		; disk image: W_DRIVES = partitions (COMMAND_DRIVE_INFO)
+        ld	(ix+W_RFS),a
+        ld	b,0
+DRIVES_Count:
+        or	a
+        jr	z,DRIVES_Set
+        inc	b
+        srl	a
+        jr	DRIVES_Count
+DRIVES_NoJIO:
+        ld	b,0
+DRIVES_Set:
+        ld	(ix+W_DRIVES),b
+ENDIF
+
 DRIVES_Exit:
-        ld	a,(ix+W_DRIVES)
 IFDEF IDEDOS1
+        ld	a,(ix+W_DRIVES)
         or	a
         jr	nz,r206
         inc	a			; Return value of 0 drives is not allowed in DOS 1
 r206:
-ENDIF
         ld	l,a
+ELSE
+IFDEF HYBRID
+        ld	l,(ix+W_DRIVES)		; JIO drives (0 = none), plus the local drives of the other interfaces
+ELSE
+        ld	l,1			; DOS 2: drives are served by the server, see RFS_INIT in the kernel
+ENDIF
+ENDIF
         pop     de
         pop     bc
         pop     af
@@ -164,7 +241,9 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 
-INIENV:	call	GETWRK			; HL and IX point to work buffer
+INIENV:
+IFDEF IDEDOS1
+	call	GETWRK			; HL and IX point to work buffer
         xor	a
         or	(ix+W_DRIVES)		; number of drives 0?
         ret	z
@@ -194,6 +273,7 @@ TestInterface:	ld	a,(hl)
         add	a,b
         ld	(ix+W_BOOTDRV),a	; Set boot drive
 ENDIF
+ENDIF
         ret
 
 ; ------------------------------------------
@@ -220,12 +300,10 @@ choice_txt:	db	$00
 ; MTOFF - Motors off not implemented
 ; ------------------------------------------
 DSKFMT:
-        IFDEF IDEDOS1
-                ; This routine will be called by DOS1 only
                 ; Error $0c = Bad parameter
                 ld	a,$0c
                 scf
-        ENDIF
+                ret
 SUBRET:
 MTOFF:		ret
 
@@ -235,6 +313,7 @@ MTOFF:		ret
 OEMSTA:		scf
                 ret
 
+IF (IDEDOS1 || HYBRID)
 ; ------------------------------------------
 ; Default DPB pattern (DOS 1)
 ; ------------------------------------------
@@ -253,6 +332,7 @@ DEFDPB:		db	$00		; +00 DRIVE	Drive number
                 db	$03		; +10 FATSIZ	Sectors per FAT
                 dw	$0007		; +11 FIRDIR	First directory sector
                 dw	$0000		; +12 FATPTR	FAT pointer
+ENDIF
 
 ; ------------------------------------------
 ; Check for boot code in the MBR, to be used in a modified MSX-DOS boot process.
@@ -367,12 +447,103 @@ nokey:		or	$ff
         ENDIF ; BOOTCHOICE
 
 ; ------------------------------------------------------------------------------
+; Next serial line of JioPorts (W_LINE, the lines are tried in turn until the server answers): a joystick port
+; (0FFh = port 2, 0FEh = port 1), or the I/O port of a JIO cartridge if the cartridge is found there (detection
+; routine of herraa1, as b3rendsh/msxdos2s), else the next line. JioPorts ends with a joystick port.
+; Output: (IX+W_PORT) = serial line
+; May corrupt: AF,BC,DE,HL
+; ------------------------------------------------------------------------------
+JioDetect:	ld	a,(ix+W_LINE)
+		ld	e,a
+		inc	a
+		cp	JioPortsEnd-JioPorts
+		jr	c,JioNext
+		xor	a
+JioNext:	ld	(ix+W_LINE),a
+		ld	d,0
+		ld	hl,JioPorts
+		add	hl,de
+		ld	a,(hl)
+		ld	(ix+W_PORT),a
+		cp	0FEh
+		ret	nc			; joystick port
+		call	ProbePort
+		jr	nz,JioDetect		; no cartridge at this port
+		ret
+
+; Output: Z = cartridge at port A
+ProbePort:	ld	c,a
+		ld	a,2Fh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	0CCh
+		ret	nz
+		ld	a,0DBh
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	88h
+		ret	nz
+		ld	a,0F7h
+		out	(c),a
+		in	a,(c)
+		and	0FCh
+		cp	44h
+		ret
+
+; Serial lines tried in turn at boot until the server answers: I/O ports of a JIO cartridge (used only if the cartridge
+; is found there), then joystick ports (0FFh = port 2, 0FEh = port 1, last of the list). JIOSAFE (safe ROMs): joystick
+; ports only, no I/O port written to probe the cartridge (other devices could be at these ports)
+JioPorts:
+IFNDEF JIOSAFE
+		db	00h,20h,30h		; JIO cartridge (herraa1/msx-jio-cart-v1): IOSEL switches
+ENDIF
+		db	0FFh,0FEh		; joystick ports 2 and 1
+JioPortsEnd:
+
+; Print A in hex (2 digits)
+PrintHex:	push	af
+		rrca
+		rrca
+		rrca
+		rrca
+		call	PrintDigit
+		pop	af
+PrintDigit:	and	0Fh			; 0-9, A-F
+		add	a,90h
+		daa
+		adc	a,40h
+		daa
+		rst	$18
+		ret
+
+; Serial line (W_PORT), all the other registers kept
+; Output: A = port, 0FFh = joystick port 2
+GetPort:	push	hl
+		push	de
+		push	bc
+		push	ix
+		call	GETWRK
+		ld	a,(ix+W_PORT)
+		pop	ix
+		pop	bc
+		pop	de
+		pop	hl
+		ret
+
+; ------------------------------------------------------------------------------
 ; *** Print subroutines ***
 ; ------------------------------------------------------------------------------
 PrintMsg:	ex      (sp),hl
                 call    PrintString
                 ex      (sp),hl
                 ret
+
+IFDEF HYBRID
+LoginCmd:	db	"JIO",0,22,18h		; COMMAND_BDOS, _LOGIN
+ResetCmd:	db	"JIO",0,22,1Dh		; COMMAND_BDOS, reset (RFS_RESET)
+ENDIF
 
 PrintString:	ld      a,(hl)
                 inc     hl
@@ -381,12 +552,6 @@ PrintString:	ld      a,(hl)
                 rst	$18			; print character
                 jr      PrintString
 
-; Print CR+LF
-PrintCRLF:	ld	a,$0d
-                rst	$18
-                ld	a,$0a
-                rst	$18
-                ret
 
 ; ------------------------------------------------------------------------------
 ENDIF ; DRV_IPL
@@ -437,6 +602,14 @@ INCLUDE	"crt.asm"
 ;********************************************************************************************************************************
 
 DSKIO:
+IF !(IDEDOS1 || HYBRID)
+        ; DOS 2: files are served by the JIO kernel, there are no sectors.
+        ; Another (FAT) kernel using this drive gets a "not ready" error, B = sectors not transferred.
+DSKIO_NotReady:
+        ld	a,2
+        scf
+        ret
+ELSE
         di
 
         push	hl
@@ -446,6 +619,11 @@ DSKIO:
         pop	af
         pop	bc
         pop	hl
+IFDEF HYBRID
+        inc	(ix+W_RFS)		; directories served: no sectors (carry flag kept)
+        dec	(ix+W_RFS)
+        jr	nz,DSKIO_NotReady
+ENDIF
 
         ld      (ix+W_COMMAND),COMMAND_DRIVE_WRITE
         jr	c,WriteFlag
@@ -514,6 +692,14 @@ ENDIF
         ld      b,0
         ret
 
+IFDEF HYBRID
+DSKIO_NotReady:
+        ld	a,2
+        scf
+        ret
+ENDIF
+ENDIF
+
 ;********************************************************************************************************************************
 ; DSKCHG - Disk change
 ; Input:
@@ -532,11 +718,23 @@ ENDIF
 ; May corrupt: AF,BC,DE,HL,IX,IY
 ;********************************************************************************************************************************
 DSKCHG:
+IF !(IDEDOS1 || HYBRID)
+        jr	DSKIO_NotReady		; DOS 2: no sectors, "not ready" error (see DSKIO)
+ELSE
         di
         ld	b,a			; save drive
 	push	bc
 	push	hl
         call	GETWRK
+IFDEF HYBRID
+        ld	a,(ix+W_RFS)
+        or	a
+        jr	z,DSKCHG_Image
+        pop	hl
+        pop	bc
+        jr	DSKIO_NotReady		; directories served: no sectors (see DSKIO)
+DSKCHG_Image:
+ENDIF
         ld      (ix+W_COMMAND),COMMAND_DRIVE_DISK_CHANGED
         call	DoCommand
 	pop	hl
@@ -599,6 +797,7 @@ GetDriveMask:
 	ret
 
 masks:	db	0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
+ENDIF
 
 ;********************************************************************************************************************************
 
@@ -644,17 +843,28 @@ vJIOTransmit:
         ret
 
 vJIOTransmit2:
+        call	GetPort
         ex      de,hl
         inc	bc
         exx
-        ld	a,15
+        ld	c,a
+        ld	b,4			; bit 2: joystick port 2 pin 6, JIO cartridge
+        inc	a
+        jr	z,TxPSG
+        inc	a
+        jr	nz,TxCart
+        ld	b,1			; bit 0: joystick port 1 pin 6
+TxPSG:  ld	a,15			; PSG register 15
         out	($a0),a
         in	a,($a2)
-        or	4
-        ld	e,a
-        xor	4
-        ld	d,a
         ld	c,$a1
+        jr	TxLevels
+TxCart: in	a,(c)			; I/O register of the JIO cartridge
+TxLevels:
+        or	b
+        ld	e,a
+        xor	b
+        ld	d,a
 
         db	$3e
 JIOTransmitLoop:
@@ -747,6 +957,7 @@ bJIOReceive:
         ld      l,e
         ld      d,b
         ld      e,c
+        call	GetPort
 
         push	ix
         push	de
@@ -755,17 +966,26 @@ bJIOReceive:
 
         dec	hl
         ld	b,(hl)		; What if HL=0 ?
-        ld	c,$a2
         ld	ix,0
         add	ix,sp
-        ld	a,15
+        ld	c,a
+        cp	0FEh
+        jr	nc,RxPSG
+        in	a,(c)			; I/O register of the JIO cartridge (bit 0)
+        jr	RxLevel
+RxPSG:  ld	c,$a2
+        ld	a,15			; PSG register 15: bit 6 = joystick port selected (0 = port 1)
         out	($a0),a
         in	a,($a2)
-        or	64
-        out	($a1),a
-        ld	a,14
+        jr	z,RxJoy1		; Z (CP 0FEh above, flags kept): joystick port 1
+        or	64			; joystick port 2
+        jr	RxSel
+RxJoy1: and	0BFh
+RxSel:  out	($a1),a
+        ld	a,14			; PSG register 14 (pin 1 of the joystick port selected)
         out	($a0),a
         in	a,($a2)
+RxLevel:
         or	1
         jp	pe,HeaderPE
 ;________________________________________________________________________________________________________________________________

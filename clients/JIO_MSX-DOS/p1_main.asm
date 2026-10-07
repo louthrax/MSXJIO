@@ -23,15 +23,17 @@
 ; 10. Added BOOTCODE option
 ; 11. Added TURBOR and DOSV231 options (not included: rom disk driver, boot logic, DOS1 mode, Kanji)
 ; 12. Optmized code / removed unused code (OPTM)
+; 13. JIO: no boot sector, MSXDOS2.SYS is loaded from the JIO server, no sector buffer and DPB allocated
 
 
 		INCLUDE "disk.inc"	; Assembler directives
-		INCLUDE	"msx.inc"	; MSX constants and definitions
+		INCLUDE	"../../common/msx.inc"	; MSX constants and definitions
 
 		SECTION	P1_MAIN
 
 		ORG	04000H
 		S_ORG0	EQU	04000H	; Offset for current address: $ calculations
+		SMSGLEN	EQU	80	; size of message buffer (SSECBUF)
 
 		; Routines which can be used by the disk hardware driver
 		PUBLIC  PROMPT		; Prints a message for two drive emulation on a single drive.
@@ -56,7 +58,22 @@
 		EXTERN	OEMSTA		; Used for system expansion (OEMSTATEMENT)
 		EXTERN	MYSIZE		; Size of the page-3 RAM work area required by the driver in bytes.
 		EXTERN	SECLEN		; Maximum sector size for media supported by this driver (512).
+	IFDEF HYBRID
 		EXTERN	DEFDPB		; Base address of an 18 byte "default" DPB for this driver.
+		EXTERN	W_RFS		; Offset in the driver work area: not 0 if the server serves directories
+		EXTERN	RFS_TURBO	; Kernel (rfs.asm): turbo R flag
+		EXTERN	RFS_NJIO	; Kernel (rfs.asm): number of JIO drives
+		EXTERN	W_PORT		; Offset in the driver work area: serial line (0FFh = joystick port 2, else I/O port)
+		EXTERN	J_TXP		; Kernel (rfs.asm): setup of the serial line (transmit, receive)
+		EXTERN	J_RXP
+		EXTERN	J_TXOR
+		EXTERN	J_TXXOR
+		EXTERN	J_RXSEL
+		EXTERN	W_HOOK		; Offset in the driver work area: H_BDOS hook for _FORMAT
+		EXTERN	W_FLAGS		; Offset in the driver work area: flags of the server (COMMAND_DRIVE_INFO)
+		EXTERN	RFS_WMASK	; Kernel (rfs.asm): mask of the write blocks in a 16KB page
+		EXTERN	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606	; Kernel: routines used by _FORMAT
+	ENDIF
 
 		; Additional symbol defined by the ide driver module
 		EXTERN	BOOTMBR
@@ -176,11 +193,11 @@ DOS_SIN:	JP      J417C
 
 ; DOS2:  RAMDISK driver jumpentries
 		DEFS    04080H-$-S_ORG0,0
-L4080:		JP      RAMD_DSKIO		; RAMDISK:  DSKIO routine
-L4083:		JP      RAMD_DSKCHG		; RAMDISK:  DSKCHG routine
-L4086:		JP      RAMD_GETDPB		; RAMDISK:  GETDPB routine
-L4089:		JP      RAMD_CHOICE		; RAMDISK:  CHOICE routine
-L408C:		JP      RAMD_DSKFMT		; RAMDISK:  DSKFMT routine
+L4080:		JP      RAMD_STUB		; RAMDISK:  DSKIO routine (Mod: no ramdisk)
+L4083:		JP      RAMD_STUB		; RAMDISK:  DSKCHG routine
+L4086:		JP      RAMD_STUB		; RAMDISK:  GETDPB routine
+L4089:		JP      RAMD_STUB		; RAMDISK:  CHOICE routine
+L408C:		JP      RAMD_STUB		; RAMDISK:  DSKFMT routine
 
 ; DOS1 kernel compatible:  CP/M BIOS CONOUT entry
 ; This entry is supported, to use MSXDOS.SYS
@@ -301,13 +318,8 @@ J4845:		LD      (HL),0C9H
 		JR      J4870			; continue
 
 ; Disk interface not starting the disk system initialization
-J4865:		LD      A,(DOSVER)
-	IF DOSV231
-		CP	023H
-	ELSE
-		CP	022H
-	ENDIF
-		JR      NC,J4888
+; Mod: always take over, even from a newer DOS 2 kernel (the JIO kernel can not share drives with a FAT kernel)
+J4865:
 
 ; Disk interface taking over disk system initialization
 		CALL    C492A			; switch system RAM to slot with memory mapper
@@ -372,6 +384,7 @@ DOS_CPMVER:     DOSCALL 00CH
 ; -------------------------------------
 
 		LD      (DE),A			; store slot id
+	IFDEF HYBRID
 		LD      B,0
 		LD      HL,SDPBLI
 		ADD     HL,BC
@@ -405,6 +418,9 @@ J48E5:		LD      (HL),E
 		DEC     A
 		JR      NZ,J48E5		; next drive
 		CALL    INIENV			; initialize work area disk driver
+	ELSE
+		CALL    INIENV			; Mod: no DPB, files are served by the JIO server
+	ENDIF			; initialize work area disk driver
 		LD      HL,DISKID
 		INC     (HL)			; increase disk interface count
 		RET
@@ -544,9 +560,8 @@ J49AE:		LD      (HL),0C9H
 		LD      (SDOS1),HL		; address of DOS1 BDOS subroutine
 		LD      A,0FFH
 		LD      (TIMFLG),A		; clockchip detected (because of the MSX2 requirement not need to detect it)
-		LD      HL,21			; size of drive parameter block
-		CALL    C4C50			; allocate memory (adjust BASIC areapointers, halt when error)
-		LD      (RM_DPB),HL		; update pointer to DPB of ram disk
+	IFDEF HYBRID
+		; Mod: local drives use the sector buffer (no ramdisk)
 		LD      HL,(AUTLIN)		; bigest sector size sofar
 		LD      DE,512			; DOS2 supports at least 512 bytes sectors
 		RST    	R_DCOMPR		; sector size of DOS2 bigger ?
@@ -558,7 +573,7 @@ J49F9:		LD      (SMAXSEC),HL		; update bigest sector size
 		LD      (HL),0			; FAT buffer = clean
 		INC     HL
 		LD      (SSECBUF),HL		; update pointer to sector buffer
-		LD      HL,RM_DPB		; drive parameter block entries (includes ram disk)
+		LD      HL,RM_DPB		; drive parameter block entries (no ramdisk DPB)
 		LD      BC,9*256 + 0FFH		; 8 drives + 1 ram disk drive, drive id = 0FFH (ram disk drive id)
 J4A0C:		LD      E,(HL)
 		INC     HL
@@ -580,6 +595,12 @@ J4A0C:		LD      E,(HL)
 		EX      DE,HL
 J4A24:		INC     C			; next drive id
 		DJNZ    J4A0C			; next drive
+	ELSE
+		; Mod: files are served by the JIO server, no sector buffer, FAT buffer or DPB needed
+		LD      HL,SMSGLEN		; message buffer (was the sector buffer)
+		CALL    C4C50			; allocate memory (adjust BASIC areapointers, halt when error)
+		LD      (SSECBUF),HL		; update pointer to message buffer
+	ENDIF
 		CALL    C4E12			; get slot id of page 2
 		CALL    C4103			; install disk system subroutines
 		JP      C,J4C54			; error, halt system
@@ -663,32 +684,23 @@ J4ABB:		CALL    C4BE8			; initialize DiskBASIC
 		JP      CALBAS			; start DiskBASIC
 
 ; Note: boot logic is different then original rom
+; Mod: no boot sector when the server serves directories, MSXDOS2.SYS is loaded from the first drive served by the
+; JIO server. Hybrid ROM with local drives only (disk image served or no server): boot loader of the boot sector, as
+; the original rom (self-booting disks).
 J4AC1:		LD      HL,J4B1B
 		PUSH    HL			; start DiskBASIC when failed
-	IFDEF FAT16
-		LD	A,1
-		LD	(CUR_DRV),A		; set default drive to A:
-		CALL    C694A			; search for first drive with valid boot loader and set default drive to it
-		CALL	NZ,C4AFB		; NZ=found, execute boot loader with flag = BASIC
-	ELSE
+	IFDEF HYBRID
+		CALL	C_RFS			; directories served ?
+		JR	NZ,J4AC2		; yep, no boot sector
 		CALL    C694A			; get valid boot loader
-		RET     Z			; no valid boot loader, start DiskBASIC
-		CALL    C4AFB			; (boot loader flag = BASIC), execute boot loader
+		CALL	NZ,C4AFB		; found, execute boot loader with flag = BASIC (Cx reset by C694A)
+J4AC2:
 	ENDIF
 		LD      HL,(BOTTOM)
 		LD      DE,BOT32K
 		RST    	R_DCOMPR		; at least 32 Kb RAM ?
 		RET     NZ			; nope, start DiskBASIC
-	IFDEF BOOTCODE
-		CALL	BOOTMBR
-		RET	C			; If c-flag is set then start DiskBASIC
-	ENDIF
-	IFDEF BOOTCHOICE
-		CALL	Z,BOOTMENU		; if BOOTCODE returns Z-flag or is not enabled then show boot menu to set current drive
-		RET	C			; If c-flag is set then start DiskBASIC
-	ELSE
 		LD      A,(CUR_DRV)		; current drive
-	ENDIF
 		LD      HL,I4B18		; empty command line
 		JR      J4ADF			; start MSXDOS
 
@@ -703,22 +715,19 @@ J4ADF:		LD      SP,TMPSTK		; switch to temporary stack
 		LD      A,0FFH
 		LD      (DOSFLG),A		; MSXDOS environment = enabled
 		POP     AF			; restore drive id
-	IFDEF NODOS1
-		JP	C68B3			; try to start MSXDOS2, if it fails start DiskBASIC
-	ELSE
+	IFDEF HYBRID
 		CALL    C68B3			; prepare for MSXDOS, try to start MSXDOS2
+		CALL	C_RFS			; directories served ?
+		RET	NZ			; yep, start DiskBASIC
 		CALL    C694A			; get valid boot loader
 		RET     Z			; no valid boot loader, start DiskBASIC
 		LD      A,0C3H			; page 1 support = enabled
 		CALL    C4C18			; update page 1 support
 		SCF     			; boot loader flag = MSXDOS
+		JP	C4AFB			; start boot loader
+	ELSE
+		JP	C68B3			; try to start MSXDOS2, if it fails start DiskBASIC
 	ENDIF
-
-; Subroutine start boot loader
-C4AFB:		LD      HL,DISKVE		; address BDOS diskerror handler pointer
-		LD      DE,SDOSON		; enable DOS kernel subroutine
-		LD      A,(NOTFIR)		; cold boot flag
-		JP      0C01EH			; (rem: JSC01E)	start boot loader (if boot loader returns, start DiskBASIC)
 
 I4B07:		DEFB	"RUN\"\\AUTOEXEC.BAS"
 I4B18:		DEFB    0
@@ -4512,6 +4521,386 @@ I6930:		DEFW	RDSLT,SRDSLT
 		DEFW	KEYINT,SIRQ
 		DEFW	0
 
+	IFDEF HYBRID
+; Subroutine start boot loader
+C4AFB:		LD      HL,DISKVE		; address BDOS diskerror handler pointer
+		LD      DE,SDOSON		; enable DOS kernel subroutine
+		LD      A,(NOTFIR)		; cold boot flag
+		JP      0C01EH			; (rem: JSC01E)	start boot loader (if boot loader returns, start DiskBASIC)
+
+; Subroutine directories served by the server ?
+; Output: Zx reset if the JIO drives are served as directories (no sectors)
+C_RFS:		CALL	GETWRK			; IX = work area of the JIO driver
+		LD	A,(IX+W_RFS)
+		OR	A
+		RET
+
+; Subroutine initialize the JIO remote file system of the kernel (rfs.asm), after the kernel initialization
+; (kernel in page 0, data segment in page 2)
+C_RFSINIT:	LD	A,(EXPTBL)
+		LD	HL,IDBYT2
+		CALL	RDSLT
+		CP	3			; turbo R?
+		LD	A,0
+		JR	NZ,J_RFI1
+		DEC	A
+J_RFI1:		LD	(RFS_TURBO),A
+		CALL	GETWRK			; IX = work area of the JIO driver
+		LD	A,(IX+W_PORT)		; serial line found by DRIVES
+		CP	0FFH
+		JR	Z,J_RFI3		; joystick port 2: code of the kernel
+		CP	0FEH
+		JR	NZ,J_RFI5
+		LD	A,1			; joystick port 1: pin 6 = bit 0 of PSG register 15 (OR 1, XOR 1),
+		LD	(J_TXOR+1),A		; bit 6 of register 15 reset (AND 0BFH)
+		LD	(J_TXXOR+1),A
+		LD	HL,J_RXSEL
+		LD	(HL),0E6H
+		INC	HL
+		LD	(HL),0BFH
+		JR	J_RFI3
+J_RFI5:		LD	HL,J_TXP		; I/O port: LD C,port / IN A,(C) / NOP x4
+		CALL	C_INPORT
+		LD	B,4
+J_RFI4:		LD	(HL),0
+		INC	HL
+		DJNZ	J_RFI4
+		LD	HL,J_RXP		; LD C,port / IN A,(C) / JR to the end of the 18 bytes
+		CALL	C_INPORT
+		LD	(HL),18H
+		INC	HL
+		LD	(HL),18-6
+J_RFI3:
+		LD	HL,DRVTBL		; JIO drives: drives of the first disk interface, if it is this one and if the
+		LD	A,(MASTER)		; server serves directories (disk image served: the JIO drives are local drives,
+		INC	HL			; sectors read and written by DSKIO)
+		CP	(HL)
+		DEC	HL
+		LD	A,0
+		JR	NZ,J_RFI2
+		OR	(IX+W_RFS)
+		JR	Z,J_RFI2
+		LD	A,(HL)
+J_RFI2:		LD	(RFS_NJIO),A
+
+		; Bluetooth link (FLAG_TX_BLOCKS of the server, bit 5): writes sent in blocks of 8KB at most (RFS_RW), a
+		; long continuous transmission can be lost by the Bluetooth serial module
+		BIT	5,(IX+W_FLAGS)
+		LD	A,3FH			; 16KB (pages)
+		JR	Z,J_RFI7
+		LD	A,1FH			; 8KB
+J_RFI7:		LD	(RFS_WMASK),A
+
+		; _FORMAT (BDOS function 67H): no room left in the kernel, P1_FORMAT of this ROM is called through the
+		; H_BDOS hook (called by the kernel at each BDOS function), code of the hook in the work area
+		PUSH	IX
+		POP	HL
+		LD	DE,W_HOOK
+		ADD	HL,DE
+		LD	A,(H_BDOS)		; hook already installed (second initialization): kept
+		CP	0C3H
+		JR	NZ,J_RFI6
+		LD	DE,(H_BDOS+1)
+		RST	R_DCOMPR
+		RET	Z
+J_RFI6:		CALL	C4E05			; slot of this ROM
+		EX	DE,HL			; DE = hook in the work area
+		PUSH	AF
+		PUSH	DE
+		LD	HL,I_HOOK
+		LD	BC,I_HOOKOLD-I_HOOK
+		LDIR
+		LD	HL,H_BDOS		; previous hook (5 bytes), when not _FORMAT
+		LD	BC,5
+		LDIR
+		LD	HL,I_HOOKOLD
+		LD	BC,I_HOOKEND-I_HOOKOLD
+		LDIR
+		POP	HL
+		POP	AF
+		PUSH	HL
+		LD	DE,HOOK_SLOT
+		ADD	HL,DE
+		LD	(HL),A			; slot of this ROM
+		POP	HL
+		DI
+		LD	A,0C3H			; H_BDOS: JP hook
+		LD	(H_BDOS),A
+		LD	(H_BDOS+1),HL
+		EI
+		RET
+
+; Hook H_BDOS (copied to the work area W_HOOK, 24 bytes): BDOS function 67H (_FORMAT) -> P1_FORMAT of this ROM, the
+; function is not done by the kernel (return of K_BDOS dropped, result stored as K_BDOS does)
+I_HOOK:		DEFB	0F5H			; PUSH AF
+		DEFB	79H			; LD A,C
+		DEFB	0FEH,67H		; CP 67H
+		DEFB	28H,6			; JR Z,format (POP AF and the previous hook: 6 bytes)
+		DEFB	0F1H			; POP AF
+I_HOOKOLD:					; previous hook (5 bytes)
+		DEFB	0F1H			; POP AF
+		DEFB	33H,33H			; INC SP x2: return to K_BDOS dropped
+		DEFB	0F7H			; RST 30H (CALLF)
+I_HOOKSLOT:	DEFB	0			; slot of this ROM
+		DEFW	P1_FORMAT
+		DEFB	32H			; LD (DSBBFD),A (as K_BDOS)
+		DEFW	DSBBFD
+		DEFB	0C9H			; RET
+I_HOOKEND:
+HOOK_SLOT	EQU	I_HOOKSLOT-I_HOOK+5	; I_HOOK + previous hook: 24 bytes (W_HOOK of drv_jio.asm)
+
+; ---------------------------------------------------------
+; Function $67 _FORMAT (kernel code, moved to the disk ROM page: no room left in the kernel)
+; Called by the H_BDOS hook (CALLF): kernel in page 0, data segment in page 2
+; ---------------------------------------------------------
+P1_FORMAT:	LD	IY,D_BB80		; base of the IY relative kernel variables
+		EX	AF,AF'
+		PUSH	HL
+		POP	IX
+		LD	A,B
+		CALL	C3606			; logical to physical drive
+		LD	A,(HL)
+		INC	HL
+		LD	H,(HL)
+		LD	L,A
+		OR	H
+		LD	A,C
+		RET	Z			; invalid drive
+		EX	AF,AF'
+		OR	A
+		JR	NZ,J_FM1
+		CALL	C_FMCHOICE		; choice 0: choice string of the driver
+		PUSH	HL
+		POP	IX
+		LD	B,(IX+0)
+		EX	DE,HL
+		OR	A
+		RET
+
+J_FM1:		EX	AF,AF'
+		CALL	C2C49			; flush sector buffers of drive table
+		CALL	C2C59			; mark sector buffers of drive table unused
+		PUSH	HL
+J_FM2:		PUSH	DE
+		PUSH	IX
+		POP	DE
+		XOR	A
+		CALL	C2731			; buffer: segment and page 2 address
+		LD	HL,04000H
+		OR	A
+		SBC	HL,DE
+		EX	(SP),HL
+		POP	BC
+		SBC	HL,BC
+		JR	C,J_FM3
+		SBC	HL,BC
+		JR	C,J_FM4
+		ADD	HL,BC
+		EX	DE,HL
+		ADD	IX,BC
+		JR	J_FM2
+
+J_FM3:		ADD	HL,BC
+		LD	B,H
+		LD	C,L
+J_FM4:		SET	7,D
+		PUSH	DE
+		POP	IX
+		LD	D,A
+		EX	AF,AF'
+		POP	HL
+		CALL	C_FMDISK
+		LD	BC,9
+		ADD	HL,BC
+		LD	(HL),00H
+		RET
+
+; Subroutine choice string of the disk driver
+C_FMCHOICE:	LD	A,4			; CHOICE
+		CALL	C34D4			; call disk driver function
+		RET	NZ
+		LD	A,E
+		OR	D
+		RET	Z
+		PUSH	HL
+		EX	(SP),IX
+		EX	DE,HL
+		LD	A,(IX+0)
+		CALL	RDSLT
+		EX	DE,HL
+		EX	(SP),IX
+		POP	HL
+		OR	A
+		LD	A,0F0H
+		RET	Z
+		XOR	A
+		RET
+
+; Subroutine format disk
+C_FMDISK:	BIT	7,A
+		JR	NZ,J_FD1
+		LD	E,C
+		LD	C,D
+		LD	D,B
+		LD	B,A
+		LD	A,5			; DSKFMT
+		CALL	C34D4			; call disk driver function
+		RET	NZ
+		INC	A
+J_FD1:		PUSH	AF
+		LD	IX,I_B6D4
+		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		PUSH	BC
+		CALL	C334E
+		LD	DE,1
+		JR	NZ,J_FD2
+		LD	E,(IX+14)
+		LD	D,(IX+15)
+J_FD2:		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		LD	A,(IX+1)
+		AND	(IX+2)
+		INC	A
+		JR	NZ,J_FD6
+		LD	A,(IX+0)
+		CP	0F8H
+		JR	C,J_FD6
+		LD	C,A
+		PUSH	BC
+		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,00H			; DSKIO read
+		CALL	C34D4			; call disk driver function
+		POP	BC
+		RET	NZ
+		PUSH	BC
+		LD	A,C
+		CALL	C3382
+		POP	BC
+		RET	NZ
+		BIT	0,B
+		JR	Z,J_FD5
+		PUSH	HL
+		CALL	C32CB
+		JR	Z,J_FD4
+		LD	HL,I_BOOTCODE
+		LD	DE,ISB6F2
+		LD	BC,I_BOOTEND-I_BOOTCODE
+		LDIR				; copy bootsector code
+		EX	DE,HL
+		LD	DE,0FFB7H
+J_FD3:		LD	(HL),B
+		INC	HL
+		INC	DE
+		LD	A,D
+		OR	E
+		JR	NZ,J_FD3
+J_FD4:		LD	HL,(RANDOM+0)
+		LD	A,(RANDOM+2)
+		LD	B,A
+		XOR	A
+		SRL	L
+		RLA
+		SRL	H
+		RLA
+		SRL	B
+		RLA
+		LD	C,A
+		LD	(DSB6FB),HL
+		LD	(DSB6FD),BC
+		XOR	A
+		LD	(DSB6FA),A
+		POP	HL
+J_FD5:		LD	DE,0
+		LD	B,1
+		LD	A,(DATA_S)
+		LD	C,A
+		LD	A,1			; DSKIO write
+		JP	C34D4			; call disk driver function
+
+J_FD6:		LD	A,_NDOS
+		RET
+
+; MSXDOS 2.2 boot sector code starting at offset 0x1e, written by _FORMAT
+I_BOOTCODE:
+		PHASE	0C01EH
+
+RC01E:		JR	RC030
+		DEFB	"VOL_ID"
+		DEFB	0
+		DEFW	0FFFFH,0FFFFH
+		DEFS	5,0
+RC030:		RET	NC
+		LD	(RC069+1),DE
+		LD	(RC071+1),A
+		LD	(HL),RC067 % 256
+		INC	HL
+		LD	(HL),RC067 / 256
+RC03D:		LD	SP,KBUF+256
+		LD	DE,RC0AB
+		LD	C,00FH
+		CALL	BDOS
+		INC	A
+		JR	Z,RC071
+		LD	DE,00100H
+		LD	C,01AH
+		CALL	BDOS
+		LD	HL,1
+		LD	(RC0AB+14),HL
+		LD	HL,04000H-00100H
+		LD	DE,RC0AB
+		LD	C,027H
+		CALL	BDOS
+		JP	00100H
+
+RC067:		DEFW	RC069
+
+RC069:		CALL	0
+		LD	A,C
+		AND	0FEH
+		SUB	002H
+RC071:		OR	000H
+		JP	Z,BASENT
+		LD	DE,RC085
+		LD	C,009H
+		CALL	BDOS
+		LD	C,007H
+		CALL	BDOS
+		JR	RC03D
+
+RC085:		DEFB	"Boot error",13,10
+		DEFB	"Press any key for retry",13,10
+		DEFB	"$"
+
+RC0AB:		DEFB	0,"MSXDOS  SYS"
+		DEPHASE
+I_BOOTEND:
+
+; Write LD C,<port A> / IN A,(C) at HL (kernel code), HL after it
+C_INPORT:	LD	(HL),0EH
+		INC	HL
+		LD	(HL),A
+		INC	HL
+		LD	(HL),0EDH
+		INC	HL
+		LD	(HL),78H
+		INC	HL
+		RET
+
 ; Subroutine get valid boot loader
 ; Note: DOSV231 changes not implemented
 C694A:		LD      HL,I6A02		; on BDOS disk error warm boot (start DiskBASIC)
@@ -4570,6 +4959,8 @@ J698A:
 		LDIR
 		OR      A
 		RET
+
+	ENDIF
 
 ; Subroutine try to start MSXDOS2
 C699B:		LD      (CUR_DRV),A		; update current drive
@@ -5053,308 +5444,8 @@ C6D2E:		LD      A,(HL)
 ; *** RAMDISK driver ***
 ; ------------------------------------------------------------------------------
 
-; Subroutine DSKCHG RAMDISK
-RAMD_DSKCHG:	LD      HL,I_BC00+32
-		LD      A,(DATA_S)		; BDOS data segment
-		CALL    RD_SEG                  ; RD_SEG
-		CP      'V'
-		LD      B,0
-		RET     Z
-		DEC     B
-		RET
-
-; Subroutine DSKIO RAMDISK
-RAMD_DSKIO:	EI
-		LD      (RD_SNU),DE		; store sector number
-		LD      (RD_ADDR),HL		; store transfer address
-		LD      A,B
-		LD      (RD_SCN),A		; store number of sectors
-		EX      AF,AF'
-		LD      HL,I_BC00+32
-		LD      A,(DATA_S)		; BDOS data segment
-		CALL    RD_SEG                  ; RD_SEG
-		EI
-		SUB     'V'
-		CALL    NZ,C6E5B
-		RET     C
-		LD      HL,(SLTTBL+0)
-		PUSH    HL
-		LD      HL,(SLTTBL+2)
-		PUSH    HL			; store SLTTBL
-J6D6E:		LD      DE,(RD_SNU)
-		CALL    C6DFF
-		JR      C,J6DA6
-		LD      E,A
-		LD      A,(RD_SCN)
-		SUB     E
-		JR      NC,J6D81
-		ADD     A,E
-		LD      E,A
-		XOR     A
-J6D81:		LD      (RD_SCN),A
-		OR      A
-		PUSH    AF
-		PUSH    HL
-		LD      HL,(RD_SNU)
-		LD      D,00H
-		ADD     HL,DE
-		LD      (RD_SNU),HL
-		POP     HL
-		LD      D,E
-		SLA     D
-		LD      E,00H
-		PUSH    DE
-		CALL    C6DCA
-		POP     DE
-		LD      HL,(RD_ADDR)
-		ADD     HL,DE
-		LD      (RD_ADDR),HL
-		POP     AF
-		JR      NZ,J6D6E
-		XOR     A
-J6DA6:		EX      AF,AF'
-		DI
-		POP     HL
-		LD      (SLTTBL+2),HL
-		POP     HL
-		LD      (SLTTBL+0),HL		; restore SLTTBL
-		LD      HL,SLTTBL+0
-		XOR     A
-J6DB4:		LD      C,A
-		IN      A,(0A8H)
-		LD      B,A
-		AND     3FH     ; "?"
-		OR      C
-		LD      E,(HL)
-	IFDEF DOSV231
-		PUSH	HL
-		DEC	HL
-		DEC	HL
-		DEC	HL
-		DEC	HL
-		BIT	7,(HL)
-		POP	HL
-		INC	HL
-		CALL	NZ,SSLOTE
-	ELSE
-		INC     HL
-		CALL    SSLOTE
-	ENDIF
-		LD      A,C
-		ADD     A,40H   ; "@"
-		JR      NZ,J6DB4
-		EI
-		EX      AF,AF'
-		LD      B,00H
-		RET
-
-; Subroutine 
-C6DCA:		DI
-		LD      A,(RAMAD3)
-		CP      B
-		JR      Z,J6DE4
-		CALL    GET_P1
-		PUSH    AF			; store current segment page 1
-		LD      A,C
-		CALL    PUT_P1
-		SET     6,H
-		CALL    RD_LDI
-		POP     AF
-		CALL    PUT_P1
-		EI
-		RET
-
-J6DE4:		CALL    GET_P0
-		PUSH    AF			; store current segment page 0
-		LD      A,C
-		CALL    PUT_P0
-		LD      B,D
-		LD      C,E
-		LD      DE,(RD_ADDR)
-		EX      AF,AF'
-		JR      NC,J6DF6
-		EX      DE,HL
-J6DF6:		EX      AF,AF'
-		LDIR
-		POP     AF
-		CALL    PUT_P0
-		EI
-		RET
-
-; Subroutine 
-C6DFF:		LD      A,D
-		OR      E			; sector number 0 ?
-		JR      NZ,J6E11		; nope,
-		LD      A,(DATA_S)
-		LD      C,A			; BDOS data segment
-		LD      A,(RAMAD3)
-		LD      B,A
-		LD      HL,I_BC00-8000H
-		LD      A,1
-		RET
-
-J6E11:		CALL    GET_P2
-		PUSH    AF			; store current segment page 2
-		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2
-		LD      HL,(D_BE00)             ; number of ramdisk segments
-		LD      H,00H
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		POP     AF
-		CALL    PUT_P2
-		SBC     HL,DE
-		LD      A,0CH
-		RET     C
-		LD      H,D
-		LD      L,E
-		DEC     HL
-		ADD     HL,HL
-		LD      A,L
-		PUSH    AF
-		ADD     HL,HL
-		ADD     HL,HL
-		LD      E,H
-		LD      D,0
-		LD      HL,I_BE02               ; ramdisk segment table
-		ADD     HL,DE
-		ADD     HL,DE
-		CALL    GET_P2
-		PUSH    AF			; store current segment page 2
-		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2
-		LD      C,(HL)
-		INC     HL
-		LD      B,(HL)
-		POP     AF
-		CALL    PUT_P2
-		POP     AF
-		AND     3EH
-		LD      H,A
-		LD      L,00H
-		LD      A,40H
-		SUB     H
-		RRCA
-		OR      A
-		RET
-
-; Subroutine 
-C6E5B:		CALL    GET_P2
-		PUSH    AF			; store current segment page 2
-		LD      A,(DATA_S)		; BDOS data segment
-		CALL    PUT_P2
-		LD      A,(D_BE00)              ; number of ramdisk segments
-		OR      A
-		JR      NZ,J6E73
-		POP     AF
-		CALL    PUT_P2
-		LD      A,0CH
-		SCF
-		RET
-
-J6E73:		EXX
-		LD      HL,I_BC00+11
-		LD      (HL),00H
-		INC     HL
-		LD      (HL),02H
-		INC     HL
-		LD      (HL),01H
-		CP      81H
-		JR      C,J6E84
-		INC     (HL)
-J6E84:		INC     HL
-		LD      (HL),01H
-		INC     HL
-		LD      (HL),00H
-		INC     HL
-		LD      (HL),02H
-		INC     HL
-		LD      C,A
-		SRL     A
-		SRL     A
-		ADD     A,04H
-		LD      E,A
-		LD      D,00H
-		PUSH    DE
-		EX      DE,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		EX      DE,HL
-		LD      (HL),E
-		INC     HL
-		LD      (HL),D
-		INC     HL
-		LD      E,C
-		LD      D,00H
-		EX      DE,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		ADD     HL,HL
-		INC     HL
-		EX      DE,HL
-		LD      (HL),E
-		INC     HL
-		LD      (HL),D
-		INC     HL
-		LD      (HL),0FFH
-		INC     HL
-		EX      DE,HL
-		LD      A,C
-		DEC     HL
-		POP     BC
-		OR      A
-		SBC     HL,BC
-		CP      81H
-		JR      C,J6EC4
-		SRL     H
-		RR      L
-J6EC4:		LD      B,H
-		LD      C,L
-		ADD     HL,BC
-		ADD     HL,BC
-		EX      DE,HL
-		DEC     DE
-		SRL     D
-		SRL     D
-		INC     D
-		LD      (HL),D
-		INC     HL
-		LD      (HL),00H
-		INC     HL
-		LD      HL,I6EE6
-		LD      DE,I_BC00+32
-		LD      BC,11
-		LDIR
-		EXX
-		POP     AF
-		CALL    PUT_P2
-		XOR     A
-		RET
-
-I6EE6:		DEFB	"VOL_ID"
-
-I6EEC:		DEFB	0
-		DEFB	1
-		DEFB	2
-		DEFB	3
-		DEFB	4
-
-; Subroutine GETDPB RAMDISK
-RAMD_GETDPB:	RET
-
-; Subroutine CHOICE RAMDISK
-RAMD_CHOICE:	LD      HL,I6EEC
-		RET
-
-; Subroutine DSKFMT RAMDISK
-RAMD_DSKFMT:	LD      A,0CH
+; Mod: no ramdisk, the files are served by the JIO server (entries not used by the kernel)
+RAMD_STUB:	LD      A,0CH
 		SCF
 		RET
 
@@ -5433,6 +5524,11 @@ J410F:		DI
 		CALL    PUT_P2
 		CALL    C418C			; initialize characterset
 I416E:		CALL    0                       ; initialize BDOS code
+	IFDEF HYBRID
+		PUSH	AF
+		CALL	C_RFSINIT		; initialize JIO remote file system of the kernel
+		POP	AF
+	ENDIF
 		EX      AF,AF'
 		DI
 		LD      A,(EXPTBL+0)
@@ -5995,25 +6091,6 @@ ALLOCMEM:	LD      A,L
 		LD      HL,(STKTOP)
 		ADD     HL,BC
 		JR      J4BE5
-Q4BC0:		LD      A,1
-		LD      (MAXFIL),A
-		LD      HL,(HIMEM)
-		LD      DE,-534
-		ADD     HL,DE
-		LD      (FILTAB),HL
-		LD      E,L
-		LD      D,H
-		DEC     HL
-		DEC     HL
-		LD      (MEMSIZ),HL
-		LD      BC,200
-		OR      A
-		SBC     HL,BC
-		PUSH    HL
-		LD      HL,13
-		ADD     HL,DE
-		LD      (NULBUF),HL
-		POP     HL
 J4BE5:		LD      (STKTOP),HL
 		DEC     HL
 		DEC     HL

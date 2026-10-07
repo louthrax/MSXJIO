@@ -20,10 +20,12 @@
 ; 07. Optmized code / removed unused code (OPTM)
 ; 08. Added DOSV231 option
 ; 09. Undelete flag for DOS1 / FAT16 partitions (DIRTYBIT)
+; 10. JIO: local drives (FAT12) and JIO drives served by the JIO server (rfs.asm).
+;     FCB functions, FORMAT and ramdisk code removed (FCB functions: see rfs.asm).
 
 
 		INCLUDE "disk.inc"		; Assembler directives
-		INCLUDE	"msx.inc"		; MSX constants and definitions
+		INCLUDE	"../../common/msx.inc"		; MSX constants and definitions
 
 		SECTION	P0_KERNEL
 
@@ -31,6 +33,10 @@
 
 		PUBLIC	K1_BEGIN		; begin of kernel code
 		PUBLIC	K1_END			; end of kernel code
+	IFDEF HYBRID
+		; used by _FORMAT, in the disk ROM page (P1_FORMAT, p1_main.asm: no room left in the kernel)
+		PUBLIC	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606
+	ENDIF
 
 ; ------------------------------------------------------------------------------
 ; Following kernel code is copied to ram in page 0
@@ -93,13 +99,6 @@ C0092:		JP	KB_AUXIN		; AUX input
 ; *** Initialize kernel / BDOS ***
 ; ---------------------------------------------------------
 K_INIT:		LD	IY,D_BB80		; Base address for IY relative kernel variables
-		LD	DE,RM_DPB		; Ramdisk DPB
-		LD	A,(MASTER)
-		LD	C,A
-		LD	L,80H
-		LD	B,1
-		CALL	K_INIT_DRVTAB		; Allocate and initialize drive table for ramdisk
-		JR	NZ,J00D8
 		LD	HL,DRVTBL
 		LD	DE,SDPBLI
 		LD	B,4
@@ -157,7 +156,9 @@ J0101:		LD	B,5			; number of buffers
 		CALL	F_BUFFER		; allocate buffers
 		LD	B,00H
 		CALL	F_JOIN
-		CALL	C0E35
+	IFNDEF HYBRID
+		CALL	RFS_INIT		; JIO remote file system (HYBRID: C_RFSINIT of p1_main.asm)
+	ENDIF
 		CALL	K_CON_INIT
 	IF OPTM = 0
 		; copy cursor on/off escape codes to data segment
@@ -450,33 +451,34 @@ J029E:		LD	HL,0
 ; Note: Function $09 _STROUT is implemented in PRTBUF (F1C9),
 ;	 msxdos2.sys handles the call to this routine.
 ; ---------------------------------------------------------
+; X_ functions are routed to the local (FAT) or JIO (rfs.asm) implementation, R_ functions are in rfs.asm
 I02A2:		DEFW	F_TERM0,F_CONIN,F_CONOUT,F_AUXIN	; 0
 		DEFW	F_AUXOUT,F_LSTOUT,F_DIRIO,F_DIRIN	; 4
 		DEFW	F_INNOE,K_INVALID,F_BUFIN,F_CONST	; 8
-		DEFW	F_CPMVER,F_DSKRST,F_SELDSK,F_FOPEN	; 0C
-		DEFW	F_FCLOSE,F_SFIRST,F_SNEXT,F_FDEL	; 10
-		DEFW	F_RDSEQ,F_WRSEQ,F_FMAKE,F_FREN		; 14
-		DEFW	F_LOGIN,F_CURDRV,F_SETDTA,F_ALLOC	; 18
+		DEFW	F_CPMVER,F_DSKRST,F_SELDSK,R_FOPEN	; 0C
+		DEFW	R_FCLOSE,R_SFIRST,R_SNEXT,R_FDEL	; 10
+		DEFW	R_RDSEQ,R_WRSEQ,R_FMAKE,R_FREN		; 14
+		DEFW	F_LOGIN,F_CURDRV,F_SETDTA,X_ALLOC	; 18
 		DEFW	K_INVALID,K_INVALID,K_INVALID,K_INVALID	; 1C
-		DEFW	K_INVALID,F_RDRND,F_WRRND,F_FSIZE	; 20
-		DEFW	F_SETRND,K_INVALID,F_WRBLK,F_RDBLK	; 24
-		DEFW	F_WRZER,K_INVALID,F_GDATE,F_SDATE	; 28
-		DEFW	F_GTIME,F_STIME,F_VERIFY,F_RDABS	; 2C
-		DEFW	F_WRABS,F_DPARM,K_INVALID,K_INVALID	; 30
+		DEFW	K_INVALID,R_RDRND,R_WRRND,R_FSIZE	; 20
+		DEFW	R_SETRND,K_INVALID,R_WRBLK,R_RDBLK	; 24
+		DEFW	R_WRZER,K_INVALID,F_GDATE,F_SDATE	; 28
+		DEFW	F_GTIME,F_STIME,F_VERIFY,X_RDABS	; 2C
+		DEFW	X_WRABS,X_DPARM,K_INVALID,K_INVALID	; 30
 		DEFW	K_INVALID,K_INVALID,K_INVALID,K_INVALID	; 34
 		DEFW	K_INVALID,K_INVALID,K_INVALID,K_INVALID	; 38
 		DEFW	K_INVALID,K_INVALID,K_INVALID,K_INVALID	; 3C
-		DEFW	F_FFIRST,F_FNEXT,F_FNEW,F_OPEN		; 40
-		DEFW	F_CREATE,F_CLOSE,F_ENSURE,F_DUP		; 44
-		DEFW	F_READ,F_WRITE,F_SEEK,F_IOCTL		; 48
-		DEFW	F_HTEST,F_DELETE,F_RENAME,F_MOVE	; 4C
-		DEFW	F_ATTR,F_FTIME,F_HDELETE,F_HRENAME	; 50
-		DEFW	F_HMOVE,F_HATTR,F_HFTIME,F_GETDTA	; 54
-		DEFW	F_GETVFY,F_GETCD,F_CHDIR,F_PARSE	; 58
-		DEFW	F_PFILE,F_CHKCHR,F_WPATH,F_FLUSH	; 5C
+		DEFW	X_FFIRST,X_FNEXT,X_FNEW,X_OPEN		; 40
+		DEFW	X_CREATE,F_CLOSE,F_ENSURE,F_DUP		; 44
+		DEFW	F_READ,F_WRITE,X_SEEK,F_IOCTL		; 48
+		DEFW	X_HTEST,X_DELETE,X_RENAME,X_MOVE	; 4C
+		DEFW	X_ATTR,X_FTIME,X_HDELETE,X_HRENAME	; 50
+		DEFW	X_HMOVE,X_HATTR,X_HFTIME,F_GETDTA	; 54
+		DEFW	F_GETVFY,X_GETCD,X_CHDIR,F_PARSE	; 58
+		DEFW	F_PFILE,F_CHKCHR,X_WPATH,F_FLUSH	; 5C
 		DEFW	F_FORK,F_JOIN,F_TERM,K_INVALID		; 60
-		DEFW	K_INVALID,F_ERROR,F_EXPLAIN,F_FORMAT	; 64
-		DEFW	F_RAMD,F_BUFFER,F_ASSIGN,F_GENV		; 68
+		DEFW	K_INVALID,F_ERROR,F_EXPLAIN,K_INVALID	; 64
+		DEFW	R_RAMD,F_BUFFER,F_ASSIGN,F_GENV		; 68
 		DEFW	F_SENV,F_FENV,F_DSKCHK,F_DOSVER		; 6C
 		DEFW	F_REDIR					; 70
 
@@ -948,7 +950,7 @@ J05EA:		JP	Z,J07A1
 		LD	E,A
 		LD	A,(D_BB7B)
 		OR	A
-		JP	NZ,J0653
+		JR	NZ,J0653
 		LD	A,(D_BB86)
 		CP	B
 		JR	Z,J063F
@@ -1030,7 +1032,7 @@ J0678:		LD	(HL),E
 		CALL	C07DC
 		INC	B
 		INC	B
-		JP	C06FD
+		JR	C06FD
 
 J0687:		LD	A,(D_BB86)
 		CP	C
@@ -1055,7 +1057,7 @@ J06A2:		INC	HL
 J06A3:		LD	(HL),E
 		CALL	C07DC
 		INC	B
-		JP	C06FD
+		JR	C06FD
 
 J06AB:		CALL	C08B2
 J06AE:		LD	A,7
@@ -1392,7 +1394,7 @@ C0882:		LD	HL,(D_BB8B)
 		CALL	C0915
 		LD	(D_BB8B),HL
 		BIT	1,(IY+9)
-		JP	Z,J0908
+		JR	Z,J0908
 		LD	C,0FFH
 		JP	K_HCONOUT
 
@@ -2254,169 +2256,6 @@ J0D28:		INC	C
 		RET
 
 ; ---------------------------------------------------------
-; Function $67 _FORMAT
-; ---------------------------------------------------------
-F_FORMAT:	EX	AF,AF'
-		PUSH	HL
-		POP	IX
-		LD	A,B
-		CALL	C3606
-		LD	A,(HL)
-		INC	HL
-		LD	H,(HL)
-		LD	L,A
-		OR	H
-		LD	A,C
-		RET	Z
-		EX	AF,AF'
-		OR	A
-		JR	NZ,J0D58
-		CALL	C3013
-		PUSH	HL
-		POP	IX
-		LD	B,(IX+0)
-		EX	DE,HL
-		OR	A
-		RET
-
-J0D58:		EX	AF,AF'
-		CALL	C2C49
-		CALL	C2C59
-		PUSH	HL
-J0D60:		PUSH	DE
-		PUSH	IX
-		POP	DE
-		XOR	A
-		CALL	C2731
-		LD	HL,04000H
-		OR	A
-		SBC	HL,DE
-		EX	(SP),HL
-		POP	BC
-		SBC	HL,BC
-		JR	C,J0D7E
-		SBC	HL,BC
-		JR	C,J0D81
-		ADD	HL,BC
-		EX	DE,HL
-		ADD	IX,BC
-		JR	J0D60
-
-J0D7E:		ADD	HL,BC
-		LD	B,H
-		LD	C,L
-J0D81:		SET	7,D
-		PUSH	DE
-		POP	IX
-		LD	D,A
-		EX	AF,AF'
-		POP	HL
-		CALL	C3030
-		LD	BC,9
-		ADD	HL,BC
-		LD	(HL),00H
-		RET
-
-; ---------------------------------------------------------
-; Function $68 _RAMD
-; ---------------------------------------------------------
-F_RAMD:		PUSH	BC
-		LD	B,8
-		LD	D,B
-		CALL	F_ASSIGN
-		POP	BC
-		INC	B
-		JP	Z,J0E2D
-		DEC	B
-		JP	Z,J0E04
-		LD	HL,(D_BA33)
-		LD	A,H
-		OR	L
-		LD	C,_RAMDX
-		JP	NZ,J0E2F
-		CALL	C0E35
-		LD	DE,I_BE02
-		LD	HL,D_BE00
-J0DB6:		EXX
-		LD	A,1
-		LD	B,30H
-		CALL	K_ALLSEG
-		JR	C,J0DCA
-		PUSH	BC
-		EXX
-		INC	(HL)
-		LD	(DE),A
-		INC	DE
-		POP	AF
-		LD	(DE),A
-		INC	DE
-		DJNZ	J0DB6
-J0DCA:		LD	A,(D_BE00)
-		OR	A
-		LD	A,C
-		LD	C,_NORAM
-		JP	Z,J0E2F
-		LD	HL,(D_BBFB)
-		LD	(D_BA33),HL
-		LD	A,8
-		PUSH	HL
-		POP	IX
-		LD	(IX+8),A
-		LD	(IX+9),00H
-		LD	(IX+31),0FFH
-		LD	C,A
-		LD	IX,I_B9DA
-		LD	B,00H
-		CALL	C318D
-		LD	A,0FFH
-		CALL	C2F1A
-		LD	DE,0
-		CALL	C2FA9
-		CALL	C2C49
-		JR	J0E2D
-
-J0E04:		LD	HL,(D_BA33)
-		LD	A,H
-		OR	L
-		JR	Z,J0E2D
-		LD	A,8
-		CALL	C2C5A
-		LD	HL,0
-		LD	(D_BA33),HL
-		XOR	A
-		LD	(D_BE00),A
-		LD	HL,I_BE02
-J0E1D:		LD	C,(HL)
-		INC	HL
-		LD	B,(HL)
-		INC	HL
-		LD	A,B
-		OR	A
-		JR	Z,J0E2D
-		PUSH	HL
-		LD	A,C
-		CALL	K_FRESEG
-		POP	HL
-		JR	J0E1D
-
-J0E2D:		LD	C,00H
-J0E2F:		LD	A,(D_BE00)
-		LD	B,A
-		LD	A,C
-		RET
-
-; Subroutine clear ramdisk bootsector and ramdisk segment table
-C0E35:		LD	HL,I_BC00
-		LD	DE,0400H
-J0E3B:		LD	(HL),0
-		INC	HL
-		DEC	DE
-		LD	A,D
-		OR	E
-		JR	NZ,J0E3B
-		RET
-
-; ---------------------------------------------------------
 ; Function $69 _BUFFER
 ; ---------------------------------------------------------
 F_BUFFER:	LD	A,B
@@ -2654,7 +2493,7 @@ J0F60:		LD	A,H
 		JR	NZ,J0F60
 J0F71:		POP	BC
 		POP	HL
-		JP	C0FC8
+		JR	C0FC8
 
 I0F76:		DEFW	0
 
@@ -2981,7 +2820,7 @@ C111B:		CALL	C1110
 		LD	C,A
 		CALL	C113C
 		LD	E,A
-		JP	J1105
+		JR	J1105
 
 ; Subroutine read byte (BCD) from real time clock
 ; Input:  E = register+1
@@ -4215,7 +4054,7 @@ F_GETCD:	LD	A,B
 		CALL	C12C3
 		POP	DE
 		RET	NZ
-		JP	F_WPATH
+		JR	F_WPATH
 
 I1842:		DEFB	0
 
@@ -4239,7 +4078,7 @@ F_CHDIR:	XOR	A
 		LD	(HL),D
 		INC	HL
 		EX	DE,HL
-		JP	F_WPATH
+		JR	F_WPATH
 
 ; ---------------------------------------------------------
 ; Function $5B _PARSE
@@ -4972,7 +4811,7 @@ J1C8E:		PUSH	HL
 		DEC	A
 		JR	Z,J1CA4
 		BIT	1,(IY+41)
-		JP	Z,J1D19
+		JR	Z,J1D19
 		JR	J1CF9
 
 J1CA4:		POP	HL
@@ -5843,6 +5682,7 @@ C216B:		LD	A,(IX-1)
 		DEC	A
 		LD	(IX-1),A
 		RET	NZ
+		CALL	RFS_FCLOSE		; last reference: close remote file
 		PUSH	DE
 		PUSH	BC
 		PUSH	IX
@@ -6083,6 +5923,8 @@ J22DF:		LD	L,(IX-3)
 		OR	A
 		SBC	HL,BC
 		JR	Z,J22DF
+		BIT	5,(IX+49)		; FCB file: not locked (as the original FCB functions)
+		JR	NZ,J22DF
 		EX	DE,HL
 		CALL	C2308
 		EX	DE,HL
@@ -6249,7 +6091,7 @@ J23F2:		LD	(DE),A
 		DJNZ	J23F2
 		POP	DE
 		POP	HL
-		JP	J2390
+		JR	J2390
 
 ; Subroutine move current directory entry
 C23FD:		XOR	A
@@ -6904,6 +6746,8 @@ C2757:		AND	04H
 ;         A  = operation flags
 C275B:		BIT	7,(IX+30)
 		JR	NZ,J27AA
+		BIT	6,(IX+49)		; remote file ?
+		JP	NZ,RFS_RWFAB
 		LD	(D_BBC4),A
 		AND	10H
 		OR	B
@@ -8329,29 +8173,6 @@ J2F16:		EX	(SP),IX
 		POP	HL
 		RET
 
-; Subroutine clear FAT
-C2F1A:		LD	DE,0
-		LD	C,A
-		LD	B,15
-		CALL	C2DD3
-		INC	DE
-		LD	BC,0FFFFH
-		CALL	C2DD3
-J2F2A:		INC	DE
-		LD	BC,0
-		CALL	C2DD3
-		PUSH	HL
-		LD	BC,22
-		ADD	HL,BC
-		LD	A,(HL)
-		INC	HL
-		LD	H,(HL)
-		LD	L,A
-		SBC	HL,DE
-		POP	HL
-		JR	NZ,J2F2A
-		RET
-
 ; Subroutine allocate clusters
 ; Input:  HL = drive table
 ;         BC = number of clusters
@@ -8519,196 +8340,6 @@ C2FFC:		PUSH	DE
 	ENDIF
 		JR	Z,C2FFC
 		RET
-
-; Subroutine get format choice string
-C3013:		LD	A,4		; CHOICE
-		CALL	C34D4		; call disk driver function
-		RET	NZ
-		LD	A,E
-		OR	D
-		RET	Z
-		PUSH	HL
-		EX	(SP),IX
-		EX	DE,HL
-		LD	A,(IX+0)
-		CALL	RDSLT
-		EX	DE,HL
-		EX	(SP),IX
-		POP	HL
-		OR	A
-		LD	A,0F0H
-		RET	Z
-		XOR	A
-		RET
-
-; Subroutine format disk
-C3030:		BIT	7,A
-		JR	NZ,J303F
-		LD	E,C
-		LD	C,D
-		LD	D,B
-		LD	B,A
-		LD	A,5		; DSKFMT
-		CALL	C34D4		; call disk driver function
-		RET	NZ
-		INC	A
-J303F:		PUSH	AF
-		LD	IX,I_B6D4
-		LD	DE,0
-		LD	B,1
-		LD	A,(DATA_S)
-		LD	C,A
-		LD	A,00H		; DSKIO read
-		CALL	C34D4		; call disk driver function
-		POP	BC
-		RET	NZ
-		PUSH	BC
-		CALL	C334E
-		LD	DE,1
-		JR	NZ,J3063
-		LD	E,(IX+14)
-		LD	D,(IX+15)
-J3063:		LD	B,1
-		LD	A,(DATA_S)
-		LD	C,A
-		LD	A,00H		; DSKIO read
-		CALL	C34D4		; call disk driver function
-		POP	BC
-		RET	NZ
-		LD	A,(IX+1)
-		AND	(IX+2)
-		INC	A
-		JR	NZ,J30E6
-		LD	A,(IX+0)
-		CP	0F8H
-		JR	C,J30E6
-		LD	C,A
-		PUSH	BC
-		LD	DE,0
-		LD	B,1
-		LD	A,(DATA_S)
-		LD	C,A
-		LD	A,00H		; DSKIO read
-		CALL	C34D4		; call disk driver function
-		POP	BC
-		RET	NZ
-		PUSH	BC
-		LD	A,C
-		CALL	C3382
-		POP	BC
-		RET	NZ
-		BIT	0,B
-		JR	Z,J30D7
-		PUSH	HL
-		CALL	C32CB
-		JR	Z,J30B9
-		LD	HL,IBOOTCODE
-		LD	DE,ISB6F2
-		LD	BC,0099H
-		LDIR			; copy bootsector code
-		EX	DE,HL
-		LD	DE,0FFB7H
-J30B2:		LD	(HL),B
-		INC	HL
-		INC	DE
-		LD	A,D
-		OR	E
-		JR	NZ,J30B2
-J30B9:		LD	HL,(RANDOM+0)
-		LD	A,(RANDOM+2)
-		LD	B,A
-		XOR	A
-		SRL	L
-		RLA
-		SRL	H
-		RLA
-		SRL	B
-		RLA
-		LD	C,A
-		LD	(DSB6FB),HL
-		LD	(DSB6FD),BC
-		XOR	A
-		LD	(DSB6FA),A
-		POP	HL
-J30D7:		LD	DE,0
-		LD	B,1
-		LD	A,(DATA_S)
-		LD	C,A
-		LD	A,1		; DSKIO write
-		JP	C34D4		; call disk driver function	OPTM: call/ret=jp
-
-J30E6:		LD	A,_NDOS
-		RET
-
-	IF OPTM = 0
-		; Not used
-Q_30E9:		DEFB	0EBH,0FEH	; x86 JMP +256
-		DEFB	090H		; x86 NOP
-		DEFB	"MSXDOS22"
-	ENDIF
-
-IBOOTCODE:	
-		DEPHASE
-
-; ------------------------------------------------------------------------------
-; MSXDOS 2.2 boot sector code starting at offset 0x1e
-; Used in the format routine to initialize a floppy disk
-
-		PHASE  0C01EH
-
-RC01E:  	JR      RC030
-		DEFB    "VOL_ID"
-		DEFB    0
-		DEFW    0FFFFH,0FFFFH
-		DEFS    5,0
-RC030:  	RET     NC
-		LD      (RC069+1),DE
-		LD      (RC071+1),A
-		LD      (HL),RC067 % 256	; rem: LOW RC067
-		INC     HL
-		LD      (HL),RC067 / 256	; rem: HIGH RC067
-RC03D:  	LD      SP,KBUF+256
-		LD      DE,RC0AB
-		LD      C,00FH
-		CALL    BDOS
-		INC     A
-		JR      Z,RC071
-		LD      DE,00100H
-		LD      C,01AH
-		CALL    BDOS
-		LD      HL,1
-		LD      (RC0AB+14),HL
-		LD      HL,04000H-00100H
-		LD      DE,RC0AB
-		LD      C,027H
-		CALL    BDOS
-		JP      00100H
-
-RC067:  	DEFW    RC069
-
-RC069:  	CALL    0
-		LD      A,C
-		AND     0FEH
-		SUB     002H
-RC071:  	OR      000H
-		JP      Z,BASENT
-		LD      DE,RC085
-		LD      C,009H
-		CALL    BDOS
-		LD      C,007H
-		CALL    BDOS
-		JR      RC03D
-
-RC085:  	DEFB    "Boot error",13,10
-		DEFB    "Press any key for retry",13,10
-		DEFB    "$"
-
-RC0AB:  	DEFB    0,"MSXDOS  SYS"
-RC0B7:
-		DEPHASE
-; ------------------------------------------------------------------------------
-
-		PHASE  	IBOOTCODE+RC0B7-RC01E
 
 ; Subroutine validate FIB / check disk change
 ; Input:  C  = drive
@@ -9880,1040 +9511,6 @@ I372F:		DEFB	_WPROT,0
 		DEFB	_NOUPB,12
 		DEFB	0,6+128
 
-; ---------------------------------------------------------
-; *** Functions: 0F-17,21-24,28 ***
-; ---------------------------------------------------------
-
-; ---------------------------------------------------------
-; Function $0F _FOPEN
-; ---------------------------------------------------------
-F_FOPEN:	LD	(IY+47),04H
-		LD	A,2
-		LD	C,1
-J3753:		CALL	C3A33
-		JR	NZ,J378B
-		XOR	A
-		PUSH	DE
-		CALL	C2284
-		POP	DE
-		LD	HL,(D_BB96)
-		PUSH	HL
-		LD	A,(D_BB98)
-		OR	A
-		JR	Z,J376C
-		LD	A,(D_B9F3)
-		LD	(HL),A
-J376C:		CALL	C3D02
-		INC	HL
-		LD	A,(DE)
-		LD	(HL),A
-		INC	HL
-		LD	(HL),00H
-		POP	IX
-		CALL	C3CB4
-		XOR	A
-		CALL	C3C88
-		CALL	C3C4E
-		LD	A,(D_B9F3)
-		CALL	C2C41
-J3787:		XOR	A
-		LD	L,A
-		LD	H,A
-		RET
-
-J378B:		LD	HL,00FFH
-		RET
-
-; ---------------------------------------------------------
-; Function $10 _FCLOSE
-; Input:  DE = pointer to FCB
-; ---------------------------------------------------------
-F_FCLOSE:	CALL	C399D
-		JR	NZ,J378B
-		LD	DE,(D_BB96)
-		CALL	C3A15
-		CALL	C223A
-		OR	A
-		JR	NZ,J378B
-		LD	A,(IX+25)
-		CALL	C2C41
-		JR	J3787
-
-; ---------------------------------------------------------
-; Function $11 _SFIRST
-; ---------------------------------------------------------
-F_SFIRST:	LD	HL,12
-		ADD	HL,DE
-		LD	A,(HL)
-		LD	(D_BB95),A
-		LD	(IY+47),04H
-		LD	A,(DE)
-		ADD	A,A
-		SBC	A,A
-		AND	10H
-		LD	C,00H
-		CALL	C3A33
-		JR	NZ,J378B
-		JR	J37DC
-
-; ---------------------------------------------------------
-; Function $12 _SNEXT
-; ---------------------------------------------------------
-F_SNEXT:	LD	DE,I_B9DA
-		LD	HL,I_B99A
-		LD	BC,64
-		LD	A,(HL)
-		CP	0FFH
-		LD	A,0D7H
-		JP	NZ,J378B
-		LDIR
-		CALL	C3AF7
-		JP	NZ,J378B
-J37DC:		PUSH	DE
-		LD	HL,I_B9DA
-		LD	DE,I_B99A
-		LD	BC,64
-		LDIR
-		POP	DE
-		LD	HL,I_B975
-		LD	A,(D_B9F3)
-		LD	(HL),A
-		CALL	C3D02
-		LD	A,(D_BB95)
-		LD	(HL),A
-		INC	HL
-		LD	A,(DE)
-		LD	(HL),A
-		INC	HL
-		INC	DE
-		INC	DE
-		LD	(HL),00H
-		INC	HL
-		INC	DE
-		EX	DE,HL
-		LD	BC,18
-		LDIR
-		LD	IX,I_B975
-		XOR	A
-		CALL	C3C88
-		CALL	C3C4E
-		JR	C,F_SNEXT
-		LD	HL,I_B975
-		LD	DE,(DTA_AD)
-		LD	BC,33
-		LD	A,1
-		CALL	C26F3
-		JP	J3787
-
-; ---------------------------------------------------------
-; Function $14 _RDSEQ
-; Input:  DE = pointer to FCB
-; ---------------------------------------------------------
-F_RDSEQ:	CALL	C399D
-		JR	NZ,J3869
-		LD	IX,(D_BB96)
-		CALL	C3C85
-		LD	A,(D_B9F8)
-		BIT	7,A
-		JR	Z,J3850
-		LD	BC,128
-		LD	DE,(DTA_AD)
-		LD	IX,I_B9DA
-		XOR	A
-		CALL	C2757
-		JR	NZ,J3869
-		LD	IX,(D_BB96)
-		JR	J3860
-
-J3850:		CALL	C3B4E
-		JR	Z,J385D
-		CALL	C3B9B
-		JR	NZ,J3869
-		LD	HL,I_B2D4
-J385D:		CALL	C3A26
-J3860:		CALL	C3C30
-		CALL	C3CB4
-		JP	J3787
-
-J3869:		LD	HL,1
-		RET
-
-; ---------------------------------------------------------
-; Function $15 _WRSEQ
-; Input:  DE = pointer to FCB
-; ---------------------------------------------------------
-F_WRSEQ:	CALL	C399D
-		JR	NZ,J3869
-		LD	IX,(D_BB96)
-		CALL	C3C85
-		CALL	C3B7B
-		LD	IX,I_B9DA
-		LD	BC,128
-		LD	DE,(DTA_AD)
-		XOR	A
-		CALL	C2753
-		JR	NZ,J3869
-		LD	IX,(D_BB96)
-		CALL	C3C30
-		CALL	C3CB4
-		LD	A,(IX+32)
-		LD	HL,(D_BB96)
-		LD	BC,15
-		ADD	HL,BC
-		CP	(HL)
-		JR	C,J38A5
-		LD	(HL),A
-J38A5:		JP	J3787
-
-; ---------------------------------------------------------
-; Function $16 _FMAKE
-; ---------------------------------------------------------
-F_FMAKE:	LD	HL,12
-		ADD	HL,DE
-		LD	A,(HL)
-		OR	A
-		JR	Z,J38B7
-		CALL	F_FOPEN
-		OR	A
-		JP	Z,J3787
-J38B7:		LD	(IY+47),00H
-		XOR	A
-		LD	C,A
-		JP	J3753
-
-; ---------------------------------------------------------
-; Function $13 _FDEL
-; ---------------------------------------------------------
-F_FDEL:		LD	A,0FFH
-		LD	(D_BB90),A
-		LD	BC,00FFH
-		PUSH	BC
-		LD	(IY+47),04H
-		XOR	A
-		LD	C,A
-		CALL	C3A33
-		JR	J38DB
-
-J38D4:		POP	BC
-		LD	C,00H
-		PUSH	BC
-J38D8:		CALL	C3AF7
-J38DB:		JR	NZ,J3920
-		BIT	0,(IX+14)
-		JR	NZ,J38D8
-		LD	A,1
-		CALL	C2332
-		OR	A
-		JR	Z,J38D4
-		JR	J3920
-
-; ---------------------------------------------------------
-; Function $17 _FREN
-; ---------------------------------------------------------
-F_FREN:		LD	BC,00FFH
-		PUSH	BC
-		PUSH	DE
-		LD	IX,I_B9DA
-		LD	(IX+31),00H
-		LD	HL,17
-		ADD	HL,DE
-		LD	DE,I_B975
-		EX	DE,HL
-		LD	A,(DE)
-		CALL	C173A
-		POP	DE
-		XOR	A
-		LD	C,A
-		CALL	C3A33
-		JR	J3915
-
-J390E:		POP	BC
-		LD	C,00H
-		PUSH	BC
-		CALL	C3AF7
-J3915:		JR	NZ,J3920
-		LD	BC,I_B975
-		CALL	C2398
-		OR	A
-		JR	Z,J390E
-J3920:		LD	B,A
-		LD	A,(D_B9F3)
-		CALL	C2C41
-		POP	HL
-		LD	A,L
-		OR	A
-		RET	Z
-		LD	A,B
-		RET
-
-; ---------------------------------------------------------
-; Function $21 _RDRND
-; ---------------------------------------------------------
-F_RDRND:	LD	A,1
-		CALL	C3B0F
-		JR	NZ,J3957
-		LD	A,C
-		NEG
-		AND	7FH
-		LD	C,A
-		LD	A,00H
-		CALL	NZ,C3C05
-		JR	J394A
-
-; ---------------------------------------------------------
-; Function $22 _WRRND
-; ---------------------------------------------------------
-F_WRRND:	XOR	A
-		DEFB	021H
-
-; ---------------------------------------------------------
-; Function $28 _WRZER
-; ---------------------------------------------------------
-F_WRZER:	LD	A,2
-		CALL	C3B0F
-		JR	NZ,J3957
-J394A:		LD	IX,(D_BB96)
-		CALL	C3C4E
-		CALL	C3CB4
-		JP	J3787
-
-J3957:		LD	HL,1
-		RET
-
-; ---------------------------------------------------------
-; Function $23 _FSIZE
-; ---------------------------------------------------------
-F_FSIZE:	LD	(IY+47),04H
-		LD	A,2
-		LD	C,00H
-		CALL	C3A33
-		JP	NZ,J378B
-		LD	C,(IX+21)
-		LD	B,(IX+22)
-		LD	E,(IX+23)
-		LD	D,(IX+24)
-		XOR	A
-		LD	H,A
-		SUB	C
-		AND	7FH
-		LD	L,A
-		ADD	HL,BC
-		JR	NC,J397F
-		INC	DE
-J397F:		ADD	HL,HL
-		LD	A,H
-		EX	DE,HL
-		ADC	HL,HL
-		LD	IX,(D_BB96)
-		LD	(IX+33),A
-		LD	(IX+34),L
-		LD	(IX+35),H
-		JP	J3787
-
-; ---------------------------------------------------------
-; Function $24 _SETRND
-; ---------------------------------------------------------
-F_SETRND:	PUSH	DE
-		POP	IX
-		CALL	C3C85
-		JP	J3787
-
-; ---------------------------------------------------------
-; *** Subroutines: FIB and FCB ***
-; ---------------------------------------------------------
-
-; Subroutine rebuild FIB from FCB
-; Input:  DE = pointer to FCB
-C399D:		EX	DE,HL
-		LD	(D_BB96),HL
-		LD	IX,I_B9DA
-		LD	(IX+0),0FFH
-		LD	A,(HL)
-		AND	0FH
-		LD	(IX+25),A
-		LD	DE,D_B9EF
-		LD	BC,16
-		ADD	HL,BC
-		LD	BC,4
-		LDIR
-		LD	DE,I_B9F4
-		LD	BC,4
-		LDIR
-		LD	DE,I_B9FF
-		LD	BC,8
-		LDIR
-	IFDEF FAT16 ; CLUST
-		LD	HL,(I_B9FA)	; FCB+20h DPB address
-		CALL	CHKDRV
-		RET	Z		; FAT16
-	ENDIF
-		LD	A,(IX+42)
-		LD	B,00H
-		BIT	6,A
-		JR	Z,J39D6
-		LD	B,1
-J39D6:		LD	(IX+14),B
-		LD	B,00H
-		BIT	5,A
-		JR	Z,J39E1
-		LD	B,0A4H
-J39E1:		BIT	4,A
-		JR	Z,J39E7
-		SET	6,B
-J39E7:		LD	(IX+30),B
-		LD	B,00H
-		BIT	7,A
-		JR	Z,J39F2
-		LD	B,80H
-J39F2:		LD	(IX+49),B
-		AND	0FH
-		LD	(IX+42),A
-		XOR	A
-		BIT	7,(IX+30)
-		RET	Z
-		LD	L,(IX+26)
-		LD	H,(IX+27)
-		LD	E,(HL)
-		INC	HL
-		LD	D,(HL)
-		LD	L,(IX+28)
-		LD	H,(IX+29)
-		SBC	HL,DE
-		RET	Z
-		LD	A,0B7H
-		RET
-
-; Subroutine update FIB with file name from FCB
-C3A15:		LD	IX,I_B9DA
-		LD	HL,ISB9DB
-		INC	DE
-		LD	A,(DE)
-		LD	(IX+31),02H
-		JP	C173A			; OPTM: call/ret=jp
-
-; Subroutine transfer record from sequential read buffer
-C3A26:		LD	DE,(DTA_AD)
-		LD	BC,128
-		LD	A,1
-		JP	C26F3			; OPTM: call/ret=jp
-
-; Subroutine get directory entry and setup FIB
-; Input:  DE = pointer to FCB
-C3A33:		PUSH	AF
-		XOR	A
-		LD	(D_BB98),A
-		POP	AF
-		LD	B,A
-		PUSH	BC
-		LD	(D_BB96),DE
-		LD	IX,I_B9DA
-		LD	(IX+31),A
-		PUSH	AF
-		PUSH	DE
-		INC	DE
-		LD	HL,I_B8F4
-		LD	A,(DE)
-		CALL	C173A
-		POP	DE
-		POP	AF
-		LD	B,A
-		LD	A,(DE)
-		AND	0FH
-		LD	DE,I_B8F4
-J3A59:		LD	C,8
-		CALL	C12C3
-		JR	NZ,J3A8A
-		OR	C
-		LD	A,0D9H
-		JR	NZ,J3A8A
-		PUSH	HL
-		LD	HL,I_B926
-		LD	DE,I_B9FA
-		LD	BC,11
-		PUSH	DE
-		LDIR
-		POP	DE
-		POP	HL
-		CALL	C1A49
-J3A77:		OR	A
-		JR	NZ,J3A8A
-		PUSH	DE
-		PUSH	HL
-		CALL	C198F
-		CALL	C1A3B
-	IFDEF FAT16
-		CALL	STOR_7
-	ELSE
-		EX	DE,HL
-		LDIR
-	ENDIF
-		POP	HL
-		POP	DE
-		POP	BC
-		XOR	A
-		RET
-
-J3A8A:		POP	BC
-		BIT	0,C
-		JR	NZ,J3A97
-		PUSH	AF
-		XOR	A
-		LD	(D_BB98),A
-		POP	AF
-		OR	A
-		RET
-
-J3A97:		LD	(D_B400),A
-		PUSH	BC
-		LD	HL,I3AF0
-		LD	DE,I_B2D4
-		LD	A,0FFH
-		LD	(D_BB90),A
-		LD	B,0FFH
-		LD	A,1
-		CALL	C0EDF
-		OR	A
-		POP	BC
-		RET	NZ
-		PUSH	BC
-		LD	C,4
-		LD	DE,I_B2D4
-		LD	IX,I_B9DA
-		XOR	A
-		CALL	C12C3
-		POP	DE
-		RET	NZ
-		LD	A,B
-		AND	05H
-		JR	Z,J3AEB
-		LD	A,0FFH
-		LD	(D_BB98),A
-		PUSH	DE
-		LD	HL,(D_BB9E)
-		LD	A,B
-		AND	18H
-		JR	Z,J3AD6
-		LD	(HL),5CH	; "\"
-		INC	HL
-J3AD6:		LD	DE,I_B8F4
-J3AD9:		LD	A,(DE)
-		LD	(HL),A
-		INC	HL
-		INC	DE
-		OR	A
-		JR	NZ,J3AD9
-		POP	BC
-		XOR	A
-		LD	C,00H
-		PUSH	BC
-		LD	DE,I_B2D4
-		JP	J3A59
-
-J3AEB:		LD	A,(D_B400)
-		OR	A
-		RET
-
-I3AF0:		DEFB	"APPEND",0
-
-; Subroutine try to get next directory entry
-C3AF7:		LD	IX,I_B9DA
-		LD	(IY+47),04H
-		CALL	C19F8
-		RET	NZ
-		LD	DE,I_B9FA
-		CALL	C1A87
-		LD	C,00H
-		PUSH	BC
-		JP	J3A77
-
-; Subroutine do random record operation
-; Input:  A  = operation code
-;         DE = pointer to FCB
-C3B0F:		EX	AF,AF'
-		CALL	C399D
-		RET	NZ
-		LD	IX,(D_BB96)
-		LD	A,(IX+33)
-		LD	C,(IX+34)
-		LD	B,(IX+35)
-		PUSH	AF
-		PUSH	BC
-		CALL	C3CA1
-		CALL	C3B7B
-		POP	HL
-		POP	AF
-		LD	B,A
-		ADD	A,A
-		ADC	HL,HL
-		LD	A,L
-		LD	(IX+12),A
-		LD	A,H
-		LD	(IX+14),A
-		LD	A,B
-		AND	7FH
-		LD	(IX+32),A
-		XOR	A
-		EX	AF,AF'
-		LD	BC,128
-		LD	IX,I_B9DA
-		LD	DE,(DTA_AD)
-		JP	C275B			; OPTM: call/ret=jp
-
-; Subroutine get pointer to record if it is in the sequential read buffer
-C3B4E:		CALL	C3B85
-		RET	NZ
-		LD	A,(D_BB92)
-		LD	B,A
-		LD	DE,(DSBB93)
-		LD	A,(IX+33)
-		LD	L,(IX+34)
-		LD	H,(IX+35)
-		SUB	B
-		SBC	HL,DE
-		RET	NZ
-		LD	B,A
-		LD	A,(D_BB91)
-		SUB	01H	; 1
-		RET	C
-		CP	B
-		RET	C
-		XOR	A
-		SRL	B
-		RRA
-		LD	C,A
-		LD	HL,I_B2D4
-		ADD	HL,BC
-		XOR	A
-		RET
-
-; Subroutine if random record is in sequential read buffer then invalidate sequential read buffer
-C3B7B:		CALL	C3B85
-		RET	NZ
-		LD	A,0FFH
-		LD	(D_BB90),A
-		RET
-
-; Subroutine check sequential read buffer has drive and startcluster of file
-C3B85:		LD	A,(IX+0)
-		LD	B,A
-		LD	A,(D_BB90)
-		CP	B
-		RET	NZ
-		LD	L,(IX+26)
-		LD	H,(IX+27)
-		LD	DE,(D_BB8E)
-		SBC	HL,DE
-		RET
-
-; Subroutine fill sequential read buffer
-C3B9B:		LD	A,0FFH
-		LD	(D_BB90),A
-		LD	A,(IX+33)
-		AND	03H
-		LD	B,A
-		LD	A,8
-		SUB	B
-		LD	B,A
-		XOR	A
-		SRL	B
-		RR	A
-		LD	C,A
-		PUSH	IX
-		LD	IX,I_B9DA
-		LD	DE,I_B2D4
-		LD	A,0FFH
-		CALL	C2757
-		POP	IX
-		JR	Z,J3BC6
-		CP	0C7H
-		JR	NZ,J3C01
-J3BC6:		LD	A,B
-		OR	C
-		JR	Z,J3C01
-		LD	HL,127
-		ADD	HL,BC
-		ADD	HL,HL
-		LD	A,H
-		LD	(D_BB91),A
-		XOR	A
-		LD	B,A
-		SUB	C
-		AND	7FH
-		LD	C,A
-		LD	A,0FFH
-		CALL	NZ,C3C05
-		PUSH	IX
-		POP	HL
-		LD	BC,33
-		ADD	HL,BC
-		LD	DE,D_BB92
-		LD	BC,3
-		LDIR
-		LD	A,(IX+26)
-		LD	(D_BB8E),A
-		LD	A,(IX+27)
-		LD	(DSBB8F),A
-		LD	A,(IX+0)
-		LD	(D_BB90),A
-		XOR	A
-		RET
-
-J3C01:		XOR	A
-		LD	B,A
-		INC	A
-		RET
-
-; Subroutine clear space
-; Input:  A  = segment type (b2 set BDOS, b2 reset DOS)
-;         DE = address
-;         BC = size
-C3C05: 		PUSH	AF
-		PUSH	DE
-		AND	04H
-		CALL	C2731
-		SET	7,D
-		CALL	PUT_P2
-J3C11:		XOR	A
-		LD	(DE),A
-		INC	DE
-		DEC	BC
-		LD	A,B
-		OR	C
-		JR	Z,J3C28
-		BIT	6,D
-		JR	Z,J3C11
-		POP	AF
-		AND	0C0H
-		ADD	A,40H
-		LD	D,A
-		LD	E,00H
-		POP	AF
-		JR	C3C05
-
-J3C28:		POP	AF
-		POP	AF
-		LD	A,(DATA_S)
-		JP	PUT_P2
-
-; Subroutine increase record number FCB
-C3C30:		LD	A,(IX+12)
-		LD	L,A
-		LD	A,(IX+14)
-		LD	H,A
-		LD	A,(IX+32)
-		INC	A
-		JP	P,J3C42
-		INC	HL
-		LD	A,00H
-J3C42:		LD	(IX+32),A
-		LD	A,L
-		LD	(IX+12),A
-		LD	A,H
-		LD	(IX+14),A
-		RET	P
-
-; Subroutine update record count in current extent FCB
-C3C4E:		LD	HL,(D_B9EF)
-		XOR	A
-		LD	B,A
-		SUB	L
-		AND	7FH
-		LD	C,A
-		ADD	HL,BC
-		LD	BC,(DSB9F1)
-		JR	NC,J3C5F
-		INC	BC
-J3C5F:		LD	A,(DSBA08)
-		AND	0C0H
-		LD	D,A
-		XOR	A
-		LD	E,A
-		SBC	HL,DE
-		PUSH	BC
-		EX	(SP),HL
-		LD	BC,(D_BA09)
-		SBC	HL,BC
-		POP	HL
-		LD	B,A
-		JR	C,J3C80
-		LD	B,80H
-		JR	NZ,J3C80
-		LD	A,H
-		AND	0C0H
-		JR	NZ,J3C80
-		ADD	HL,HL
-		LD	B,H
-J3C80:		LD	A,B
-		LD	(IX+15),A
-		RET
-
-; Subroutine setup random record from current extent FCB
-C3C85:		LD	A,(IX+32)
-
-; Subroutine setup random record from current extent FCB
-; Input:  A = record in extent
-C3C88:		PUSH	AF
-		LD	A,(IX+14)
-		LD	B,A
-		LD	A,(IX+12)
-		LD	C,A
-		POP	AF
-		ADD	A,A
-		SRL	B
-		RR	C
-		RRA
-		LD	(IX+33),A
-		LD	(IX+34),C
-		LD	(IX+35),B
-
-; Subroutine update current file position from random record number
-; Input:  BC,A = random record number
-C3CA1:		LD	HL,D_BA07
-		LD	(HL),00H
-		SRL	B
-		RR	C
-		RRA
-		RR	(HL)
-		INC	HL
-		LD	(HL),A
-		INC	HL
-		LD	(HL),C
-		INC	HL
-		LD	(HL),B
-		RET
-
-; Subroutine setup DOS2 specific FCB fields
-; Input:  IX = pointer to FCB
-C3CB4:		PUSH	IX
-		POP	HL
-		LD	BC,16
-		ADD	HL,BC
-		EX	DE,HL
-		LD	HL,D_B9EF
-		LD	BC,4
-		LDIR
-		LD	HL,I_B9F4
-		LD	BC,4
-		LDIR
-		LD	HL,I_B9FF
-		LD	BC,8
-		LDIR
-	IFDEF FAT16 ; CLUST2
-		LD	HL,(I_B9FA)
-		CALL	CHKDRV
-		RET	Z		; FAT16
-	ENDIF
-		LD	A,(IX+29)
-		AND	0FH
-		LD	B,A
-		LD	A,(DSB9E8)
-		BIT	0,A
-		JR	Z,J3CE3
-		SET	6,B
-J3CE3:		LD	A,(D_B9F8)
-		BIT	7,A
-		JR	Z,J3CEC
-		SET	5,B
-J3CEC:		LD	A,(D_B9F8)
-		BIT	6,A
-		JR	Z,J3CF5
-		SET	4,B
-J3CF5:		LD	A,(DSBA0B)
-		BIT	7,A
-		JR	Z,J3CFE
-		SET	7,B
-J3CFE:		LD	(IX+29),B
-		RET
-
-; Subroutine copy file name back to FCB
-; Input:  HL = pointer to FCB
-C3D02:		INC	HL
-		LD	A,(DE)
-		CP	05H
-		JR	NZ,J3D0A
-		LD	A,0E5H
-J3D0A:		LD	(HL),A
-		INC	HL
-		INC	DE
-		LD	BC,10
-		EX	DE,HL
-		LDIR
-		EX	DE,HL
-		RET
-
-; ---------------------------------------------------------
-; *** Functions: 26,27 ***
-; ---------------------------------------------------------
-
-; ---------------------------------------------------------
-; Function $27 _RDBLK
-; Input:  DE = pointer to FCB
-;         HL = number of records
-; ---------------------------------------------------------
-F_RDBLK:	LD	A,1
-		JR	J3D1A
-
-; ---------------------------------------------------------
-; Function $26 _WRBLK
-; Input:  DE = pointer to FCB
-;         HL = number of records
-; ---------------------------------------------------------
-F_WRBLK:	XOR	A
-J3D1A:		EX	AF,AF'
-		LD	A,0C9H
-		LD	(D_B976),A
-		PUSH	HL
-		CALL	C399D
-		JP	NZ,J3DED
-		LD	IX,(D_BB96)
-		CALL	C3B7B
-		LD	C,(IX+14)
-		LD	B,(IX+15)
-		LD	HL,64-1
-		XOR	A
-		SBC	HL,BC
-		LD	E,(IX+35)
-		LD	D,(IX+36)
-		JR	NC,J3D43
-		LD	D,A
-J3D43:		CALL	C3E14
-		LD	A,H
-		OR	L
-		JP	NZ,J3DF0
-		PUSH	DE
-		LD	E,(IX+33)
-		LD	D,(IX+34)
-		CALL	C3E14
-		POP	BC
-		ADD	HL,BC
-		JP	C,J3DF0
-		LD	(D_BA07),DE
-		LD	(D_BA09),HL
-		POP	DE
-		PUSH	DE
-		LD	C,(IX+14)
-		LD	B,(IX+15)
-		CALL	C3E14
-		LD	A,H
-		OR	L
-		JP	NZ,J3DF0
-		LD	C,E
-		LD	B,D
-		PUSH	BC
-		EX	AF,AF'
-		PUSH	AF
-		LD	IX,I_B9DA
-		LD	DE,(DTA_AD)
-		BIT	0,A
-		JR	NZ,J3D8A
-		LD	A,B
-		OR	C
-		LD	A,00H
-		JR	NZ,J3D8A
-		SET	4,A
-J3D8A:		CALL	C275B
-		LD	(D_B976),A
-		LD	IX,(D_BB96)
-		POP	AF
-		EX	AF,AF'
-		XOR	A
-		POP	HL
-		SBC	HL,BC
-		JR	Z,J3DC9
-		LD	(D_B977),DE
-		LD	E,(IX+14)
-		LD	D,(IX+15)
-		CALL	C3DFE
-		LD	A,H
-		OR	L
-		PUSH	BC
-		JR	Z,J3DC0
-		POP	BC
-		INC	BC
-		PUSH	BC
-		EX	DE,HL
-		SBC	HL,DE
-		LD	B,H
-		LD	C,L
-		LD	DE,(D_B977)
-		EX	AF,AF'
-		BIT	0,A
-		CALL	NZ,C3C05
-J3DC0:		POP	BC
-		POP	HL
-		PUSH	BC
-		XOR	A
-		SBC	HL,BC
-		JR	Z,J3DC9
-		INC	A
-J3DC9:		EX	AF,AF'
-		CALL	C3CB4
-		POP	DE
-		LD	L,(IX+33)
-		LD	H,(IX+34)
-		ADD	HL,DE
-		LD	(IX+33),L
-		LD	(IX+34),H
-		JR	NC,J3DEA
-		LD	L,(IX+35)
-		LD	H,(IX+36)
-		INC	HL
-		LD	(IX+35),L
-		LD	(IX+36),H
-J3DEA:		EX	AF,AF'
-		JR	J3DF5
-
-J3DED:		LD	(D_B976),A
-J3DF0:		POP	HL
-		XOR	A
-		LD	D,A
-		LD	E,A
-		INC	A
-J3DF5:		LD	L,A
-		LD	H,00H
-		OR	A
-		RET	Z
-		LD	A,(D_B976)
-		RET
-
-; Subroutine divide
-C3DFE:		XOR	A
-		LD	H,A
-		LD	L,A
-		LD	A,10H
-J3E03:		CCF
-J3E04:		RL	C
-		RL	B
-		DEC	A
-		RET	M
-		ADC	HL,HL
-		SBC	HL,DE
-		JR	NC,J3E03
-		ADD	HL,DE
-		OR	A
-		JR	J3E04
-
-; Subroutine multiply
-C3E14:		PUSH	BC
-		LD	A,B
-		LD	HL,0
-		LD	B,10H
-J3E1B:		ADD	HL,HL
-		RL	C
-		RLA
-		JR	NC,J3E28
-		ADD	HL,DE
-		JR	NC,J3E28
-		INC	C
-		JR	NZ,J3E28
-		INC	A
-J3E28:		DJNZ	J3E1B
-		EX	DE,HL
-		LD	L,C
-		LD	H,A
-		POP	BC
-		RET
-
 IFDEF FAT16
 ; ------------------------------------------------------------------------------
 ; *** Subroutines: FAT16 ***
@@ -11180,6 +9777,8 @@ EBSER:		DW	0,0		; EBPB serial
 
 ; ------------------------------------------------------------------------------
 ENDIF ; FAT16
+
+		INCLUDE	"rfs.asm"		; JIO remote file system
 
 	IFDEF ROM16K
 		DEFS	$3FFE-$,0

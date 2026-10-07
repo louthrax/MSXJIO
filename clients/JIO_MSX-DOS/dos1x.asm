@@ -20,7 +20,7 @@
 
 
         INCLUDE "disk.inc"	; Assembler directives
-	INCLUDE	"msx.inc"	; MSX constants and definitions
+	INCLUDE	"../../common/msx.inc"	; MSX constants and definitions
 
 	SECTION DISK 
         ORG     04000H

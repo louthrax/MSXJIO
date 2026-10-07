@@ -1,16 +1,105 @@
 QT += core gui widgets bluetooth serialport
 
-CONFIG += c++20
-
 MAKEFILE = Makefile
 
-FORMS += MainWindow.ui
+CONFIG += c++20
+
+WARN_CXX = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
+WARN_C   = -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-non-prototype
+
+ICON_SVG = $$PWD/$${TARGET}.svg
+
+unix {
+    BUILD_DATE    = $$system(date +'%Y-%m-%d_%H:%M:%S')
+    BUILD_HASH    = $$system(git config --global --add safe.directory "$$PWD" && git rev-parse HEAD)
+    BUILD_VERSION = $$system(cat Version.txt)
+
+    !macx:!android {
+        QMAKE_CXXFLAGS += -fcoroutines
+    }
+}
+
+macx {
+    ICON=$$PWD/$${TARGET}.icns
+    ICON_RELATIVE=$$replace(ICON, /Users/laurent, ..)
+
+    icns_from_svg.target   = $$ICON_RELATIVE
+    icns_from_svg.depends  = $$ICON_SVG
+    icns_from_svg.commands = $$PWD/tools/Svg2icns.sh $$ICON_SVG $$ICON_RELATIVE
+
+    QMAKE_EXTRA_TARGETS += icns_from_svg
+}
+
+win32 {
+    BUILD_DATE    = $$system(powershell -NoProfile -Command "Get-Date -Format 'yyyy-MM-dd_HH:mm:ss'")
+    BUILD_HASH    = $$system(powershell -NoProfile -Command "git -C '$$PWD' rev-parse HEAD")
+    BUILD_VERSION = $$system(powershell -NoProfile -Command "(Get-Content '$$PWD\\Version.txt' -Raw).Trim()")
+
+    ICON_ICO = $$OUT_PWD/$${TARGET}.ico
+    RC_ICONS += $$ICON_ICO
+
+    ico_from_svg.target   = $$ICON_ICO
+    ico_from_svg.depends  = $$ICON_SVG
+    ico_from_svg.commands = magick -background none $$ICON_SVG \
+        -define icon:auto-resize=16,24,32,48,64,128,256 \
+        $$ICON_ICO
+
+    QMAKE_EXTRA_TARGETS += ico_from_svg
+    PRE_TARGETDEPS      += $$ICON_ICO
+}
+
+android {
+    ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android     # AndroidManifest.xml (package name, label, icon) and res
+    ANDROID_RES_DIR = $$PWD/android/res
+
+    RESOLUTIONS_W = \
+        ldpi:36 \
+        mdpi:48 \
+        hdpi:72 \
+        xhdpi:96 \
+        xxhdpi:144 \
+        xxxhdpi:192
+
+    for (ENTRY, RESOLUTIONS_W) {
+        RES = $$section(ENTRY, :, 0, 0)
+        WIDTH = $$section(ENTRY, :, 1, 1)
+
+        DIR = $$ANDROID_RES_DIR/drawable-$$RES
+        PNG_FILE = $$DIR/icon.png
+        MYTARGET = icon_$${RES}_png
+
+        $${MYTARGET}.commands = mkdir -p $$DIR && rsvg-convert -w $${WIDTH} -h $${WIDTH} $$ICON_SVG -o $$PNG_FILE
+        $${MYTARGET}.depends = $$ICON_SVG
+
+        QMAKE_EXTRA_TARGETS += $$MYTARGET
+        PRE_TARGETDEPS += $$MYTARGET
+        QMAKE_CLEAN += $$PNG_FILE
+    }
+}
+
+DEFINES += BUILD_DATE=$$BUILD_DATE BUILD_HASH=$$BUILD_HASH BUILD_VERSION=$$BUILD_VERSION
+
+CONFIG(release, debug|release) {
+
+    unix|android|win32-g++ {
+        QMAKE_CFLAGS_RELEASE   += -O3 -flto
+        QMAKE_CXXFLAGS_RELEASE += -O3 -flto
+        QMAKE_LFLAGS_RELEASE   += -flto
+    }
+
+    win32-msvc {
+        QMAKE_CFLAGS_RELEASE   += /Ox /GL /Gw
+        QMAKE_CXXFLAGS_RELEASE += /Ox /GL /Gw
+        QMAKE_LFLAGS_RELEASE   += /LTCG /OPT:REF /OPT:ICF
+    }
+}
+
+linux|macx {
+    QMAKE_CXXFLAGS_WARN_ON = $$WARN_CXX
+    QMAKE_CFLAGS_WARN_ON   = $$WARN_C
+}
 
 linux:!android:!macx:static {
-
-    QMAKE_CXXFLAGS_RELEASE += -O3
-    QMAKE_LFLAGS_RELEASE   += -O3
-
     QMAKE_LIBS += \
         -lbrotlicommon \
         -lXau \
@@ -20,174 +109,35 @@ linux:!android:!macx:static {
 
     QMAKE_LFLAGS += -static
 
-    QMAKE_POST_LINK += strip $$OUT_PWD/$$TARGET && upx $$OUT_PWD/$$TARGET
+    QMAKE_POST_LINK += strip $$OUT_PWD/$${TARGET} && upx $$OUT_PWD/$${TARGET}
 }
 
-android {
-    QT += svg
-    ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
-
-    # Define paths
-    SVG_ICON = $$PWD/icons/JIOServer.svg
-    ANDROID_RES_DIR = $$PWD/android/res
-
-    # Define PNG output files for each resolution
-    HDPI_PNG    = $$ANDROID_RES_DIR/drawable-hdpi/icon.png
-    LDPI_PNG    = $$ANDROID_RES_DIR/drawable-ldpi/icon.png
-    MDPI_PNG    = $$ANDROID_RES_DIR/drawable-mdpi/icon.png
-    XHDPI_PNG   = $$ANDROID_RES_DIR/drawable-xhdpi/icon.png
-    XXHDPI_PNG  = $$ANDROID_RES_DIR/drawable-xxhdpi/icon.png
-    XXXHDPI_PNG = $$ANDROID_RES_DIR/drawable-xxxhdpi/icon.png
-
-    # Generate PNGs for each resolution explicitly
-    $${LDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-ldpi    && inkscape $$SVG_ICON --export-type=png --export-width=36  --export-height=36  --export-filename=$$LDPI_PNG
-    $${MDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-mdpi    && inkscape $$SVG_ICON --export-type=png --export-width=48  --export-height=48  --export-filename=$$MDPI_PNG
-    $${HDPI_PNG}.commands    = mkdir -p $$ANDROID_RES_DIR/drawable-hdpi    && inkscape $$SVG_ICON --export-type=png --export-width=72  --export-height=72  --export-filename=$$HDPI_PNG
-    $${XHDPI_PNG}.commands   = mkdir -p $$ANDROID_RES_DIR/drawable-xhdpi   && inkscape $$SVG_ICON --export-type=png --export-width=96  --export-height=96  --export-filename=$$XHDPI_PNG
-    $${XXHDPI_PNG}.commands  = mkdir -p $$ANDROID_RES_DIR/drawable-xxhdpi  && inkscape $$SVG_ICON --export-type=png --export-width=144 --export-height=144 --export-filename=$$XXHDPI_PNG
-    $${XXXHDPI_PNG}.commands = mkdir -p $$ANDROID_RES_DIR/drawable-xxxhdpi && inkscape $$SVG_ICON --export-type=png --export-width=192 --export-height=192 --export-filename=$$XXXHDPI_PNG
-
-    $${LDPI_PNG}.depends     = $$SVG_ICON
-    $${MDPI_PNG}.depends     = $$SVG_ICON
-    $${HDPI_PNG}.depends     = $$SVG_ICON
-    $${XHDPI_PNG}.depends    = $$SVG_ICON
-    $${XXHDPI_PNG}.depends   = $$SVG_ICON
-    $${XXXHDPI_PNG}.depends  = $$SVG_ICON
-
-    DEPS = $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
-    QMAKE_EXTRA_TARGETS += $$DEPS
-    PRE_TARGETDEPS += $$DEPS
-    CLEAN_FILES += $$HDPI_PNG $$LDPI_PNG $$MDPI_PNG $$XHDPI_PNG $$XXHDPI_PNG $$XXXHDPI_PNG
-}
-
-ICON_NAME = JIOServer
-ICON_SRC = $$PWD/icons/$${ICON_NAME}.svg
-
-win32:CONFIG(release, debug|release) {
-    DESTDIR = release
-    TARGET_EXE = $$OUT_PWD/$$DESTDIR/$${TARGET}.exe
-    DEPLOYDIR = $$OUT_PWD/deploy
-    WINDEPLOYQT = $$[QT_INSTALL_BINS]/windeployqt.exe
-
-    OUT_EXE_WIN = $$shell_path($$TARGET_EXE)
-    DEPLOYDIR_WIN = $$shell_path($$DEPLOYDIR)
-    WINDEPLOYQT_WIN = $$shell_path($$WINDEPLOYQT)
-    ZIPFILE = $$shell_path($$OUT_PWD/../$$TARGET-win.zip)
-
-    RC_ICONS = $$ICON_OUT
-    RC_FILE = JIOServer.rc
-
-    ICON_OUT = $$shell_quote($$shell_path($${ICON_NAME}.ico))
-
-    QMAKE_EXTRA_TARGETS += make_icon
-    PRE_TARGETDEPS += $$ICON_OUT
-
-    make_icon.target = $$ICON_OUT
-    make_icon.depends = $$ICON_SRC
-    make_icon.commands = \
-        echo Generating icon... && \
-        magick convert -background none -resize 256x256 $$ICON_SRC ico-256.png &&\
-        magick convert -background none -resize 128x128 $$ICON_SRC ico-128.png &&\
-        magick convert -background none -resize   64x64 $$ICON_SRC ico-64.png &&\
-        magick convert -background none -resize   32x32 $$ICON_SRC ico-32.png &&\
-        magick convert -background none -resize   16x16 $$ICON_SRC ico-16.png &&\
-        magick convert ico-256.png ico-128.png ico-64.png ico-32.png ico-16.png $$ICON_OUT && \
-        echo $$ICON_OUT generated.
-
-    QMAKE_POST_LINK += \
-        "$$WINDEPLOYQT_WIN" "$$OUT_EXE_WIN" --dir "$$DEPLOYDIR_WIN" && \
-        copy /Y "$${OUT_EXE_WIN}" "$${DEPLOYDIR_WIN}\\$${TARGET}.exe" && \
-        del "$$ZIPFILE" && \
-        7z a -tzip "$$ZIPFILE" "$$DEPLOYDIR_WIN\*" && \
-        echo ZIP created at $$ZIPFILE;
-}
-
-APP_BUNDLE = $$OUT_PWD/$$DESTDIR/$${TARGET}.app
-
-macx {
-    INFO_PLIST = $$APP_BUNDLE/Contents/Info.plist
-    QMAKE_POST_LINK += /usr/libexec/PlistBuddy -c $$quote('"Set :NSBluetoothAlwaysUsageDescription string Enable Bluetooth communication with MSX"') "$$INFO_PLIST";
-}
-
-
-macx:CONFIG(release, debug|release) {
-    DEPLOYDIR = $$OUT_PWD/deploy
-    MACDEPLOYQT = $$[QT_INSTALL_BINS]/macdeployqt
-    DMGFILE = $$OUT_PWD/$${TARGET}-mac.dmg
-
-    QMAKE_EXTRA_TARGETS += make_icon
-
-    QMAKE_BUNDLE_DATA += app_icon
-    app_icon.files = $${ICON_NAME}.icns
-    app_icon.path = Contents/Resources
-
-    make_icon.target = $${ICON_NAME}.icns
-    make_icon.depends = $$ICON_SRC
-    make_icon.commands = \
-        echo "==[ Generating $${ICON_NAME}.icns from $$ICON_SRC ]==" && \
-        rm -rf $${ICON_NAME}.iconset $${ICON_NAME}.icns && \
-        mkdir -p $${ICON_NAME}.iconset && \
-        /usr/local/bin/convert -background none -resize 16x16     $$ICON_SRC $${ICON_NAME}.iconset/icon_16x16.png && \
-        /usr/local/bin/convert -background none -resize 32x32     $$ICON_SRC $${ICON_NAME}.iconset/icon_16x16@2x.png && \
-        /usr/local/bin/convert -background none -resize 32x32     $$ICON_SRC $${ICON_NAME}.iconset/icon_32x32.png && \
-        /usr/local/bin/convert -background none -resize 64x64     $$ICON_SRC $${ICON_NAME}.iconset/icon_32x32@2x.png && \
-        /usr/local/bin/convert -background none -resize 128x128   $$ICON_SRC $${ICON_NAME}.iconset/icon_128x128.png && \
-        /usr/local/bin/convert -background none -resize 256x256   $$ICON_SRC $${ICON_NAME}.iconset/icon_256x256.png && \
-        /usr/local/bin/convert -background none -resize 512x512   $$ICON_SRC $${ICON_NAME}.iconset/icon_512x512.png && \
-        /usr/local/bin/convert -background none -resize 1024x1024 $$ICON_SRC $${ICON_NAME}.iconset/icon_512x512@2x.png && \
-        iconutil -c icns $${ICON_NAME}.iconset && \
-        echo "✅ $${ICON_NAME}.icns generated."
-
-    QMAKE_POST_LINK += \
-        echo "==[ macOS Deployment ]==" && \
-        "$$MACDEPLOYQT" "$$APP_BUNDLE" -verbose=1 && \
-        rm -rf "$$APP_BUNDLE/Contents/Resources/qt.conf" \
-        rm -rf "$$DEPLOYDIR" && \
-        mkdir -p "$$DEPLOYDIR" && \
-        cp -R "$$APP_BUNDLE" "$$DEPLOYDIR/" && \
-        hdiutil create -volname "$${TARGET}" -srcfolder "$$DEPLOYDIR" -ov -format UDZO ~/Tmp/$${TARGET}-mac.dmg && \
-        mv ~/Tmp/$${TARGET}-mac.dmg $$OUT_PWD/../$${TARGET}-mac.dmg && \
-        echo "DMG created at $$DMGFILE";
-}
-
-SOURCES += \
-    Drive.cpp \
-    InterfaceBluetoothSocket.cpp \
-    InterfaceSerialPort.cpp \
-    Main.cpp \
-    MainWindow.cpp \
-    PartitionExtractor.cpp
-
-HEADERS += \
-    ByteReader.h \
-    Common.h \
-    Drive.h \
-    Interface.h \
-    InterfaceBluetoothSocket.h \
-    InterfaceSerialPort.h \
-    MainWindow.h \
-    PartitionExtractor.h
 
 RESOURCES += \
     Icons.qrc \
     Fonts.qrc
 
+include(JIOServerCore.pri)
+
+HEADERS += \
+    MainWindow.h
+
+SOURCES += \
+    Main.cpp \
+    MainWindow.cpp
+
+FORMS += MainWindow.ui
+
 DISTFILES += \
-    MSXClient/0_Make.sh \
-    mylinker.sh \
-    MSXClient/bootcode.inc \
-    MSXClient/crt.asm \
-    MSXClient/disk.inc \
-    MSXClient/dos1x.asm \
-    MSXClient/driver.asm \
-    MSXClient/drv_jio.asm \
-    MSXClient/drv_jio.c \
-    MSXClient/drv_jio.inc \
-    MSXClient/drv_jio_c.asm \
-    MSXClient/msx.inc \
-    MSXClient/p0_kernel.asm \
-    MSXClient/p1_main.asm \
-    MSXClient/p3_paging.asm \
+    ../clients/JIO_MSX-DOS/*.sh \
+    ../clients/JIO_MSX-DOS/*.asm \
+    ../clients/JIO_MSX-DOS/*.c \
+    ../clients/JIO_MSX-DOS/*.h \
+    ../clients/JIO_NFS/*.sh \
+    ../clients/JIO_NFS/*.asm \
+    ../clients/JIO_NFS/*.c \
+    ../clients/JIO_NFS/*.h \
+    ../clients/JIO_TIME/*.sh \
+    ../clients/JIO_TIME/*.asm \
     android/AndroidManifest.xml \
-    docs/Notes.odt \
     readme.md
