@@ -3,6 +3,13 @@
     <!-- %%INSERT_PERMISSIONS -->
     <!-- served disk images and directories, accessed by their paths (MainWindow.cpp: szLocalPath) -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+    <!-- CPU kept running while connected to the MSX, screen off (MainWindow.cpp: vSetWakeLock) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- foreground service while connected to the MSX: the application is not frozen when the phone locks itself
+         (android/src/net/louthrax/jioserver/JIOService.java), its notification -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
 
     <!-- %%INSERT_FEATURES -->
@@ -14,7 +21,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             <meta-data android:name="android.app.lib_name" android:value="-- %%INSERT_APP_LIB_NAME%% --"/>
+            <!-- the Qt event loop keeps running when another application is in front: the server keeps answering -->
+            <meta-data android:name="android.app.background_running" android:value="true"/>
         </activity>
+
+        <service android:name="net.louthrax.jioserver.JIOService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
 
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.qtprovider" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/qtprovider_paths"/>

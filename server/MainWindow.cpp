@@ -92,6 +92,61 @@ static bool bRequestAllFilesAccess()
 
 /*
  =======================================================================================================================
+    Partial wake lock while connected to the MSX: the CPU keeps running when the screen is off, the server keeps
+    answering in the background (the Qt event loop runs in the background: android.app.background_running of the
+    manifest). Released when disconnected.
+ =======================================================================================================================
+ */
+static void vSetWakeLock(bool _bOn)
+{
+    static QJniObject	soWakeLock;
+
+    if(!soWakeLock.isValid())
+    {
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+        QJniObject	oContext = QNativeInterface::QAndroidApplication::context();
+        QJniObject	oPowerManager = oContext.callObjectMethod(
+            "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;", QJniObject::fromString("power").object<jstring>());
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+        if(!oPowerManager.isValid())
+            return;
+        soWakeLock = oPowerManager.callObjectMethod(
+            "newWakeLock", "(ILjava/lang/String;)Landroid/os/PowerManager$WakeLock;",
+            jint(1), QJniObject::fromString("JIOServer:link").object<jstring>());   // 1 = PARTIAL_WAKE_LOCK
+        if(!soWakeLock.isValid())
+            return;
+        soWakeLock.callMethod<void>("setReferenceCounted", "(Z)V", jboolean(false));
+    }
+
+    if(_bOn)
+        soWakeLock.callMethod<void>("acquire", "()V");
+    else if(soWakeLock.callMethod<jboolean>("isHeld", "()Z"))
+        soWakeLock.callMethod<void>("release", "()V");
+}
+
+/*
+ =======================================================================================================================
+    Connected to the MSX: wake lock (screen off) and foreground service (JIOService.java: the application is not
+    frozen in the background when the phone locks itself), both stopped when disconnected
+ =======================================================================================================================
+ */
+static void vSetLinkActive(bool _bActive)
+{
+    static bool sbActive = false;
+
+    if(_bActive == sbActive)
+        return;
+    sbActive = _bActive;
+
+    vSetWakeLock(_bActive);
+    QJniObject::callStaticMethod<void>(
+        "net/louthrax/jioserver/JIOService", _bActive ? "start" : "stop", "(Landroid/content/Context;)V",
+        QNativeInterface::QAndroidApplication::context().object());
+}
+
+/*
+ =======================================================================================================================
  =======================================================================================================================
  */
 void MainWindow::vRequestAndroidPermissionsAndSetInterface(QObject *parent)
@@ -104,6 +159,11 @@ void MainWindow::vRequestAndroidPermissionsAndSetInterface(QObject *parent)
     {
         vLog(eLogWarning, "\"All files access\" is needed to serve the disk images and the directories: allow it, then come back\n");
     }
+
+    // notification of the foreground service while connected (JIOService.java)
+    QJniObject::callStaticMethod<void>(
+        "net/louthrax/jioserver/JIOService", "requestNotifications", "(Landroid/content/Context;)V",
+        QNativeInterface::QAndroidApplication::context().object());
 
     qApp->requestPermission(oBluetoothPermission, parent, [this] (const QPermission &perm)
                             {
@@ -882,6 +942,10 @@ void MainWindow::vSetState(tdConnectionState _eCState)
         m_poUI->unlockPushButton->setEnabled(false);
         break;
     }
+
+#ifdef Q_OS_ANDROID
+    vSetLinkActive(_eCState == eCStateConnected);
+#endif
 }
 
 /*
