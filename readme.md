@@ -130,6 +130,33 @@ Of course, you can also build yourself something more handy like that:
     <img src="./readme_resources/Bluetooth_WithPlug.jpg" width="700"/>
 </p>  
 
+## Bluetooth configuration for MSXJIO
+
+It is very likely that the Bluetooth Serial Transceiver module you just bought is not configured to match the required MSXJIO settings:
+
+|Setting   | Value             |
+|----------|-------------------|
+|Baud rate | **115200 bits/s** |
+|Stop bit  | **1 bit**         |
+|Parity    | **None**          |
+
+For the **HC-05** chip, you can use the **JSM** tool (JIO Serial Monitor) provided by MSXJIO: `JIO_38400_bauds_serial_monitor_3_0.zip` in the [latest release](https://github.com/louthrax/MSXJIO/releases/latest).
+
+- Plug your HC-05 module in MSX joystick port 2
+- Power on your MSX **while keeping the HC-05 AT switch pressed**. The HC-05 led should be blinking in a stable and slowly (2s) way.
+- Run JSM.BAS from MSX-BASIC
+- Enter this command:  
+  **AT+UART=115200,0,0**
+- You can also change the name of your device with the command:  
+  **AT+NAME=<name_here>**
+  <p align="center">
+      <img src="./readme_resources/Configure_BT_with_JSM.jpg" width="500"/>
+  </p>
+- A list of the available AT commands for the HC-05 is available [here](./docs/HC-03_05_AT_command_set.pdf).
+
+Configuration of the **HC-06** is trickier and requires an extra USB to TTL UART adapter.  
+Procedure is described [here](https://github.com/b3rendsh/msxdos2s/tree/main/jio/bluetooth).
+
 ## JIO cartridge and joystick port 1
 
 The [JIO cartridge](https://github.com/herraa1/msx-jio-cart-v1) by herraa1 holds the ROM, the USB serial and/or
