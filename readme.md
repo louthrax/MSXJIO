@@ -1,9 +1,10 @@
 # MSXJIO
 
-**MSXJIO** is a project that allows serving a hard or floppy disk-image (and other things to come),
- from a host computer (or smartphone) to your MSX, through high-speed **115200 bauds** communication on joystick port 2.
+**MSXJIO** is a project that allows serving a hard or floppy disk image, or folders of the host computer (or
+smartphone) as MSX-DOS drives, to your MSX, through high-speed **115200 bauds** communication on joystick port 2 (or
+the JIO cartridge).
 
- All you need is a cheap USB or Bluetooth communication chip, and a 16KB or 32KB ROM (for the MSX-DOS clients).
+All you need is a cheap USB or Bluetooth communication chip, and a 16KB or 32KB ROM (for the MSX-DOS clients).
 
 **JIO** stands for **J**oystick **I**nput **O**utput.
 
@@ -19,17 +20,26 @@ The system is divided into two parts:
 - **JIOServer**: the server application, which runs on **Linux**, **Windows**, **macOS**, or **Android**.
 
 - **MSX Clients**:
-  - **JIO MSX-DOS 1**  
-  A modified version of MSX-DOS 1 reading sectors from a served hard or floppy disk image
+  - **JIO MSX-DOS 1** (ROM)  
+  A modified version of MSX-DOS 1 reading sectors from a served hard or floppy disk image.
 
-  - **JIO MSX-DOS 2**  
-  A modified and compact version of MSX-DOS 2 reading sectors from a served hard or floppy disk image
+  - **JIO MSX-DOS 2** (ROM)  
+  A modified and compact version of MSX-DOS 2. It reads sectors from a served disk image, or uses folders of the host
+  as drives (see [Serving directories](#serving-directories)). The drives of your MSX (e.g. its floppy drive) stay
+  available.
+
+  - **JIO.COM**  
+  Serves host folders as drives on an MSX that already runs MSX-DOS 2 or Nextor (from another cartridge), without the
+  JIO ROM.
+
+  - **JIOTIME.COM**  
+  Sets the date and time of the MSX from the host.
+
+  - **JIODBG.COM**  
+  Diagnosis of the serial line (JIO cartridge, joystick ports).
 
   - **JSYNC** (not released yet)  
-  An MSX-DOS 2 tool to synchronize files an directories between MSX and host (a bit like rsync).
-
-  - **JRTC** (not released yet)  
-  An MSX-DOS 2 tool to synchronize MSX RTC time and date with host.
+  An MSX-DOS 2 tool to synchronize files and directories between MSX and host (a bit like rsync).
 
 Details about b3rendsh's MSX-DOS clients can be found here: https://github.com/b3rendsh/msxdos2s
 
@@ -42,7 +52,7 @@ All server (Android, Linux, Windows and macOS) and client software can be downlo
 ## Supported MSX models
 
 As the signal decoding is done in a software way on MSX, the client MSX Z80 frequency needs to be as
-close as possible from the "standard" one (3 579 545 Hz):  
+close as possible to the "standard" one (3 579 545 Hz):  
 
 - Models confirmed to be working:  
 
@@ -65,7 +75,7 @@ close as possible from the "standard" one (3 579 545 Hz):
     |National CF-3000|3 579 405 Hz   |
     |Casio PV-7      |3 579 431 Hz   |
 
-    Weirdly, the frequency of these models is close from the standard one, but there might be other
+    Weirdly, the frequency of these models is close to the standard one, but there might be other
 (electronical) factors here...
 
 ## Hardware
@@ -128,38 +138,88 @@ Of course, you can also build yourself something more handy like that:
 
 ## JIO cartridge and joystick port 1
 
-The [JIO cartridge](https://github.com/herraa1/msx-jio-cart-v1) by herraa1 has the ROM, the USB serial and/or
-Bluetooth module, and an I/O register for the serial line: joystick port 2 stays free.
-- ROMs: `jio_dos2.rom` (or `jio_dos1.rom`): while waiting for the server, they try in turn the JIO cartridge (I/O
-  ports 00H, 20H, 30H of the IOSEL switches, used only if the cartridge is found there), joystick port 2 and joystick
-  port 1. The line of the server is kept and shown at boot (except joystick port 2). `jio_dos2_safe.rom` (or
-  `jio_dos1_safe.rom`): joystick ports only, no I/O port written to probe the cartridge (for an MSX with other
-  devices at these ports).
-- JIO.COM and JIOTIME.COM: option `C` (port detected) or `C<port>` (hex: `C00`, `C20`, `C30`), e.g. `JIO C +`,
-  `JIOTIME C`. `JIO S` shows the serial line of the installed driver.
-- JIO.COM (at install) and JIOTIME.COM without `J1`, `J2` or `C` option: JIO cartridge (if found), then joystick
-  port 2, then joystick port 1, until the server answers; the serial line used is shown (JIO.COM keeps it).
-- The I/O register works whatever the position of the ROMDIS switch (it only disables the flash ROM): with the ROM
-  disabled, JIO.COM and JIOTIME.COM can use the cartridge from another boot device.
+The [JIO cartridge](https://github.com/herraa1/msx-jio-cart-v1) by herraa1 holds the ROM, the USB serial and/or
+Bluetooth module, and an I/O register for the serial line: joystick port 2 stays free. You can also wire the adapter
+to **joystick port 1** instead of port 2 (same pins).
 
-Joystick port 1 (the adapter wired as for port 2, on port 1): found automatically, or option `J1` of JIO.COM and
-JIOTIME.COM (`J2`: port 2).
+**The serial line is found automatically.** While waiting for the server, the ROMs, JIO.COM and JIOTIME.COM try in
+turn the JIO cartridge (at the I/O port set by its IOSEL switches: 00H, 20H or 30H), joystick port 2 and joystick
+port 1, until the server answers. The line found is shown (the ROMs don't show joystick port 2, the default).
 
-Serial lines of the ROMs: `JioPorts` in `clients/JIO_MSX-DOS/drv_jio.asm` (I/O ports of the JIO cartridge, probed,
-then joystick ports 2 and 1), tried in turn at boot until the server answers; the safe ROMs (`JIOSAFE`) keep only the
-joystick ports.
+- To force a line with JIO.COM and JIOTIME.COM: `J1` or `J2` (joystick port), `C` (JIO cartridge, port detected) or
+  `C00`, `C20`, `C30` (cartridge at this port), e.g. `JIO C +`, `JIOTIME J1`. `JIO S` shows the line in use.
+- If your MSX has other devices at I/O ports 00H, 20H or 30H, use a **safe ROM** (`jio_dos2_safe.rom`,
+  `jio_dos1_safe.rom`): it only tries the joystick ports and never writes to these ports.
+- The cartridge's serial line still works when its ROM is disabled (ROMDIS switch): JIO.COM and JIOTIME.COM can use
+  it while the MSX boots from another device.
+- **JIODBG.COM** helps to find out why the MSX and the server don't communicate.
+
+## Which ROM to use
+
+| ROM | Size | For |
+|---|---|---|
+| `jio_dos2.rom` | 32KB | MSX-DOS 2: disk images **and** directories |
+| `jio_dos1.rom` | 16KB | MSX-DOS 1: disk images only |
+| `jio_dos2_64k.rom`, `jio_dos1_64k.rom` | 64KB | the same ROM in a 64KB image, for flash cartridges that expect one (e.g. the JIO cartridge) |
+| `jio_dos2_64k_NMS_8220.rom`, `jio_dos1_64k_NMS_8220.rom` | 64KB | to replace the internal ROM of a Philips NMS 8220 |
+| `..._safe` versions | | same, without probing the JIO cartridge I/O ports (see above) |
+
+Flash the ROM to the JIO cartridge, a MegaFlashROM or a Carnivore2, or burn it to an EPROM cartridge.
 
 ## Usage instructions for the MSX-DOS clients
 
-1. Create an MSX-DOS 2 cartridge (or flash `JIO-MSXDOS2` to a MegaFlashROM or Carnivore2).
 1. Connect your MSX to your PC using a USB serial cable or Bluetooth adapter.
-1. Launch **JIOServer** and select the disk image to serve.
+1. Launch **JIOServer**, choose what to serve (a disk image, or directories, see below).
 1. Select USB or Bluetooth mode using the <img src="./server/icons/Bluetooth.svg" width="20"/> or  <img src="./server/icons/USB.svg" width="20"/> button
 1. Select the communication device to use (ttyUSB0 or DSD TECH HC-05 for example)
 1. Click the <img src="./server/icons/disconnected.svg" width="20"/> button.
 1. Boot your MSX.
 1. You should see an <span style="color:green">Info✓ </span> appear in the server log and the LED blink.
-1. The MSX should now access the image.
+1. The MSX should now access the image or the directories.
+
+The choice between disk image and directories is read by the ROM when the MSX starts: reset the MSX after changing it.
+
+### Serving a disk image
+
+The server serves a floppy or hard disk image (with partitions), read and written by sectors, as a real disk: works
+with the MSX-DOS 1 and MSX-DOS 2 ROMs, boots from the image (MSX-DOS, or the boot sector of a game disk).
+
+### Serving directories
+
+With the MSX-DOS 2 ROM, the server can serve folders of the host as drives **A: to H:**: files are read and written
+directly in these folders, no disk image to prepare. Copy files to the folder on your PC, they are immediately
+visible on the MSX, and the other way round.
+
+- Put `MSXDOS2.SYS` and `COMMAND2.COM` in the folder served as **A:**: the MSX boots from it.
+- The drives of your MSX (e.g. its floppy drive) stay available, after the served drives.
+- Long names of the host are shown as 8.3 names on the MSX (e.g. `LongFileName.text` → `LONGFI~1.TEX`), as MSX-DOS
+  only knows 8.3 names. A long name typed on the MSX is kept as is on the host.
+- `RAMDISK` creates the RAM disk **H:** on the server (a temporary folder, removed by a reset of the MSX).
+- **Read only** option of the server: the served drives cannot be modified (the RAM disk stays writable).
+
+### JIO.COM: directories without the JIO ROM
+
+On an MSX that already boots MSX-DOS 2 or Nextor from another cartridge (with a memory mapper), JIO.COM adds the
+directories served as drives, without the JIO ROM:
+
+```
+JIO +        ; install, and handle all the drives served by the server
+JIO +D       ; handle drive D: only
+JIO -D       ; stop handling drive D:
+JIO S        ; show the drives handled and the serial line
+JIO          ; help
+```
+
+Put `JIO +` in your `AUTOEXEC.BAT` to install it at each boot.
+
+### If the link is lost
+
+If the server doesn't answer within about 5 seconds (server stopped, cable unplugged, Bluetooth out of range), the
+MSX doesn't hang: the ROM shows a *Not ready* error (*Abort* gives an error to the program, *Retry* waits again), and
+JIO.COM returns a *Not ready* error to the program.
+
+On Bluetooth, the MSX automatically sends large writes in blocks, as some Bluetooth modules lose data on long
+transfers.
 
 ## Fun things to try with JIOMSX
 
@@ -185,7 +245,7 @@ https://www.msx.org/forum/msx-talk/development/software-rs-232-115200bps-on-msx
 
 Shortly after, he released a working **MSX-DOS 1** version serving disk images with **drive sound emulation**!  
 https://www.youtube.com/watch?v=OHs5a-gZtuc  
-Thats was crazy !
+That was crazy!
 
 At the same time, I was aware of **b3rendsh**’s MSX-DOS 2 project:  
 https://github.com/b3rendsh/msxdos2s  
@@ -196,16 +256,25 @@ to a very cheap, versatile and not so slow MSX-DOS 2 hard-disk server !
 
 I quickly contacted b3rendsh, and we started working together on that project.
 
-After several months of collaborative coding and debugging, we hopefuly reached a stable and usable first version !
+After several months of collaborative coding and debugging, we hopefully reached a stable and usable first version !
 
 ## Server details
 
-macOS, Windows and Linux versions of the server have tooltips for each UI componenents, which should be self-explanatory.
+macOS, Windows and Linux versions of the server have tooltips for each UI component, which should be self-explanatory.
 
-For Android (that provides not tooltips), here's a quick explanation view:
+For Android (that provides no tooltips), here's a quick explanation view:
 <p align="center">
     <img src="./readme_resources/JIO_Server_with_tooltips.png" width="900"/>
 </p>  
+
+### Android
+
+- The server asks for the **All files access** permission: it is needed to serve disk images and directories from
+  the phone's storage.
+- It also asks to show **notifications**: while connected to the MSX, a notification *JIO Server — Connected to the
+  MSX* is shown, and the server keeps running when you switch to another application or when the phone locks itself.
+  If the communication still stops when the phone is locked, set the battery usage of the application to
+  *Unrestricted* in the settings of Android.
 
 ### Command line server
 
@@ -251,6 +320,9 @@ and tools to its `0_Temp` folder. At the root:
 ./0_Clean.sh                 # outputs and intermediate files of all the projects
 ```
 
+Serial lines tried by the ROMs at boot: `JioPorts` in `clients/JIO_MSX-DOS/drv_jio.asm` (I/O ports of the JIO
+cartridge, then joystick ports 2 and 1). The safe ROMs (`JIOSAFE` define) keep only the joystick ports.
+
 ## Known issues
 
 Casio PV-7 and National CF3000 are showing these kind of corruptions on reception:
@@ -268,7 +340,7 @@ You can submit tickets on GitHub directly [here](https://github.com/louthrax/MSX
 - Enhanced MSX-DOS 2 and MSX-DOS 1 versions, ideas, debugging, testing, documentation, help on JIOServer: **b3rendsh**  
 (https://github.com/b3rendsh/msxdos2s)
 
-- 115200 bauds MSX communication routine, originial Python server, support and ideas: **NYYRIKKI**  
+- 115200 bauds MSX communication routine, original Python server, support and ideas: **NYYRIKKI**  
 (https://msx.fi/nyyrikki/software.html)
 
 - Original 38400 bauds communication routine used by JIO Serial Monitor tool: **Tiny Yarou**  
