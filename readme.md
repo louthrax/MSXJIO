@@ -35,12 +35,6 @@ The system is divided into two parts:
   - **JIOTIME.COM**  
   Sets the date and time of the MSX from the host.
 
-  - **JIODBG.COM**  
-  Diagnosis of the serial line (JIO cartridge, joystick ports).
-
-  - **JSYNC** (not released yet)  
-  An MSX-DOS 2 tool to synchronize files and directories between MSX and host (a bit like rsync).
-
 Details about b3rendsh's MSX-DOS clients can be found here: https://github.com/b3rendsh/msxdos2s
 
 There's also a **JSM** (JIO Serial Monitor) helper tool that you can use to configure your Bluetooth communication chip.
@@ -152,7 +146,6 @@ port 1, until the server answers. The line found is shown (the ROMs don't show j
   `jio_dos1_safe.rom`): it only tries the joystick ports and never writes to these ports.
 - The cartridge's serial line still works when its ROM is disabled (ROMDIS switch): JIO.COM and JIOTIME.COM can use
   it while the MSX boots from another device.
-- **JIODBG.COM** helps to find out why the MSX and the server don't communicate.
 
 ## Which ROM to use
 
