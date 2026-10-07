@@ -245,10 +245,11 @@ unsigned char Server::ucResolvePath(QString _szMSXPath, QString &_rszHostPath, u
 
 /*
  =======================================================================================================================
-    Host path to MSX path relative to the drive root: no drive, no leading backslash, MSX-DOS 8.3 names
+    Host path to MSX path relative to the drive root: no drive, no leading backslash, MSX-DOS 8.3 names (host names
+    if _bLongNames, JIO_GET_LONG_NAME)
  =======================================================================================================================
  */
-QString Server::szRelativePath(unsigned char _ucDrive, const QString &_szHostPath)
+QString Server::szRelativePath(unsigned char _ucDrive, const QString &_szHostPath, bool _bLongNames)
 {
     QString szHostPath = szRootDir(_ucDrive);
     QString szPath;
@@ -264,10 +265,43 @@ QString Server::szRelativePath(unsigned char _ucDrive, const QString &_szHostPat
         if (!szPath.isEmpty())
             szPath += "\\";
 
-        szPath += szGetDosName(szHostPath);
+        szPath += _bLongNames ? szItem : szGetDosName(szHostPath);
     }
 
     return szPath;
+}
+
+/*
+ =======================================================================================================================
+    Host name to the MSX character set (JIO_GET_LONG_NAME): ASCII kept, accented letters of the MSX international
+    character set (80H..A8H, ADH..AFH: same as code page 437), "?" for the others
+ =======================================================================================================================
+ */
+static QByteArray acToMSX(const QString &_szName)
+{
+    static const QString    szMSX =
+        "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿";      // 80H..A8H
+    QByteArray              acResult;
+
+    for (const QChar &c : _szName)
+    {
+        int iIndex = szMSX.indexOf(c);
+
+        if ((c.unicode() >= 0x20) && (c.unicode() < 0x7F))
+            acResult += char(c.unicode());
+        else if (iIndex >= 0)
+            acResult += char(0x80 + iIndex);
+        else if (c == QChar(0x00A1))                             // ¡ « »
+            acResult += char(0xAD);
+        else if (c == QChar(0x00AB))
+            acResult += char(0xAE);
+        else if (c == QChar(0x00BB))
+            acResult += char(0xAF);
+        else
+            acResult += '?';
+    }
+
+    return acResult;
 }
 
 /*
@@ -405,6 +439,10 @@ void Server::vSetFindEntry(tdFileInfoBlock &_roFIB, const QString &_szHostPath, 
     QString szDirectory = szRelativePath(_ucDrive, QFileInfo(_szHostPath).path());
     QString szName = szGetDosName(_szHostPath);
     m_szWholePath = szDirectory.isEmpty() ? szName : szDirectory + "\\" + szName;
+
+    QString szLongDirectory = szRelativePath(_ucDrive, QFileInfo(_szHostPath).path(), true);
+    QString szLongName = QFileInfo(_szHostPath).fileName();
+    m_szLongWholePath = szLongDirectory.isEmpty() ? szLongName : szLongDirectory + "\\" + szLongName;
 
     vFillFIB(_roFIB, _szHostPath, _ucDrive);
 }
@@ -1608,4 +1646,74 @@ void Server::vDOS_GET_WHOLE_PATH_STRING()
     vLog(eLogBDOSDetails, "Result: %s\n", acPath.constData());
     vBDOSAnswer(&s, sizeof(s));
     vBDOSData(acPath.constData(), s.ucSize);
+}
+
+/*
+ =======================================================================================================================
+    Function $E0 JIO_GET_LONG_NAME (JIO extension): long host name of an entry found (FIB), of the whole path of the
+    last entry found (_WPATH), or of the current directory of a drive (_GETCD), in the MSX character set.
+    Answer: error, size of the string with its final 0 (0 if error), then the string. .PLONG if the buffer of the
+    program (_uiBufferSize bytes) is too small.
+ =======================================================================================================================
+ */
+void Server::vJIO_GET_LONG_NAME(unsigned char _ucSubFunction, unsigned short int _uiBufferSize, const tdFileInfoBlock &_roFIB, unsigned char _ucDriveNumber)
+{
+    PACK_PUSH
+    struct
+    {
+        unsigned char       ucError;
+        unsigned short int  uiSize;
+    } s;
+    PACK_POP
+
+    QByteArray  acName;
+
+    s.ucError = DOS_ERR_OK;
+
+    switch (_ucSubFunction)
+    {
+    case JIO_LONG_FIB_NAME:
+        {
+            auto it = m_oFindEntries.find(_roFIB.m_uiFindId);
+
+            if ((_roFIB.m_ucFF != 0xFF) || (it == m_oFindEntries.end()))
+                s.ucError = DOS_ERR_NOFIL;
+            else
+                acName = acToMSX(QFileInfo(it.value()).fileName());
+        }
+        break;
+
+    case JIO_LONG_WHOLE_PATH:
+        acName = acToMSX(m_szLongWholePath);
+        break;
+
+    case JIO_LONG_CURRENT_DIR:
+        {
+            unsigned char ucDrive = _ucDriveNumber ? _ucDriveNumber - 1 : m_ucCurrentPhysicalDrive;
+
+            if ((ucDrive >= 8) || !bIsDriveServed(ucDrive))
+                s.ucError = DOS_ERR_IDRV;
+            else if (!m_szBDOSCurrentDir[ucDrive].isEmpty())
+                acName = acToMSX(szRelativePath(ucDrive, szRootDir(ucDrive) + "/" + m_szBDOSCurrentDir[ucDrive], true));
+        }
+        break;
+
+    default:
+        s.ucError = DOS_ERR_IBDOS;
+        break;
+    }
+
+    acName.append('\0');
+    if ((s.ucError == DOS_ERR_OK) && (acName.size() > _uiBufferSize))
+        s.ucError = DOS_ERR_PLONG;
+
+    s.uiSize = (s.ucError == DOS_ERR_OK) ? acName.size() : 0;
+
+    if (s.ucError == DOS_ERR_OK)
+        vLog(eLogBDOSDetails, "Sub-function %d | Result: %s\n", _ucSubFunction, acName.constData());
+    else
+        vLog(eLogBDOSDetails, "Sub-function %d | Error %02Xh\n", _ucSubFunction, s.ucError);
+    vBDOSAnswer(&s, sizeof(s));
+    if (s.uiSize)
+        vBDOSData(acName.constData(), s.uiSize);
 }

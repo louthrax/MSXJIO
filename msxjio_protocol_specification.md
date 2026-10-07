@@ -189,6 +189,7 @@ The server answers with zero, one or more response packets (sync bytes `0xFF ...
 | `0x5A`   | _CHDIR    | path                                                         | error (byte)                                       |
 | `0x5E`   | _WPATH    | none                                                         | error (byte), offset of last item (byte), size (byte, including the `0x00`) ; whole path of last entry found (string) |
 | `0x68`   | _RAMD     | size (byte: `0x00` = destroy, `0x01`-`0xFE` = create with this number of 16 KB segments, `0xFF` = get size) | error (byte), RAM disk size (byte, segments, 0 = no RAM disk), drives served (byte, bit 0 = A:) |
+| `0xE0`   | JIO_GET_LONG_NAME | sub-function (byte), size of the buffer of the program (word); sub-function 1: FIB; sub-function 3: drive (byte, 0 = current, 1 = A:) | error (byte), size (word, including the `0x00`, 0 if error) ; long name (string) |
 
 Notes:
 - File handles are allocated by the server (`0x80` to `0xFF`). The file pointer is kept by the server.
@@ -196,6 +197,35 @@ Notes:
 - Device names (CON, AUX, PRN, LST, NUL) and the FCB functions (MSX-DOS 1) are handled by the client, using the functions above.
 - A _READ or _WRITE never crosses a 16 KB page boundary of the client memory.
 - When the server is read only, the functions that would modify a served directory (_FNEW, _CREATE, _WRITE, _DELETE, _RENAME, _MOVE, _ATTR and _FTIME with set, and the handle versions) answer `0xF8` (.WPROT, write protected disk). Files are opened read only on the host. The RAM disk H: stays writable.
+
+##### JIO_GET_LONG_NAME (BDOS function `0xE0`, JIO extension)
+
+MSX-DOS only knows 8.3 names: the server shows long host names as aliases (`LongFileName.text` → `LONGFI~1.TEX`).
+This function gives the long host names to the MSX programs that want to show them. It is not a function of MSX-DOS 2
+or Nextor: the JIO MSX-DOS 2 ROM and JIO.COM handle it. Elsewhere it returns `0xDC` (.IBDOS): the program then uses
+the 8.3 names. Long names are only returned: to open a file, use its 8.3 name (a long name can be given too, within
+the 63 characters of an MSX-DOS path).
+
+Call (`CALL 0005H` from an MSX-DOS program):
+
+| Register | Input |
+|---|---|
+| C  | `0xE0` |
+| A  | sub-function: 1 = name of the entry of a FIB (from _FFIRST, _FNEXT, _FNEW), 2 = whole path of the last entry found (as _WPATH), 3 = current directory of a drive (as _GETCD) |
+| DE | sub-function 1: FIB. Sub-function 3: E = drive (0 = current, 1 = A:) |
+| HL | buffer (ASCIIZ string returned) |
+| B  | size of the buffer (1 to 255, 0 = 256) |
+
+Output: A = error. `0x00` OK, `0xDB` (.IDRV) not a drive of the server (e.g. the floppy drive), `0xD8` (.PLONG) buffer
+too small, `0xDC` (.IBDOS) invalid sub-function (or not handled: no JIO).
+
+- The FIB and the buffer can be anywhere in the TPA (MSXDOS2.SYS does not copy the parameters of this function: the
+  JIO ROM and JIO.COM access the memory of the program themselves).
+- The names are in the MSX character set: ASCII, accented letters of the MSX international character set (codes
+  `0x80`-`0xA8`), `?` for the other characters.
+- Paths have no drive and no leading `\`, as _GETCD.
+- The registers differ from _FNEXT (FIB in IX) because the JIO ROM reaches this function through an interslot call
+  (CALLF), which changes IX and IY.
   
   
 #### 0x17 — COMMAND DATE TIME

@@ -87,7 +87,7 @@ IF Dpb <> STUB_DPB
 ENDIF
 
 ; BDOS functions handled by the driver (bit n = function n, functions 00H to 7FH), same as g_aDosHandlers of
-; driver.c. The functions 80H to FFH are never handled.
+; driver.c. Of the functions 80H to FFH, only 0E0H (JIO_GET_LONG_NAME, JIO extension) is handled (Hook_High).
 Functions:
 		defb	00h,0C0h,01h,3Fh,80h,00h,00h,00h
 		defb	7Fh,0E7h,7Fh,4Eh,20h,00h,00h,00h
@@ -106,7 +106,7 @@ Hook:
 		push	bc
 		ld	a,c
 		cp	80h
-		jr	nc,Hook_Test		; functions 80H to FFH: not handled (no carry)
+		jr	nc,Hook_High		; functions 80H to FFH: only 0E0H handled
 		rrca
 		rrca
 		rrca
@@ -124,6 +124,9 @@ Hook:
 		ld	a,(hl)
 Hook_Bit:	rrca
 		djnz	Hook_Bit		; Cx = bit of the function
+		jr	Hook_Test
+Hook_High:	sub	0E0h			; 0E0H (JIO_GET_LONG_NAME, JIO extension): carry, others: no carry
+		sub	1
 Hook_Test:	pop	bc
 		jr	c,Hook_Driver
 		pop	af

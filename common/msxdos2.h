@@ -112,8 +112,20 @@ typedef enum
 
     DOS_GET_SET_DISK_CHECK_STATUS         = 0x6E,
     DOS_GET_MSX_DOS_VERSION_NUMBER        = 0x6F,
-    DOS_GET_SET_REDIRECTION_STATUS        = 0x70
+    DOS_GET_SET_REDIRECTION_STATUS        = 0x70,
+
+    // JIO extension (not MSX-DOS 2, not Nextor): long host names of the served directories, sub-function in A
+    // (JIO_LONG_*), see msxjio_protocol_specification.md
+    JIO_GET_LONG_NAME                     = 0xE0
 } tdFunction;
+
+// Sub-functions of JIO_GET_LONG_NAME
+enum
+{
+    JIO_LONG_FIB_NAME     = 1,      // long name of the entry of a FIB (_FFIRST, _FNEXT, _FNEW)
+    JIO_LONG_WHOLE_PATH   = 2,      // long whole path of the last entry found (_WPATH)
+    JIO_LONG_CURRENT_DIR  = 3       // long current directory of a drive (_GETCD)
+};
 
 typedef enum MsxDos2Error {
     DOS_ERR_NCOMP  = 0xFF,

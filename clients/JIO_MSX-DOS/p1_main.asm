@@ -72,6 +72,7 @@
 		EXTERN	W_HOOK		; Offset in the driver work area: H_BDOS hook for _FORMAT
 		EXTERN	W_FLAGS		; Offset in the driver work area: flags of the server (COMMAND_DRIVE_INFO)
 		EXTERN	RFS_WMASK	; Kernel (rfs.asm): mask of the write blocks in a 16KB page
+		EXTERN	RFS_CMDBUF,RFS_TX,RFS_RX,RFS_TXB1,RFS_TXB,RFS_END,RFS_ISJIOD,RFS_BUF,RFS_OP,RFS_WPJIO	; Kernel (rfs.asm): JIO_GET_LONG_NAME
 		EXTERN	C2731,C2C49,C2C59,C32CB,C334E,C3382,C34D4,C3606	; Kernel: routines used by _FORMAT
 	ENDIF
 
@@ -4630,24 +4631,183 @@ J_RFI6:		CALL	C4E05			; slot of this ROM
 		EI
 		RET
 
-; Hook H_BDOS (copied to the work area W_HOOK, 24 bytes): BDOS function 67H (_FORMAT) -> P1_FORMAT of this ROM, the
-; function is not done by the kernel (return of K_BDOS dropped, result stored as K_BDOS does)
+; Hook H_BDOS (copied to the work area W_HOOK, 28 bytes): BDOS functions 67H (_FORMAT) and 0E0H (JIO_GET_LONG_NAME)
+; -> P1_HOOKFN of this ROM, the function is not done by the kernel (return of K_BDOS dropped, result stored as K_BDOS
+; does)
 I_HOOK:		DEFB	0F5H			; PUSH AF
 		DEFB	79H			; LD A,C
 		DEFB	0FEH,67H		; CP 67H
-		DEFB	28H,6			; JR Z,format (POP AF and the previous hook: 6 bytes)
+		DEFB	28H,10			; JR Z,function (CP, JR, POP AF and the previous hook: 10 bytes)
+		DEFB	0FEH,0E0H		; CP 0E0H
+		DEFB	28H,6			; JR Z,function (POP AF and the previous hook: 6 bytes)
 		DEFB	0F1H			; POP AF
 I_HOOKOLD:					; previous hook (5 bytes)
 		DEFB	0F1H			; POP AF
 		DEFB	33H,33H			; INC SP x2: return to K_BDOS dropped
 		DEFB	0F7H			; RST 30H (CALLF)
 I_HOOKSLOT:	DEFB	0			; slot of this ROM
-		DEFW	P1_FORMAT
+		DEFW	P1_HOOKFN
 		DEFB	32H			; LD (DSBBFD),A (as K_BDOS)
 		DEFW	DSBBFD
 		DEFB	0C9H			; RET
 I_HOOKEND:
-HOOK_SLOT	EQU	I_HOOKSLOT-I_HOOK+5	; I_HOOK + previous hook: 24 bytes (W_HOOK of drv_jio.asm)
+HOOK_SLOT	EQU	I_HOOKSLOT-I_HOOK+5	; I_HOOK + previous hook: 28 bytes (W_HOOK of drv_jio.asm)
+
+; ---------------------------------------------------------
+; Function $E0 JIO_GET_LONG_NAME (JIO extension, not MSX-DOS): long host name, in the MSX character set
+; Called by the H_BDOS hook (CALLF, P1_HOOKFN, AF pushed): kernel in page 0, data segment in page 2. MSXDOS2.SYS does
+; not copy the parameters of this function: the FIB and the buffer are read and written in the segments of the
+; program (J_JLRD, J_JLXF), wherever they are.
+; Input:  A  = sub-function: 1 = name of the entry of a FIB, 2 = whole path of the last entry found, 3 = current
+;              directory of a drive
+;         DE = FIB (1), E = drive (3, 0 = current, 1 = A: etc)
+;         HL = buffer, B = size of the buffer (0 = 256)
+; Output: A  = error (.IDRV: not a drive of the server, .PLONG: buffer too small, .IBDOS: invalid sub-function)
+; ---------------------------------------------------------
+P1_JLONG:	POP	AF
+		LD	IY,D_BB80		; base of the IY relative kernel variables
+		LD	(RFS_BUF),A		; request: sub-function, size of the buffer (word)
+		LD	A,B
+		LD	(RFS_BUF+1),A
+		SUB	1			; Cx: 0 = 256
+		SBC	A,A
+		AND	1
+		LD	(RFS_BUF+2),A
+		PUSH	HL			; buffer
+		LD	A,(RFS_BUF)
+		DEC	A
+		JR	Z,J_JL1
+		DEC	A
+		JR	Z,J_JL2
+		DEC	A
+		LD	A,E
+		JR	Z,J_JL3
+		LD	A,_IBDOS
+		JR	J_JLE
+
+J_JL1:		LD	HL,30			; FIB: device ?
+		ADD	HL,DE
+		CALL	J_JLRD
+		RLCA
+		JR	C,J_JLID
+		LD	HL,25			; drive of the FIB
+		ADD	HL,DE
+		CALL	J_JLRD
+J_JL3:		PUSH	DE
+		CALL	RFS_ISJIOD		; Cx: JIO drive
+		POP	DE
+		JR	C,J_JL4
+J_JLID:		LD	A,_IDRV
+J_JLE:		POP	HL
+		RET
+
+J_JL2:		LD	A,(RFS_WPJIO)		; last entry found on a JIO drive ?
+		OR	A
+		JR	Z,J_JLID
+J_JL4:		PUSH	DE
+		LD	A,0E0H
+		LD	BC,3
+		CALL	RFS_CMDBUF		; command, sub-function, size of the buffer
+		POP	DE
+		LD	A,(RFS_BUF)
+		CP	3
+		JR	Z,J_JL5
+		DEC	A
+		JR	NZ,J_JL6
+		LD	BC,50			; FIB (RFS_FIBSZ) of the program
+		CALL	J_JLXF			; A = 0: transmit
+		JR	J_JL6
+
+J_JL5:		LD	A,E			; drive
+		LD	(RFS_TXB),A
+		CALL	RFS_TXB1
+J_JL6:		LD	HL,RFS_BUF		; answer: error, size of the string with its 0, string
+		LD	BC,3
+		CALL	RFS_RX
+		POP	DE			; buffer
+		LD	BC,(RFS_BUF+1)
+		LD	A,1			; receive
+		CALL	J_JLXF
+		CALL	RFS_END
+		LD	A,(RFS_BUF)
+		RET
+
+; Read a byte of the program
+; Input:  HL = address
+; Output: A  = byte
+J_JLRD:		PUSH	DE
+		EX	DE,HL
+		XOR	A			; TPA segment
+		CALL	C2731			; A = segment, DE = page 0 based address
+		SET	7,D
+		DI
+		CALL	PUT_P2
+		LD	A,(DE)
+		PUSH	AF
+		LD	A,(DATA_S)
+		CALL	PUT_P2
+		EI
+		POP	AF
+		POP	DE
+		RET
+
+; Transmit data of the program, or receive data to the program, in its segments (page 2), by 16KB pages
+; Input:  DE = address, BC = size, A = 0 transmit, 1 receive
+J_JLXF:		LD	(RFS_OP),A
+J_XF1:		LD	A,B
+		OR	C
+		RET	Z
+		PUSH	BC			; size left
+		PUSH	DE
+		LD	A,D			; room in the 16KB page of the address
+		AND	3FH
+		LD	D,A
+		LD	HL,4000H
+		OR	A
+		SBC	HL,DE
+		OR	A
+		SBC	HL,BC
+		ADD	HL,BC			; Cx: room < size left
+		JR	C,J_XF2
+		LD	H,B			; chunk = size left
+		LD	L,C
+J_XF2:		POP	DE
+		PUSH	HL			; chunk
+		PUSH	DE
+		LD	B,H
+		LD	C,L
+		XOR	A			; TPA segment
+		CALL	C2731			; A = segment, DE = page 0 based address
+		SET	7,D
+		DI
+		CALL	PUT_P2
+		EX	DE,HL			; HL = address in page 2
+		LD	A,(RFS_OP)
+		OR	A
+		JR	NZ,J_XF3
+		CALL	RFS_TX
+		JR	J_XF4
+J_XF3:		CALL	RFS_RX
+J_XF4:		LD	A,(DATA_S)		; data segment back in page 2
+		CALL	PUT_P2
+		POP	DE
+		POP	BC			; chunk
+		EX	DE,HL
+		ADD	HL,BC			; next address
+		EX	DE,HL
+		POP	HL			; size left
+		OR	A
+		SBC	HL,BC
+		LD	B,H
+		LD	C,L
+		JR	J_XF1
+
+; Functions of the H_BDOS hook (CALLF: IX, IY changed): 0E0H -> P1_JLONG, 67H -> P1_FORMAT
+P1_HOOKFN:	PUSH	AF
+		LD	A,C
+		CP	0E0H
+		JP	Z,P1_JLONG
+		POP	AF
 
 ; ---------------------------------------------------------
 ; Function $67 _FORMAT (kernel code, moved to the disk ROM page: no room left in the kernel)

@@ -205,6 +205,22 @@ def dos_names(directory):
     return out
 
 
+MSX_ACCENTS = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿'     # MSX international character set 80H..A8H
+
+
+def msx_chars(name):
+    """host name -> MSX character set (as the C++ server): ASCII kept, accented letters, '?' for the others"""
+    out = bytearray()
+    for c in name:
+        if 0x20 <= ord(c) < 0x7F:
+            out.append(ord(c))
+        elif c in MSX_ACCENTS:
+            out.append(0x80 + MSX_ACCENTS.index(c))
+        else:
+            out.append({'¡': 0xAD, '«': 0xAE, '»': 0xAF}.get(c, ord('?')))
+    return bytes(out)
+
+
 def dos_name(path):
     n = os.path.basename(path)
     if n in ('.', '..'):
@@ -287,14 +303,14 @@ class Server:
             path = os.path.join(path, self.find_entry(path, it))
         return d, path
 
-    def rel(self, d, path):
+    def rel(self, d, path, long_names=False):
         r = os.path.relpath(path, ROOTS[d])
         if r == '.':
             return ''
         host, out = ROOTS[d], []
         for item in r.split('/'):
             host = os.path.join(host, item)
-            out.append(dos_name(host))
+            out.append(item if long_names else dos_name(host))
         return '\\'.join(out)
 
     def target(self, path, fib):
@@ -362,6 +378,8 @@ class Server:
         self.finds[fid] = p
         dr = self.rel(d, os.path.dirname(p))
         self.wpath = (dr + '\\' if dr else '') + dos_name(p)
+        dr = self.rel(d, os.path.dirname(p), True)
+        self.lwpath = (dr + '\\' if dr else '') + os.path.basename(p)
         return self.fib(p, d, fid, mask, attrs)
 
     @staticmethod
@@ -720,6 +738,38 @@ class Server:
             pos = s.rfind(b'\\') + 1
             LOG.write('WPATH -> %r\n' % s)
             return [bytes([0, pos, len(s)]), s]
+        if func == 0xE0:
+            # JIO_GET_LONG_NAME (JIO extension): sub-function, size of the buffer of the program, FIB (1) or drive
+            # (3); answer: error, size of the string with its 0 (0 if error), string (MSX character set)
+            sub, size = r.byte(), r.word()
+            e, s = E_OK, None
+            if sub == 1:
+                fib = r.take(50)
+                p = self.finds.get(struct.unpack_from('<I', fib, 32)[0])
+                if fib[0] != 0xFF or p is None:
+                    e = E_NOFIL
+                else:
+                    s = os.path.basename(p)
+            elif sub == 2:
+                s = getattr(self, 'lwpath', '')
+            elif sub == 3:
+                d = r.byte()
+                d = d - 1 if d else self.cur
+                if not self.served(d):
+                    e = E_IDRV
+                else:
+                    cwd = self.cwd.get(d, '')
+                    s = self.rel(d, os.path.join(ROOTS[d], cwd), True) if cwd else ''
+            else:
+                e = 0xDC                                    # .IBDOS
+            if e == E_OK:
+                s = (msx_chars(s) + b'\0')
+                if len(s) > size:
+                    e = 0xD8                                # .PLONG: buffer too small
+            LOG.write('LONGNAME %d -> %02X %r\n' % (sub, e, s if e == E_OK else b''))
+            if e != E_OK:
+                return [bytes([e, 0, 0])]
+            return [bytes([e]) + struct.pack('<H', len(s)), s]
         LOG.write('*** unsupported function %02X\n' % func)
         return []
 

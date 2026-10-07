@@ -73,6 +73,7 @@ prepare_files() {
     TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
     ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
     ( cd "$TEST/p2test" && z88dk-z80asm -b -o="$OUT/base/P2TEST.COM" p2test.asm && rm -f "$OUT"/base/*.o p2test.o ) || { echo "Build of P2TEST.COM failed"; exit 1; }
+    ( cd "$TEST/lfntest" && z88dk-z80asm -b -o="$OUT/base/LFNTEST.COM" lfntest.asm && rm -f "$OUT"/base/*.o lfntest.o ) || { echo "Build of LFNTEST.COM failed"; exit 1; }
     # JIO.COM (clients/JIO_NFS), built in a copy (its make script writes next to the sources)
     rm -rf "$OUT/nfs"
     mkdir -p "$OUT/nfs/clients"
@@ -474,6 +475,45 @@ test_nfs() { # name machine "slots" description [options of JIO.COM] [serial lin
     end_checks "$1" "$4"
 }
 
+# Long host names (BDOS function 0E0H JIO_GET_LONG_NAME) with JIO.COM: LFNTEST in a directory with a long name
+setup_lfn() { # drive directory
+    mkdir -p "$1/Bombaman (2004)(TeamBomba)"
+    printf 'GAME FILE\r\n' > "$1/Bombaman (2004)(TeamBomba)/GAME.TXT"
+    printf 'NOTES\r\n' > "$1/Bombaman (2004)(TeamBomba)/Game Notes.text"
+}
+test_nfs_lfn() { # name machine "slots" description
+    wanted "$1" || return
+    rm -rf "$OUT/floppy_nfs"; mkdir -p "$OUT/floppy_nfs"
+    cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT"/base/LFNTEST.COM "$OUT/floppy_nfs/"
+    printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
+    printf 'D:\r\nCD BOMBAM~1\r\nA:LFNTEST\r\n' > "$OUT/floppy_nfs/NFSTEST.BAT"
+    TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D SETUP=setup_lfn run_scenario "$1" "$R" "$RM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfs" 0 "40"
+    local d="$OUT/$1" s
+    s=$(tr -d ' \n' < "$d/screens.txt")
+    begin_checks "$1"
+    check "long names of the entries (FIB)" "$(echo "$s" | grep -qF '00.00..00GameNotes.text00GAME.TXT' && echo ok)"
+    check "long whole path of the last entry" "$(echo "$s" | grep -qF '00Bombaman(2004)(TeamBomba)\GAME.TXT' && echo ok)"
+    check "long current directory" "$(echo "$s" | grep -qF 'GAME.TXT00Bombaman(2004)(TeamBomba)D8' && echo ok)"
+    check "buffer too small: .PLONG" "$(echo "$s" | grep -qF 'D8LFNEND' && echo ok)"
+    end_checks "$1" "$4"
+}
+
+# Long host names (BDOS function 0E0H JIO_GET_LONG_NAME) with the MSX-DOS 2 ROM: LFNTEST in a directory with a long
+# name of the JIO drive A:, then on the floppy B: (local drive: .IDRV, DB)
+test_lfn_rom() { # name rom map machine slots description
+    wanted "$1" || return
+    SETUP=setup_lfn run_scenario "$1" "$2" "$3" "$4" "$5" 'CD BOMBAM~1\r\n\\LFNTEST\r\nB:\r\nA:\\LFNTEST\r\n' "$TEST/tcl/screens.tcl" 360 "$OUT/floppy_base" 1 "40"
+    local d="$OUT/$1" s
+    s=$(tr -d ' \n' < "$d/screens.txt")
+    begin_checks "$1"
+    check "long names of the entries (FIB)" "$(echo "$s" | grep -qF '00.00..00GameNotes.text00GAME.TXT' && echo ok)"
+    check "long whole path of the last entry" "$(echo "$s" | grep -qF '00Bombaman(2004)(TeamBomba)\GAME.TXT' && echo ok)"
+    check "long current directory" "$(echo "$s" | grep -qF 'GAME.TXT00Bombaman(2004)(TeamBomba)D8' && echo ok)"
+    check "buffer too small: .PLONG" "$(echo "$s" | grep -qF 'D8LFNEND' && echo ok)"
+    check "local drive B: .IDRV" "$(echo "$s" | grep -qF 'DBDBDBDBLFNEND' && echo ok)"
+    end_checks "$1" "$6"
+}
+
 # MSX-DOS 2 ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -508,6 +548,7 @@ test_basic           dos2_basic_jio   "$R" "$RM" Philips_VG_8235   "-carta $R" A
 test_basic           dos2_basic_flop  "$R" "$RM" Philips_VG_8235   "-carta $R" B "VG-8235, Disk BASIC on the floppy" 360
 test_renmove         dos2_renmove     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, REN, MOVE, ATTRIB on JIO drive A: and floppy B:" 360
 test_longnames       dos2_longnames   "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, long host names and 8.3 aliases"
+test_lfn_rom         dos2_longnames_api "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, long host names (BDOS function 0E0H, LFNTEST), floppy B: (.IDRV)"
 test_sofacopy        dos2_sofacopy    "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, SofaCopy (SC.COM) from A: to A:\\SUB (archive attribute)"
 test_ramdisk         dos2_ramdisk     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, RAMDISK (H: on the server), MSX reset" 360
 test_takeover_hybrid dos2_takeover    "$R" "$RM" Philips_NMS_8255  720 "NMS 8255, takes over from a MSX-DOS 2 cartridge in slot 1"
@@ -531,6 +572,7 @@ test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"           "NMS 8255
 test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
 test_nfs       nfs_cart     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM with the JIO cartridge option (JIO C30 +D, port not emulated)" C30 'JIO cartridge, port 30H'
 test_nfs       nfs_joy1     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM on joystick port 1 (JIO J1 +D, serial line intercepted)" J1 'joystick port 1'
+test_nfs_lfn   nfs_longnames Philips_NMS_8255 "-ext msxdos2"           "NMS 8255, JIO.COM, long host names (BDOS function 0E0H, LFNTEST)"
 
 echo
 echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"

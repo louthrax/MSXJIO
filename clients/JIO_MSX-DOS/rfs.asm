@@ -99,6 +99,8 @@ RFS_DPB:	DEFS	36,0		; unopened FCB for _SFIRST, dummy DPB for _ALLOC
 		PUBLIC	RFS_TURBO		; set at boot by C_RFSINIT (p1_main.asm), with RFS_NJIO
 		PUBLIC	RFS_NJIO
 		PUBLIC	RFS_WMASK		; set at boot by C_RFSINIT: 1FH on a Bluetooth link
+		; JIO_GET_LONG_NAME (P1_JLONG of p1_main.asm: no room left in the kernel)
+		PUBLIC	RFS_CMDBUF,RFS_TX,RFS_RX,RFS_TXB1,RFS_TXB,RFS_END,RFS_ISJIOD,RFS_BUF,RFS_OP,RFS_WPJIO
 		PUBLIC	J_TXP		; setup of the serial line, patched by C_RFSINIT for an I/O port (JIO cartridge)
 		PUBLIC	J_RXP
 		PUBLIC	J_TXOR		; bit of the line (OR 4, XOR 4) and joystick port selected (OR 64), patched by

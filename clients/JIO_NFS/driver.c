@@ -898,6 +898,54 @@ static void vDOS_GET_WHOLE_PATH_STRING()
 
 /*
  =======================================================================================================================
+    Function $E0 JIO_GET_LONG_NAME (JIO extension, not MSX-DOS): long host name, in the MSX character set.
+    Input: A = sub-function (JIO_LONG_*), DE = FIB (JIO_LONG_FIB_NAME), E = drive (JIO_LONG_CURRENT_DIR, 0 = current),
+    HL = buffer, B = size of the buffer (0 = 256). Output: A = error (.IDRV: not a drive of the server, .PLONG: buffer
+    too small, .IBDOS: invalid sub-function). Same registers as the JIO ROM (no IX: changed by its CALLF).
+ =======================================================================================================================
+ */
+static void vJIO_GET_LONG_NAME()
+{
+    bool    bHandled;
+
+    if (A == JIO_LONG_FIB_NAME)
+        bHandled = bIsPathOrFIBHandled(DE);
+    else if (A == JIO_LONG_WHOLE_PATH)
+        bHandled = g_bLastFindHandled;
+    else if (A == JIO_LONG_CURRENT_DIR)
+        bHandled = bIsLogicalDriveHandled(E);
+    else
+    {
+        A = DOS_ERR_IBDOS;
+        g_bResult = true;
+        return;
+    }
+
+    if (!bHandled)
+    {
+        A = DOS_ERR_IDRV;
+        g_bResult = true;
+        return;
+    }
+
+    vSendCommonHeader();
+    g_aucAnswer[0] = A;                     // sub-function, size of the buffer
+    g_aucAnswer[1] = B;
+    g_aucAnswer[2] = B ? 0 : 1;
+    vJIOTransmit(g_aucAnswer, 3);
+    if (A == JIO_LONG_FIB_NAME)
+        vJIOTransmit(g_aucPath, sizeof(tdFileInfoBlock));
+    else if (A == JIO_LONG_CURRENT_DIR)
+        vJIOTransmit(&E, sizeof(E));
+
+    vReceive(g_aucAnswer, 3);               // error, size of the string with its 0, string
+    A = g_aucAnswer[0];
+    if (g_aucAnswer[1] | g_aucAnswer[2])
+        vCallerReceive(HL, g_aucAnswer[1] | (g_aucAnswer[2] << 8));
+}
+
+/*
+ =======================================================================================================================
  =======================================================================================================================
  */
 static void vDOS_DELETE_FILE_OR_SUBDIRECTORY()
@@ -1372,6 +1420,7 @@ static const tdDosDispatchEntry g_aDosHandlers[] =
     { 0x5B, vDOS_PARSE_PATHNAME },
     { 0x5E, vDOS_GET_WHOLE_PATH_STRING },
     { 0x65, vDOS_GET_PREVIOUS_ERROR_CODE },
+    { 0xE0, vJIO_GET_LONG_NAME },
     { 0, 0 }
 };
 

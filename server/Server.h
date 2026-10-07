@@ -151,7 +151,7 @@ private:
     qint64              iRamDiskFree();
     QString             szRootDir(unsigned char _ucDrive);
     unsigned char       ucResolvePath(QString _szMSXPath, QString &_rszHostPath, unsigned char _ucDefaultDrive = 0xFF);
-    QString             szRelativePath(unsigned char _ucDrive, const QString &_szHostPath);
+    QString             szRelativePath(unsigned char _ucDrive, const QString &_szHostPath, bool _bLongNames = false);
     unsigned char       ucGetTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, unsigned char &_rucDrive, QString &_rszHostPath);
     unsigned char       ucGetFindTarget(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char &_rucDrive, QString &_rszDirectory, QString &_rszItem);
     unsigned char       ucGetHandlePath(unsigned char _ucFileHandle, QString &_rszPath);
@@ -194,6 +194,7 @@ private:
     void                vDOS_GET_CURRENT_DIRECTORY(unsigned char _ucDriveNumber);
     void                vDOS_CHANGE_CURRENT_DIRECTORY(const tdFileInfoBlock &_roFIB, const QString &_szMSXPath);
     void                vDOS_GET_WHOLE_PATH_STRING();
+    void                vJIO_GET_LONG_NAME(unsigned char _ucSubFunction, unsigned short int _uiBufferSize, const tdFileInfoBlock &_roFIB, unsigned char _ucDriveNumber);
 
     Task                oParser();
 
@@ -255,6 +256,7 @@ private:
     QMap<quint32, QString>          m_oFindEntries;         // FIB find id -> host path of entry found
     quint32                         m_uiNextFindId = 0;
     QString                         m_szWholePath;          // whole path of last entry found (_WPATH)
+    QString                         m_szLongWholePath;      // same with the host names (JIO_LONG_WHOLE_PATH)
     QTemporaryDir                   *m_poRamDisk = nullptr;  // RAM disk H: (_RAMD), temporary directory
     unsigned char                   m_ucRamDiskSegments = 0; // RAM disk size (16 KB segments, 0 = no RAM disk)
 };

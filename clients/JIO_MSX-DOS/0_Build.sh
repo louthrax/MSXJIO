@@ -47,14 +47,14 @@ build_rom() { # name size sources...
     rm -rf "$OBJ"
     mkdir -p "$OBJ"
     z88dk-z80asm -b -d -l -m -I0_Temp -O"$OBJ" -o=jio_$NAME.bin "$@"
-    # the driver must end before its CRC table (ORG 7E00H): the linker does not check it
-    local TAIL HEAD
+    # the driver (last section) must end in the ROM page 1 (8000H): the linker does not check it
+    local TAIL
     TAIL=$(awk '/^__DRV_JIO_tail / { print strtonum("0x" substr($3,2)) }' "$OBJ/jio_$NAME.map")
-    HEAD=$(awk '/^__DRV_CRCTAB_head / { print strtonum("0x" substr($3,2)) }' "$OBJ/jio_$NAME.map")
-    if [ "$TAIL" -gt "$HEAD" ]; then
-        echo "jio_$NAME: driver too big ($((TAIL - HEAD)) bytes over its CRC table)" >&2
+    if [ "$TAIL" -gt $((0x8000)) ]; then
+        echo "jio_$NAME: driver too big ($((TAIL - 0x8000)) bytes over the end of the ROM page 8000H)" >&2
         exit 1
     fi
+    echo "jio_$NAME: $((0x8000 - TAIL)) bytes free in the ROM page 1"
     z88dk-appmake +glue -b "$OBJ/jio_$NAME" --filler 0xFF --clean
     z88dk-appmake +rom -b "$OBJ/jio_${NAME}__.bin" -o "$ROM.rom" -s "$SIZE" --org 0
     z88dk-appmake +rom -b "$OBJ/jio_${NAME}__.bin" -o "${ROM}_64k.rom" -s 65536 --org 16384 --fill 0xFF

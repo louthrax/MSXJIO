@@ -59,6 +59,7 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `dos2_basic_jio`, `dos2_basic_flop` | MSX-DOS 2 | VG-8235 | Disk BASIC on the JIO drive / on the floppy: OPEN, PRINT#, LINE INPUT#, SAVE, KILL, LOAD, FILES |
 | `dos2_ramdisk` | MSX-DOS 2 | VG-8235 (360 KB) | `RAMDISK 32K` (H: on the server): copies both ways (byte compare), MD, FCB functions on H:, free space, disk full, H: -> floppy, `RAMDISK 0 /D`, RAM disk destroyed by a MSX reset (`tcl/reboot.tcl`) |
 | `dos2_longnames` | MSX-DOS 2 | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
+| `dos2_longnames_api`, `nfs_longnames` | MSX-DOS 2 ROM, JIO.COM | VG-8235, NMS 8255 | `JIO_GET_LONG_NAME` (BDOS function `0E0H`, `lfntest/`, FIB and buffer at 9000H and above): long names of the entries of a directory with a long name, long whole path, long current directory, buffer too small (.PLONG); ROM: floppy B: (.IDRV) |
 | `dos2_renmove` | MSX-DOS 2 | VG-8235 (360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and on the floppy B: |
 | `dos2_takeover` | MSX-DOS 2 | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the JIO ROM takes over, copy to the floppy |
 | `dos2_readonly` | MSX-DOS 2 | VG-8235 (360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: and floppy B: writable |

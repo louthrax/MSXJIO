@@ -294,6 +294,7 @@ const char *tdFunctionToString(tdFunction func)
         ENUM_CASE(DOS_GET_SET_DISK_CHECK_STATUS)
         ENUM_CASE(DOS_GET_MSX_DOS_VERSION_NUMBER)
         ENUM_CASE(DOS_GET_SET_REDIRECTION_STATUS)
+        ENUM_CASE(JIO_GET_LONG_NAME)
     default: return "Unhandled";
     }
 }
@@ -624,6 +625,22 @@ Task Server::oParser()
 
             case DOS_GET_WHOLE_PATH_STRING:
                 vDOS_GET_WHOLE_PATH_STRING();
+                break;
+
+            case JIO_GET_LONG_NAME:
+                vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);          // sub-function
+                vReceive(&uiWord1, sizeof(uiWord1), 0, uiCRC);          // size of the buffer of the program
+                memset(&oFIB, 0, sizeof(oFIB));
+                ucByte2 = 0;
+                if (ucByte1 == JIO_LONG_FIB_NAME)
+                {
+                    vReceive(&oFIB, sizeof(oFIB), 0, uiCRC);
+                }
+                else if (ucByte1 == JIO_LONG_CURRENT_DIR)
+                {
+                    vReceive(&ucByte2, sizeof(ucByte2), 0, uiCRC);      // drive (0 = current)
+                }
+                vJIO_GET_LONG_NAME(ucByte1, uiWord1, oFIB, ucByte2);
                 break;
 
             default:

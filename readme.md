@@ -186,7 +186,9 @@ visible on the MSX, and the other way round.
 - Put `MSXDOS2.SYS` and `COMMAND2.COM` in the folder served as **A:**: the MSX boots from it.
 - The drives of your MSX (e.g. its floppy drive) stay available, after the served drives.
 - Long names of the host are shown as 8.3 names on the MSX (e.g. `LongFileName.text` → `LONGFI~1.TEX`), as MSX-DOS
-  only knows 8.3 names. A long name typed on the MSX is kept as is on the host.
+  only knows 8.3 names. A long name typed on the MSX is kept as is on the host. Programs can get the long names with
+  the JIO function `JIO_GET_LONG_NAME` (BDOS function `0E0H`, see the
+  [protocol specification](./msxjio_protocol_specification.md#jio_get_long_name-bdos-function-0xe0-jio-extension)).
 - `RAMDISK` creates the RAM disk **H:** on the server (a temporary folder, removed by a reset of the MSX).
 - **Read only** option of the server: the served drives cannot be modified (the RAM disk stays writable).
 
