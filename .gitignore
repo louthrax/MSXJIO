@@ -6,6 +6,11 @@
 0_Builds/
 0_Temp/
 
+# JIODBG (serial line diagnosis, clients/JIO_TIME/dbg): assembled next to its source
+clients/JIO_TIME/dbg/*.COM
+clients/JIO_TIME/dbg/*.map
+clients/JIO_TIME/dbg/*.lis
+
 # Server: Android icons (generated from JIOServer.svg), macOS icon
 server/android/res/
 server/JIOServer.icns
