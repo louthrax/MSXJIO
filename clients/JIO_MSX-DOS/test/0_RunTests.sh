@@ -474,6 +474,34 @@ test_nfs() { # name machine "slots" description [options of JIO.COM] [serial lin
     end_checks "$1" "$4"
 }
 
+# JIO.COM on MSX-DOS 1 (no mapper support routines: driver segment found with the mapper I/O ports, stub below
+# MSXDOS.SYS, BDOS jump and warm boot set to it): boot from the floppy A: (MSX-DOS 1 of the internal disk ROM),
+# NFSTEST.BAT typed at the prompt once COMMAND.COM is reloaded
+DOS1_FILES=${DOS1_FILES:-/mnt/DataLinux/Projects/MSX/sdcard/MSXDOS1}
+setup_dos1() { # drive directory: RUNOK.COM, printing "RUN OK" (LD DE,0109H / LD C,9 / CALL 5 / RET)
+    printf '\x11\x09\x01\x0e\x09\xcd\x05\x00\xc9RUN OK$' > "$1/RUNOK.COM"
+}
+test_nfs_dos1() { # name machine "slots" description
+    wanted "$1" || return
+    if [ ! -f "$DOS1_FILES/MSXDOS.SYS" ]; then echo "  SKIP  $1: $DOS1_FILES/MSXDOS.SYS not found"; return; fi
+    rm -rf "$OUT/floppy_nfs"; mkdir -p "$OUT/floppy_nfs"
+    cp -p "$DOS1_FILES/MSXDOS.SYS" "$DOS1_FILES/COMMAND.COM" "$OUT"/base/JIO.COM "$OUT/floppy_nfs/"
+    printf 'JIO +D\r\n' > "$OUT/floppy_nfs/AUTOEXEC.BAT"
+    printf 'JIO S\r\nD:\r\nDIR\r\nTYPE HELLO.TXT\r\nCOPY A:COMMAND.COM C.COM\r\nCOPY HELLO.TXT A:H2.TXT\r\nCOPY HELLO.TXT R1.TXT\r\nREN R1.TXT R2.TXT\r\nCOPY HELLO.TXT X.TXT\r\nDEL X.TXT\r\nRUNOK\r\nDIR\r\n' > "$OUT/floppy_nfs/NFSTEST.BAT"
+    TYPE_TIME=25 TYPE_TEXT=$'NFSTEST\r' NFS=1 JIO_DRIVE=D SETUP=setup_dos1 run_scenario "$1" "$R" "$RM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 360 "$OUT/floppy_nfs" 0 "$(seq -s " " 20 2 80)"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "JIO.COM installed (JIO S)" "$(has_text "$d/screens.txt" 'Disks handled: D:' && echo ok)"
+    check "DIR of the JIO drive D:" "$(has_text "$d/screens.txt" 'COMMAND2 COM' && echo ok)"
+    check "TYPE on D: (whole text, nothing after)" "$(grep -m1 -A3 'TYPE HELLO.TXT' "$d/screens.txt" | tr -d ' \n' | grep -q '^D>TYPEHELLO.TXTHellofromtheJIOserver!Secondline.$' && echo ok)"
+    check "COPY A: -> D: (byte compare)" "$(cmp -s "$d/drive/C.COM" "$DOS1_FILES/COMMAND.COM" && echo ok)"
+    check "COPY D: -> A: (byte compare)" "$(cmp -s "$d/floppy_out/$(ls "$d/floppy_out" | grep -ix 'h2.txt')" "$OUT/base/hello.txt" && echo ok)"
+    check "REN on D:" "$([ ! -e "$d/drive/R1.TXT" ] && cmp -s "$d/drive/R2.TXT" "$OUT/base/hello.txt" && echo ok)"
+    check "DEL on D:" "$([ ! -e "$d/drive/X.TXT" ] && echo ok)"
+    check "program run from D:" "$(has_text "$d/screens.txt" 'RUN OK' && echo ok)"
+    end_checks "$1" "$4"
+}
+
 # MSX-DOS 2 ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -531,6 +559,7 @@ test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"           "NMS 8255
 test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
 test_nfs       nfs_cart     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM with the JIO cartridge option (JIO C30 +D, port not emulated)" C30 'JIO cartridge, port 30H'
 test_nfs       nfs_joy1     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM on joystick port 1 (JIO J1 +D, serial line intercepted)" J1 'joystick port 1'
+test_nfs_dos1  nfs_dos1     Philips_VG_8235   "-ext ram1mb"            "VG-8235 + 1 MB mapper, JIO.COM on MSX-DOS 1 (internal disk ROM)"
 
 echo
 echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"

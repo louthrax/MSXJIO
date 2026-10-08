@@ -252,14 +252,20 @@ __endasm;
  =======================================================================================================================
  =======================================================================================================================
  */
-void vRelocate(char * _pcCodeStart, unsigned int * _puiRelocationStart, unsigned int _uiSize)
+// Code copied at _pcCopy, relocated for the address _uiBase (MSX-DOS 1: the stub is prepared in a buffer)
+void vRelocateFor(char * _pcCopy, unsigned int _uiBase, unsigned int * _puiRelocationStart, unsigned int _uiSize)
 {
     while (_uiSize)
     {
-        *((unsigned int*)(_pcCodeStart + *_puiRelocationStart)) += (unsigned int) _pcCodeStart;
+        *((unsigned int*)(_pcCopy + *_puiRelocationStart)) += _uiBase;
         _uiSize--;
         _puiRelocationStart++;
     }
+}
+
+void vRelocate(char * _pcCodeStart, unsigned int * _puiRelocationStart, unsigned int _uiSize)
+{
+    vRelocateFor(_pcCodeStart, (unsigned int) _pcCodeStart, _puiRelocationStart, _uiSize);
 }
 
 /*
@@ -332,6 +338,85 @@ allseg_ret:
 __endasm;
 }
 
+/*
+ =======================================================================================================================
+    MSX-DOS 1: no mapper support routines. The mapper of the TPA (slot of page 2) is accessed with its I/O ports
+    (FCH..FFH, page 2: FEH), MSX-DOS 1 keeps the segments of the boot (page 0..3: 3, 2, 1, 0).
+ =======================================================================================================================
+ */
+bool          g_bDos1 = false;
+unsigned char g_aucMapperSave[256] = { 0 };
+
+// Major version of MSX-DOS (_DOSVER): MSX-DOS 1 has no _DOSVER, MSXDOS.SYS answers A = B = 0 to a function it does not
+// know (IX and IY kept)
+unsigned char ucDosVersion() __naked
+{
+__asm
+        push    ix
+        push    iy
+        ld      b,0
+        ld      c,0x6F      ; _DOSVER
+        call    5
+        pop     iy
+        pop     ix
+        ld      a,b
+        ret
+__endasm;
+}
+
+// Number of segments of the mapper of page 2 (0 = 256): segment number written at 8000H of each segment, segment 0
+// then holds the last number written to a segment aliased with it (256 - size). The bytes are restored.
+unsigned char ucMapperSegments() __naked
+{
+__asm
+        di
+        ld      hl,_g_aucMapperSave
+        ld      bc,0                ; b = 256 segments, c = segment
+mapsave:
+        ld      a,c
+        out     (0xFE),a
+        ld      a,(0x8000)
+        ld      (hl),a
+        inc     hl
+        inc     c
+        djnz    mapsave
+mapwrite:
+        ld      a,c
+        out     (0xFE),a
+        ld      (0x8000),a
+        inc     c
+        djnz    mapwrite
+        xor     a
+        out     (0xFE),a
+        ld      a,(0x8000)
+        neg
+        ld      e,a                 ; size (0 = 256)
+        ld      hl,_g_aucMapperSave
+maprestore:
+        ld      a,c
+        out     (0xFE),a
+        ld      a,(hl)
+        ld      (0x8000),a
+        inc     hl
+        inc     c
+        djnz    maprestore
+        ld      a,1                 ; segment of page 2 of the TPA
+        out     (0xFE),a
+        ei
+        ld      a,e
+        ret
+__endasm;
+}
+
+void vOutP2(unsigned char _ucSegment) __naked
+{
+    _ucSegment;
+__asm
+        out     (0xFE),a
+        ret
+__endasm;
+}
+
 unsigned char ucGetP2() __naked
 {
 __asm
@@ -364,12 +449,26 @@ bool bInstallDriver()
     unsigned int  uiSegment;
     unsigned char ucTpaSegment;
 
-    g_pucMapper = pucMapperTable();
     vVerbose("Mapper routines: ", (unsigned int) g_pucMapper, 4);
-    if (!g_pucMapper)
+    if (g_bDos1)
     {
-        vError("No memory mapper support routines (MSX-DOS 2 needed).\r\n", 1);
-        return false;
+        // MSX-DOS 1: last segment of the mapper of the TPA (not used by MSX-DOS 1: segments 0..3)
+        unsigned char ucSegments = ucMapperSegments();
+
+        vVerbose("Mapper segments (MSX-DOS 1): ", ucSegments, 2);
+        if (ucSegments && (ucSegments < 5))
+        {
+            vError("No memory mapper with a free segment (MSX-DOS 1: 128 KB needed).\r\n", 1);
+            return false;
+        }
+        g_ucDriverSegment = ucSegments - 1;
+        vVerbose("Driver segment: ", g_ucDriverSegment, 2);
+        vOutP2(g_ucDriverSegment);
+        memcopy((char *) DRIVER_BASE, &driver_start, &driver_end - &driver_start);
+        vRelocate((char *) DRIVER_BASE, &driver_reloc_start, (&driver_reloc_end - &driver_reloc_start) >> 1);
+        vOutP2(1);
+        vVerboseText("Driver copied\r\n");
+        return true;
     }
 
     uiSegment = uiAllocateSegment();
@@ -714,23 +813,140 @@ bool bGetServerInfo()
     return true;
 }
 
+// Stub copied at _pucCopy, relocated for the address _pucBase (MSX-DOS 2: both HIMSAV, MSX-DOS 1: buffer prepared
+// before it is copied below MSX-DOS), with the address of GET_P2 and of the previous hook
+void vFillStub(unsigned char *_pucCopy, unsigned char *_pucBase, unsigned int _uiGetP2, unsigned int _uiHookOriginal)
+{
+    memcopy(_pucCopy, &stub_start, &stub_end - &stub_start);
+    vRelocateFor(_pucCopy, (unsigned int) _pucBase, &stub_reloc_start, (&stub_reloc_end - &stub_reloc_start) >> 1);
+
+    _pucCopy[STUB_SEGMENT] = g_ucDriverSegment;
+    _pucCopy[STUB_AUTO_RETRY] = g_ucAutoRetry;
+    _pucCopy[STUB_PORT] = JioPort;
+    _pucCopy[STUB_TX_BLOCKS] = g_ucTxBlocks;
+    *((unsigned int*)(_pucCopy + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
+    *((unsigned int*)(_pucCopy + STUB_GET_P2 + 1)) = _uiGetP2;
+    *((unsigned int*)(_pucCopy + STUB_HOOK_ORIGINAL + 1)) = _uiHookOriginal;
+    g_pbHandledDrives = (bool *) (_pucCopy + STUB_DRIVES);
+}
+
+// MSX-DOS 2: stub at HIMSAV (memory reserved before the restart of MSX-DOS), GO_BDOS hook (F37AH)
 void vInstallStub()
 {
-    memcopy(HIMSAV, &stub_start, &stub_end - &stub_start);
-    vRelocate(HIMSAV, &stub_reloc_start, (&stub_reloc_end - &stub_reloc_start) >> 1);
-
-    HIMSAV[STUB_SEGMENT] = g_ucDriverSegment;
-    HIMSAV[STUB_AUTO_RETRY] = g_ucAutoRetry;
-    HIMSAV[STUB_PORT] = JioPort;
-    HIMSAV[STUB_TX_BLOCKS] = g_ucTxBlocks;
-    *((unsigned int*)(HIMSAV + STUB_ENTRY + 1)) = DRIVER_BASE + driver__vDriverEntry;
-    *((unsigned int*)(HIMSAV + STUB_GET_P2 + 1)) = (unsigned int) g_pucMapper + 0x27;
-    HIMSAV[STUB_HOOK_ORIGINAL + 1] = *((unsigned char*)0xF37B);
-    HIMSAV[STUB_HOOK_ORIGINAL + 2] = *((unsigned char*)0xF37C);
+    vFillStub((unsigned char *) HIMSAV, (unsigned char *) HIMSAV, (unsigned int) g_pucMapper + 0x27, *((unsigned int*)0xF37B));
 
     *((unsigned char*)0xF37A) = (unsigned char)0xC3;
-    *((unsigned int*)0xF37B) = HIMSAV + STUB_HOOK;
-    g_pbHandledDrives = HIMSAV + STUB_DRIVES;
+    *((unsigned int*)0xF37B) = (unsigned int) (HIMSAV + STUB_HOOK);
+}
+
+/*
+ =======================================================================================================================
+    MSX-DOS 1: no GO_BDOS hook. The BDOS jump (0005H) goes to the entry of MSXDOS.SYS (address in 0006H, also the top
+    of the TPA): the stub is put just below it, 0005H jumps to the stub, which calls MSXDOS.SYS for the functions it
+    does not handle. The warm boot of MSXDOS.SYS (after each program) sets 0005H again from a constant of its code
+    (LD HL,<entry> / LD (0006H),HL): set to the stub. Before the stub: JP to its hook, and its GET_P2 (MSX-DOS 1:
+    segment 1 in page 2). COMMAND.COM keeps a copy of itself and its data (batch file being run...) below the top of
+    the TPA: the stub is put below this copy (address read by the warm boot), which stays as it is, above the new top
+    of the TPA. If this address is not found: stub just below MSXDOS.SYS, and copy of COMMAND.COM made invalid (its
+    checksum), the warm boot reloads it below the stub.
+    The stub is prepared in a buffer, copied at the end (the stack of JIO.COM is at the top of the TPA).
+ =======================================================================================================================
+ */
+#define DOS1_PRESTUB 6                      // JP hook, LD A,1 / RET (GET_P2)
+unsigned char  g_aucStubImage[1024] = { 0 };
+unsigned char  g_aucDos1Stack[128] = { 0 };
+unsigned char *g_pucDos1Top = 0;            // new top of the TPA (0006H): stub image
+unsigned int   g_uiStubImageSize = 0;
+unsigned char *g_pucWarmBootConstant = 0;   // <entry> of LD HL,<entry> / LD (0006H),HL of the warm boot
+unsigned char *g_pucCommandChecksum = 0;    // checksum of the copy of COMMAND.COM, made invalid (0: copy kept)
+
+bool bPrepareStubDos1()
+{
+    unsigned int  uiEntry = *((unsigned int*)6);
+    unsigned char *pucBase;
+    unsigned char *p, *q;
+
+    g_uiStubImageSize = (&stub_end - &stub_start) + DOS1_PRESTUB;
+    if (g_uiStubImageSize > sizeof(g_aucStubImage))
+    {
+        vError("Stub too big.\r\n", 1);
+        return false;
+    }
+    unsigned int  uiTop = uiEntry;
+
+    // Warm boot of MSXDOS.SYS: LD HL,<entry> / LD (0006H),HL, then the check of the copy of COMMAND.COM:
+    // LD HL,(<start>) / LD BC,(<size>) ... LD HL,(<checksum>) / SBC HL,DE
+    for (p = (unsigned char *) uiEntry; p < (unsigned char *) uiEntry + 0x1000; p++)
+    {
+        if ((p[0] == 0x21) && (p[1] == (uiEntry & 0xFF)) && (p[2] == (uiEntry >> 8)) && (p[3] == 0x22) && (p[4] == 6) && (p[5] == 0))
+        {
+            g_pucWarmBootConstant = p + 1;
+            for (q = p + 6; q < p + 80; q++)
+            {
+                if ((q[0] == 0x2A) && (q[3] == 0xED) && (q[4] == 0x4B) && (uiTop == uiEntry))
+                    uiTop = **((unsigned int **) (q + 1));      // start of the copy of COMMAND.COM
+                if ((q[0] == 0xED) && (q[1] == 0x52) && (q[-3] == 0x2A))
+                {
+                    g_pucCommandChecksum = *((unsigned char **) (q - 2));
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    if ((uiTop >= uiEntry) || (uiTop < 0x8000))
+        uiTop = uiEntry;                    // copy of COMMAND.COM not found: reloaded below the stub
+    else
+        g_pucCommandChecksum = 0;           // copy of COMMAND.COM kept, above the stub
+
+    g_pucDos1Top = (unsigned char *) (uiTop - g_uiStubImageSize);
+    pucBase = g_pucDos1Top + DOS1_PRESTUB;
+    vFillStub(g_aucStubImage + DOS1_PRESTUB, pucBase, (unsigned int) (g_pucDos1Top + 3), uiEntry);
+    g_aucStubImage[0] = 0xC3;               // JP hook
+    *((unsigned int*)(g_aucStubImage + 1)) = (unsigned int) (pucBase + STUB_HOOK);
+    g_aucStubImage[3] = 0x3E;               // LD A,1 / RET: segment of page 2 of the TPA
+    g_aucStubImage[4] = 1;
+    g_aucStubImage[5] = 0xC9;
+
+    vVerbose("MSXDOS.SYS entry: ", uiEntry, 4);
+    vVerbose("Warm boot constant: ", (unsigned int) g_pucWarmBootConstant, 4);
+    vVerbose("Copy of COMMAND.COM: ", uiTop, 4);
+    vVerbose("COMMAND.COM reloaded, checksum: ", (unsigned int) g_pucCommandChecksum, 4);
+    vVerbose("Stub: ", (unsigned int) pucBase, 4);
+    if (!g_pucWarmBootConstant)
+    {
+        vError("Warm boot of MSXDOS.SYS not found (unknown version).\r\n", 1);
+        return false;
+    }
+    return true;
+}
+
+// Stub copied below MSXDOS.SYS, BDOS jump and warm boot set to it, COMMAND.COM reloaded, reset of the server
+// through the stub, then warm boot (no return: the stack of JIO.COM was at the top of the TPA)
+void vFinishDos1() __naked
+{
+__asm
+        ld      sp,_g_aucDos1Stack+128
+        ld      hl,_g_aucStubImage
+        ld      de,(_g_pucDos1Top)
+        ld      bc,(_g_uiStubImageSize)
+        ldir
+        ld      de,(_g_pucDos1Top)
+        ld      (6),de                      ; BDOS jump: stub
+        ld      hl,(_g_pucWarmBootConstant)
+        ld      (hl),e
+        inc     hl
+        ld      (hl),d
+        ld      hl,(_g_pucCommandChecksum)
+        ld      a,h
+        or      l
+        jr      z,dos1_reset
+        inc     (hl)                        ; copy of COMMAND.COM invalid: reloaded by the warm boot
+dos1_reset:
+        ld      c,0x1D                      ; reset of the server (through the stub)
+        call    5
+        jp      0
+__endasm;
 }
 
 /*
@@ -1104,9 +1320,30 @@ int main(int argc, char **argv)
                 return g_iResult;
             }
             puts("Installing RFS and drives...\r\n");
-            vRestoreProgramItem();
+            g_bDos1 = ucDosVersion() < 2;   // MSX-DOS 1: mapper accessed with its I/O ports, even if mapper support
+                                            // routines are found (memory manager)
+            g_pucMapper = g_bDos1 ? 0 : pucMapperTable();
+            if (!g_bDos1)
+            {
+                vRestoreProgramItem();
+                if (!g_pucMapper)
+                {
+                    vError("No memory mapper support routines.\r\n", 1);
+                    return g_iResult;
+                }
+            }
             if (!bInstallDriver())
                 return g_iResult;
+            if (g_bDos1)
+            {
+                if (!bPrepareStubDos1())
+                    return g_iResult;
+                g_aucStubImage[DOS1_PRESTUB + STUB_HAS_TURBO] = bHasTurbo();
+                g_aucStubImage[DOS1_PRESTUB + STUB_DOS1] = 1;
+                vApplyDriveChanges();
+                vVerboseText("Restarting COMMAND.COM...\r\n");
+                vFinishDos1();
+            }
             vReserveMemory();
             vVerbose("Memory reserved, HIMSAV: ", (unsigned int) HIMSAV, 4);
             vInstallJumper();

@@ -95,19 +95,21 @@ if {[info exists ::env(TOOL_TX)] && $::env(TOOL_TX) ne ""} {
 
 # Resident stub of JIO.COM (clients/JIO_NFS), copied to HIMSAV (F349H) when installed: the serial routines
 # are intercepted when the BDOS hook (F37AH) is written. NFS_TX, NFS_RX (environment): offsets in the stub.
+# MSX-DOS 1: no hook at F37AH, the stub is put below MSXDOS.SYS (6 bytes after the new BDOS address of 0006H).
 set nfs_done 0
-if {[info exists ::env(NFS_TX)] && $::env(NFS_TX) ne ""} {
-    debug set_watchpoint write_mem 0xF37A {} {
-        # the hook is also written at boot: only when the driver is found at HIMSAV
-        set base [peek16 0xF349]
-        set tx [expr {($base + $::env(NFS_TX)) & 0xFFFF}]
-        set rx [expr {($base + $::env(NFS_RX)) & 0xFFFF}]
-        if {!$::nfs_done && [sig $tx {0x42 0x4B 0xD9 0xC5}] && [sig $rx {0xD5 0x11 0x00 0x00 0x2B}]} {
-            set ::nfs_done 1
-            debug set_bp $tx "\[sig $tx {0x42 0x4B 0xD9 0xC5}\]" { tool_tx }
-            debug set_bp $rx "\[sig $rx {0xD5 0x11 0x00 0x00 0x2B}\]" { rfs_rx }
-        }
+proc nfs_arm {base} {
+    set tx [expr {($base + $::env(NFS_TX)) & 0xFFFF}]
+    set rx [expr {($base + $::env(NFS_RX)) & 0xFFFF}]
+    if {!$::nfs_done && [sig $tx {0x42 0x4B 0xD9 0xC5}] && [sig $rx {0xD5 0x11 0x00 0x00 0x2B}]} {
+        set ::nfs_done 1
+        debug set_bp $tx "\[sig $tx {0x42 0x4B 0xD9 0xC5}\]" { tool_tx }
+        debug set_bp $rx "\[sig $rx {0xD5 0x11 0x00 0x00 0x2B}\]" { rfs_rx }
     }
+}
+if {[info exists ::env(NFS_TX)] && $::env(NFS_TX) ne ""} {
+    # the hook is also written at boot: only when the driver is found at HIMSAV
+    debug set_watchpoint write_mem 0xF37A {} { nfs_arm [peek16 0xF349] }
+    debug set_watchpoint write_mem 0x0007 {} { nfs_arm [expr {[peek16 0x0006] + 6}] }
 }
 
 # skipped handshake: W_DRIVES = JIO drives, W_RFS = directories served, reset of the server (sent by the driver)

@@ -18,9 +18,10 @@
 #define STUB_AUTO_RETRY     0x32
 #define STUB_PORT           0x33
 #define STUB_TX_BLOCKS      0x34
-#define STUB_BOUNCE         0x35
+#define STUB_DOS1           0x35
+#define STUB_BOUNCE         0x36
 #define STUB_BOUNCE_SIZE    64
-#define STUB_DPB            0x75
+#define STUB_DPB            0x76
 
 #define DRIVER_BASE         0x8000
 #define DRIVER_STACK        0xC000
