@@ -7,7 +7,7 @@
 ; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
 ; TEST		Used for testing purposes
-; RAMROM	JIO ROM loaded in a segment of the memory mapper by JIO-ROM.COM (MSX-DOS 1 computers)
+; RAMROM	JIO ROM loaded in a segment of the memory mapper by JIO-ROM.COM or JIO-ROM.CAS (target dos2ram)
 
 
 ; DOS1 compile options

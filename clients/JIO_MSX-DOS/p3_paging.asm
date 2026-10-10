@@ -13,7 +13,8 @@
 ; Modifications:
 ; 01. Moved init of paging helper routines to separate module
 ; 02. Added TURBOR and DOSV231 options
-; 03. RAMROM option (JIO-ROM.COM): disk system ROM in a segment of the memory mapper, slot id with bit 6 set
+; 03. RAMROM option (JIO-ROM.COM, JIO-ROM.CAS): disk system ROM in a segment of the memory mapper, slot id with
+;     bit 6 set
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -318,7 +319,7 @@ I4418:
 
 	IFDEF RAMROM
 ; ---------------------------------------------------------
-; RAMROM (ROM loaded by JIO-ROM.COM on MSX-DOS 1): the 16KB of the disk system ROM are in the segment DATA_S+1 of
+; RAMROM (ROM loaded by JIO-ROM.COM or .CAS): the 16KB of the disk system ROM are in the segment DATA_S+1 of
 ; the memory mapper of page 3 (top segment, hidden to the mapper routines). Its slot id (MASTER, DRVTBL, HOOKSA,
 ; hooks) is the RAM slot of page 3 with bit 6 set, bit 6 being ignored by the slot routines of the BIOS and of
 ; these helper routines: page 1 shows the ROM when the RAM slot is enabled with the ROM segment in port FDH.

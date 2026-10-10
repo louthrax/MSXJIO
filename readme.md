@@ -32,9 +32,10 @@ The system is divided into two parts:
   Serves host folders as drives on an MSX that already runs MSX-DOS 2 or Nextor (from another cartridge), without the
   JIO ROM.
 
-  - **JIO-ROM.COM**  
-  Starts MSX-DOS 2 with the JIO MSX-DOS 2 ROM loaded in RAM, on an MSX2 that boots MSX-DOS 1 (e.g. from its floppy
-  drive), without the JIO ROM (see [JIO-ROM.COM](#jio-romcom-msx-dos-2-on-an-msx-dos-1-computer-without-the-jio-rom)).
+  - **JIO-ROM.COM**, **JIO-ROM.CAS**  
+  Start MSX-DOS 2 with the JIO MSX-DOS 2 ROM loaded in RAM, without the JIO ROM: from MSX-DOS 1 (e.g. booted from the
+  floppy drive), or from tape on an MSX without disk drive (see
+  [JIO-ROM.COM](#jio-romcom-msx-dos-2-on-an-msx-dos-1-computer-without-the-jio-rom)).
 
   - **JIOTIME.COM**  
   Sets the date and time of the MSX from the host.
@@ -252,6 +253,11 @@ MSX-DOS 2 starts as if the ROM was in a slot.
   interface) does not set them again.
 - The ROM loaded in RAM has no MSX-DOS 1 kernel entries: a disk image that boots MSX-DOS 1 (`MSXDOS.SYS`) does not
   boot with it (SofaRunIt can launch it from MSX-DOS 2).
+
+**JIO-ROM.CAS**, the tape version, does the same on an MSX without disk drive (or with its disk ROM disabled by holding
+SHIFT at boot): write it to a tape (or play it with a cassette interface), then in MSX BASIC type `BLOAD"CAS:",R`.
+The ROM is read from the tape (about 34 KB: a few minutes), then MSX-DOS 2 starts. Same requirement: a memory mapper
+of at least 128 KB in the RAM slot of pages 2 and 3. If MSX-DOS is already there, it tells you to use JIO-ROM.COM.
 
 ### If the link is lost
 

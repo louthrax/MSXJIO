@@ -62,6 +62,7 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `dos2_renmove` | MSX-DOS 2 | VG-8235 (360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and on the floppy B: |
 | `dos2_takeover` | MSX-DOS 2 | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the JIO ROM takes over, copy to the floppy |
 | `sri_vg8235` | MSX-DOS 2 | VG-8235 + 1 MB mapper | SofaRunIt (`SRI.COM`, not in this repository: `SOFARUNIT` environment) launches `GAME.DSK` (MSX-DOS 1 boot disk made with the disk manipulator) from the JIO drive A:, its `AUTOEXEC.BAT` runs a program |
+| `dos2_msx1` | MSX-DOS 2 | VG-8020 (MSX1) + 1 MB mapper | JIO drive A:: boot, FDTEST, FCB functions |
 | `dos2_readonly` | MSX-DOS 2 | VG-8235 (360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: and floppy B: writable |
 | `dos2_bootsector` | MSX-DOS 2 | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
 | `dos2_image` | MSX-DOS 2 | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
@@ -75,9 +76,10 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `nfs_nms8255`, `nfs_turbor` | JIO.COM (`clients/JIO_NFS`) | NMS 8255 + MSX-DOS 2 cartridge, FS-A1ST (internal MSX-DOS 2) | no JIO ROM: `JIO +D` from the floppy A:, then (after the warm restart of JIO.COM) `NFSTEST.BAT` typed at the prompt (`tcl/typecmd.tcl`): DIR, TYPE, COPY to D: (byte compare, date set with `_HFTIME`), MD/CD, REN, MOVE, ATTRIB, FCB open / block read / close (`fcbread/`), parameters and buffers in page 2 (`p2test/`: path, FIB, `_READ` buffer, FCB and DTA at 9000H and above, hidden by the driver which is mapped in page 2). The bridge intercepts the serial routines of the resident driver (or stub) when JIO.COM installs its hook. Not tested: redirection to D: (`_DUP` not supported by JIO.COM) |
 
 JIO-ROM.COM scenarios (`jiorom_*`): MSX-DOS 1 boots from the floppy (`MSXDOS.SYS` and `COMMAND.COM` of
-`DOS1_FILES`, default `/mnt/DataLinux/Projects/MSX/sdcard/MSXDOS1`), its `AUTOEXEC.BAT` runs `JIO-ROM` (`clients/JIO_ROM`,
-ROM built with `RAMROM`), which starts MSX-DOS 2 with the ROM in RAM (`JIOROM_BOOT` of `run_scenario`). The timed
-actions of the scenario scripts are delayed by `TIME_SHIFT` seconds (`tcl/shift.tcl`) for this boot.
+`DOS1_FILES`, default `/mnt/DataLinux/Projects/MSX/sdcard/MSXDOS1`), its `AUTOEXEC.BAT` runs `JIO-ROM`
+(`clients/JIO_ROM`, ROM built by the target `dos2ram` of `0_Build.sh`), which starts MSX-DOS 2 with the ROM in RAM
+(`JIOROM_BOOT` of `run_scenario`). The timed actions of the scenario scripts are delayed by `TIME_SHIFT` seconds
+(`tcl/shift.tcl`) for this boot. JIO-ROM.CAS scenarios (`jiocas_*`): the tape version (`clients/JIO_CAS`).
 
 | Scenario | Machine | Tests |
 |---|---|---|
@@ -87,6 +89,9 @@ actions of the scenario scripts are delayed by `TIME_SHIFT` seconds (`tcl/shift.
 | `jiorom_basic_jio`, `jiorom_basic_flop` | VG-8235 | as `dos2_basic_jio`, `dos2_basic_flop` (hooks of Disk BASIC) |
 | `jiorom_format` | NMS 8255 | as `dos2_format_nms` |
 | `jiorom_ramdisk` | VG-8235 | as `dos2_ramdisk`: after the reset, MSX-DOS 1 starts JIO-ROM.COM again |
+| `jiocas_vg8235` | VG-8235 booted with SHIFT (disk ROM disabled) | `JIO-ROM.CAS` (`clients/JIO_CAS`) in the cassette player, `BLOAD"CAS:",R` (`tcl/tape.tcl`): ROM read from the tape, MSX-DOS 2 started (FDTEST, FCB functions) |
+| `jiocas_msx1` | VG-8020 (MSX1) + 1 MB mapper | as `jiocas_vg8235` (no disk drive), function keys of BASIC not shown |
+| `jiocas_dos` | VG-8235 with MSX-DOS 1 | `JIO-ROM.CAS`: message (MSX-DOS already there), nothing loaded |
 
 ## Results
 

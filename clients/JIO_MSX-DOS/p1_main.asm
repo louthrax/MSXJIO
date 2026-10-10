@@ -24,7 +24,7 @@
 ; 11. Added TURBOR and DOSV231 options (not included: rom disk driver, boot logic, DOS1 mode, Kanji)
 ; 12. Optmized code / removed unused code (OPTM)
 ; 13. JIO: no boot sector, MSXDOS2.SYS is loaded from the JIO server, no sector buffer and DPB allocated
-; 14. RAMROM: ROM in a segment of the memory mapper, loaded by JIO-ROM.COM on MSX-DOS 1 (see p3_paging.asm)
+; 14. RAMROM: ROM in a segment of the memory mapper, loaded by JIO-ROM.COM or JIO-ROM.CAS (see p3_paging.asm)
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -5551,7 +5551,7 @@ J410F:		DI
 		POP	AF
 		LD	H,080H			; restore page 2 slot (ie. RAM)
 		CALL	ENASLT			; uses the ENASLT routine of the just loaded disk rom
-	ENDIF					; RAMROM: kernel put in the segment CODE_S by JIO-ROM.COM
+	ENDIF					; RAMROM: kernel put in the segment CODE_S by JIO-ROM
 	ELSE
 		CALL	PUT_P2
 		LD	B,32			; transfer 32 sectors (16K)
