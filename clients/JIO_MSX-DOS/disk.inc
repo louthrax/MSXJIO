@@ -7,6 +7,7 @@
 ; CORE		Include dummy IDE driver
 ; IDEDOS1	MSX-DOS 1 IDE
 ; TEST		Used for testing purposes
+; RAMROM	JIO ROM loaded in a segment of the memory mapper by JIO-ROM.COM (MSX-DOS 1 computers)
 
 
 ; DOS1 compile options
@@ -51,7 +52,12 @@ IF CFIDE || PPIDE
 ENDIF
 
 IFDEF JIO
+IFNDEF RAMROM
 	DEFINE	TURBOR
+ELSE
+	DEFINE	DOSV231		; RAMROM: MSX-DOS 1 computer, no turbo R code
+	DEFINE	NODOS1		; RAMROM: room for the routines of the ROM in RAM (no MSX-DOS 1 kernel entries)
+ENDIF
 IFNDEF HYBRID
 	DEFINE	FAT16
 ENDIF

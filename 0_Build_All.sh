@@ -11,6 +11,7 @@ cd "$(dirname "$0")"
 ./clients/JIO_MSX-DOS/0_Build.sh
 ./clients/JIO_NFS/0_Build.sh
 ./clients/JIO_TIME/0_Build.sh
+./clients/JIO_ROM/0_Build.sh
 ./tools/JSM/0_Build.sh
 
 if [ "${1:-}" != clients ]; then

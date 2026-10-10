@@ -32,6 +32,10 @@ The system is divided into two parts:
   Serves host folders as drives on an MSX that already runs MSX-DOS 2 or Nextor (from another cartridge), without the
   JIO ROM.
 
+  - **JIO-ROM.COM**  
+  Starts MSX-DOS 2 with the JIO MSX-DOS 2 ROM loaded in RAM, on an MSX2 that boots MSX-DOS 1 (e.g. from its floppy
+  drive), without the JIO ROM (see [JIO-ROM.COM](#jio-romcom-msx-dos-2-on-an-msx-dos-1-computer-without-the-jio-rom)).
+
   - **JIOTIME.COM**  
   Sets the date and time of the MSX from the host.
 
@@ -231,6 +235,23 @@ JIO          ; help
 ```
 
 Put `JIO +` in your `AUTOEXEC.BAT` to install it at each boot.
+
+### JIO-ROM.COM: MSX-DOS 2 on an MSX-DOS 1 computer, without the JIO ROM
+
+On an MSX2 that boots MSX-DOS 1 (e.g. from its internal floppy drive), JIO-ROM.COM starts MSX-DOS 2 with the JIO
+MSX-DOS 2 ROM, loaded in RAM: no cartridge needed. The MSX is not reset: the ROM is copied to the memory mapper, then
+MSX-DOS 2 starts as if the ROM was in a slot.
+
+- Run `JIO-ROM` from MSX-DOS 1 (or put it in the `AUTOEXEC.BAT` of your MSX-DOS 1 floppy).
+- The server serves directories as with the ROM: put `MSXDOS2.SYS` and `COMMAND2.COM` in the folder served as **A:**.
+  The drives of the MSX (e.g. its floppy drive) come after the served drives. Disk images work too (MSX-DOS 2 boot).
+- Needs a memory mapper of at least 128 KB in the RAM slot of pages 1 to 3 (e.g. Philips VG-8235, NMS 8255). The
+  ROM uses its top 16 KB segment: MSX-DOS 2 shows 112 KB on a 128 KB MSX.
+- A reset of the MSX comes back to MSX-DOS 1: put `JIO-ROM` in its `AUTOEXEC.BAT` to start MSX-DOS 2 again.
+- Only the disk ROMs of the MSX are initialized again: an extension that set hooks at boot (other than a disk
+  interface) does not set them again.
+- The ROM loaded in RAM has no MSX-DOS 1 kernel entries: a disk image that boots MSX-DOS 1 (`MSXDOS.SYS`) does not
+  boot with it (SofaRunIt can launch it from MSX-DOS 2).
 
 ### If the link is lost
 

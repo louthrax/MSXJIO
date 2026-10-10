@@ -61,6 +61,7 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `dos2_longnames` | MSX-DOS 2 | VG-8235 | long host names: MD/CD with a long name, 8.3 aliases (`BOMBAM~1`, `LONGFI~1.TEX`) in DIR, CD, TYPE, COPY into an aliased directory |
 | `dos2_renmove` | MSX-DOS 2 | VG-8235 (360 KB) | REN, MOVE into a directory, ATTRIB +R / -R, DEL of a read only file refused, copy back (`_RENAME`, `_MOVE`, `_ATTR`); on the JIO drive A: and on the floppy B: |
 | `dos2_takeover` | MSX-DOS 2 | NMS 8255 + MSX-DOS 2 cartridge in slot 1 | the JIO ROM takes over, copy to the floppy |
+| `sri_vg8235` | MSX-DOS 2 | VG-8235 + 1 MB mapper | SofaRunIt (`SRI.COM`, not in this repository: `SOFARUNIT` environment) launches `GAME.DSK` (MSX-DOS 1 boot disk made with the disk manipulator) from the JIO drive A:, its `AUTOEXEC.BAT` runs a program |
 | `dos2_readonly` | MSX-DOS 2 | VG-8235 (360 KB) | read only server (`MOCK_READONLY`): COPY, MD, DEL, REN, ATTRIB on A: refused with "Write protected disk", host files unchanged, TYPE works, RAM disk H: and floppy B: writable |
 | `dos2_bootsector` | MSX-DOS 2 | VG-8235 | server in disk image mode, self-booting image (`IMAGE_SETUP`): the boot loader of the boot sector (C01EH) is started at boot, as with a game disk, MSX-DOS 2 is not started |
 | `dos2_image` | MSX-DOS 2 | VG-8235 (360 KB) | server in disk image mode (`MOCK_IMAGE`, 720 KB image made from the drive files): real handshake (`COMMAND_DRIVE_INFO`, `_LOGIN` = 0), MSX-DOS 2 boots from the image A: (sectors with CRC, local FAT12 drive), copies image <-> floppy B:, MD/CD, redirection, FCB functions, no RAM disk; image read back in `image_out/` |
@@ -72,6 +73,20 @@ mock server (`mock_check`) and the JIOTIME scenarios (date of the mock server, n
 | `jiotime`, `jiotime_tr`, `jiotime_none` | MSX-DOS 2 | VG-8235, FS-A1ST | `clients/JIO_TIME/JIOTIME.COM` (`COMMAND_DATE_TIME`, `MOCK_DATE`): date and time of the MSX set and read back, Z80 mode on turbo R, "No answer" without answer of the server. The RTC of openMSX 20.0 changes some months (July read back as May, also when written directly to the chip): October is used |
 | `nfs_cart` | JIO.COM | NMS 8255 + MSX-DOS 2 cartridge | as `nfs_nms8255` with the JIO cartridge option (`JIO C30 +D`), `JIO S` shows port 30H (I/O register not emulated) |
 | `nfs_nms8255`, `nfs_turbor` | JIO.COM (`clients/JIO_NFS`) | NMS 8255 + MSX-DOS 2 cartridge, FS-A1ST (internal MSX-DOS 2) | no JIO ROM: `JIO +D` from the floppy A:, then (after the warm restart of JIO.COM) `NFSTEST.BAT` typed at the prompt (`tcl/typecmd.tcl`): DIR, TYPE, COPY to D: (byte compare, date set with `_HFTIME`), MD/CD, REN, MOVE, ATTRIB, FCB open / block read / close (`fcbread/`), parameters and buffers in page 2 (`p2test/`: path, FIB, `_READ` buffer, FCB and DTA at 9000H and above, hidden by the driver which is mapped in page 2). The bridge intercepts the serial routines of the resident driver (or stub) when JIO.COM installs its hook. Not tested: redirection to D: (`_DUP` not supported by JIO.COM) |
+
+JIO-ROM.COM scenarios (`jiorom_*`): MSX-DOS 1 boots from the floppy (`MSXDOS.SYS` and `COMMAND.COM` of
+`DOS1_FILES`, default `/mnt/DataLinux/Projects/MSX/sdcard/MSXDOS1`), its `AUTOEXEC.BAT` runs `JIO-ROM` (`clients/JIO_ROM`,
+ROM built with `RAMROM`), which starts MSX-DOS 2 with the ROM in RAM (`JIOROM_BOOT` of `run_scenario`). The timed
+actions of the scenario scripts are delayed by `TIME_SHIFT` seconds (`tcl/shift.tcl`) for this boot.
+
+| Scenario | Machine | Tests |
+|---|---|---|
+| `jiorom_vg8235`, `jiorom_nms8255` | VG-8235 (360 KB), NMS 8255 (720 KB) | as `dos2_vg8235` (JIO drive A: + floppy B:), 112 KB of RAM for MSX-DOS 2 (top segment: ROM), `fdtest/`: segment written to port FDH by a program kept across the interrupts (signature search of the ROM) |
+| `jiorom_1mb`, `jiorom_1mb_s2` | VG-8235 + 1 MB mapper (slot 1, slot 2) | same, ROM in the mapper of page 3 |
+| `jiorom_sri` | VG-8235 + 1 MB mapper | as `sri_vg8235`: SofaRunIt calls the BDOS of MSX-DOS 2 (F37DH) with the BIOS in page 0 |
+| `jiorom_basic_jio`, `jiorom_basic_flop` | VG-8235 | as `dos2_basic_jio`, `dos2_basic_flop` (hooks of Disk BASIC) |
+| `jiorom_format` | NMS 8255 | as `dos2_format_nms` |
+| `jiorom_ramdisk` | VG-8235 | as `dos2_ramdisk`: after the reset, MSX-DOS 1 starts JIO-ROM.COM again |
 
 ## Results
 

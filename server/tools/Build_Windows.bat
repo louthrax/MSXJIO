@@ -88,5 +88,4 @@ exit /b 0
 
 :fail
 set "el=%errorlevel%"
-shutdown /s /t 1
 exit /b %el%

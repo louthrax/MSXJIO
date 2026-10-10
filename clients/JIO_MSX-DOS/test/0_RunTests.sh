@@ -73,6 +73,7 @@ prepare_files() {
     TOOL_MAP="$OUT/obj_jiotime/JIOTIME.map"
     ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
     ( cd "$TEST/p2test" && z88dk-z80asm -b -o="$OUT/base/P2TEST.COM" p2test.asm && rm -f "$OUT"/base/*.o p2test.o ) || { echo "Build of P2TEST.COM failed"; exit 1; }
+    ( cd "$TEST/fdtest" && z88dk-z80asm -b -o="$OUT/base/FDTEST.COM" fdtest.asm && rm -f "$OUT"/base/*.o fdtest.o ) || { echo "Build of FDTEST.COM failed"; exit 1; }
     # JIO.COM (clients/JIO_NFS), built in a copy (its make script writes next to the sources)
     rm -rf "$OUT/nfs"
     mkdir -p "$OUT/nfs/clients"
@@ -85,6 +86,17 @@ prepare_files() {
     # serial routines of the installer (COMMAND_DRIVE_INFO at install), intercepted as the routines of JIOTIME.COM
     NFS_MAIN_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/main.map"
     [ -f "$NFS_MAP" ] || NFS_MAP="$OUT/nfs/clients/JIO_NFS/0_Temp/driver.sym"
+    # JIO-ROM.COM (clients/JIO_ROM, with the sources of the ROM), built in a copy: ROM map file for the bridge
+    rm -rf "$OUT/jiorom"
+    mkdir -p "$OUT/jiorom/clients"
+    cp -r "$SRC/../../common" "$OUT/jiorom/"
+    cp -r "$SRC/../JIO_ROM" "$OUT/jiorom/clients/"
+    mkdir -p "$OUT/jiorom/clients/JIO_MSX-DOS"
+    cp "$SRC"/*.asm "$SRC"/*.inc "$OUT/jiorom/clients/JIO_MSX-DOS/"
+    rm -rf "$OUT/jiorom/clients/JIO_ROM/0_Builds" "$OUT/jiorom/clients/JIO_ROM/0_Temp"
+    ( cd "$OUT/jiorom/clients/JIO_ROM" && bash 0_Build.sh > build.log 2>&1 ) || { echo "Build of JIO-ROM.COM failed"; exit 1; }
+    JIOROM="$OUT/jiorom/clients/JIO_ROM/0_Builds/JIO-ROM.COM"
+    JIOROM_MAP="$OUT/jiorom/clients/JIO_ROM/0_Temp/rom/jio_dos2_ram.map"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
     printf 'THIS FILE IS ON THE FLOPPY\r\n' > "$OUT/floppy_base/FLOPPY.TXT"
@@ -109,6 +121,20 @@ run_scenario() {
     [ -n "${SETUP:-}" ] && $SETUP drive
     printf "$autoexec" > drive/AUTOEXEC.BAT
     make_bridge "$map" bridge.tcl
+
+    if [ -n "${JIOROM_BOOT:-}" ]; then
+        # JIO-ROM.COM: MSX-DOS 1 boots from the floppy and starts the JIO ROM in RAM (files of the scenario added)
+        rm -rf floppy_files; mkdir -p floppy_files
+        [ -n "$ffiles" ] && cp -p "$ffiles"/* floppy_files/
+        cp -p "$DOS1_FILES/MSXDOS.SYS" "$DOS1_FILES/COMMAND.COM" "$JIOROM" floppy_files/
+        printf 'JIO-ROM\r\n' > floppy_files/AUTOEXEC.BAT
+        ffiles="$dir/floppy_files"
+        fsize=${fsize:-360}
+    fi
+    local shift=""
+    [ -n "${TIME_SHIFT:-}" ] && shift="-script $TEST/tcl/shift.tcl"
+    # EXTRA_SCRIPT (environment): other tcl script run before the scenario script
+    [ -n "${EXTRA_SCRIPT:-}" ] && shift="$shift -script $EXTRA_SCRIPT"
 
     if [ -n "$fsize" ]; then
         FLOPPY_SIZE=$fsize FLOPPY_FILES=$ffiles timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/mkdisk.tcl" > /dev/null 2>&1
@@ -149,7 +175,7 @@ run_scenario() {
     TOOL_TX=$tool_tx TOOL_RX=$tool_rx \
     NFS_TX=${NFS:+$(nfs_offset vJIOTransmit)} NFS_RX=${NFS:+$(nfs_offset bJIOReceive)} \
     JIO_DRIVES=$njio JIO_HANDSHAKE=$handshake SCREEN_TIMES="$times" timeout 180 openmsx -machine "$machine" $disk $slots \
-        -script bridge.tcl -script "$script" > openmsx.log 2>&1
+        -script bridge.tcl $shift -script "$script" > openmsx.log 2>&1
     rc=$?
     kill $mp 2> /dev/null
     wait $mp 2> /dev/null
@@ -318,11 +344,12 @@ test_dos_hybrid() { # name rom map machine slots floppy size description
 RAMDISK='RAMDISK\r\nRAMDISK 32K\r\nRAMDISK\r\nCOPY A:COMMAND2.COM H:\r\nCOPY A:HELLO.TXT H:\r\nMD H:SUB\r\nCOPY A:HELLO.TXT H:SUB\r\nCOPY H:COMMAND2.COM A:Z.COM\r\nDIR H: > A:RAM1.TXT\r\nH:\r\nA:FCBTEST\r\nA:\r\nCOPY A:COMMAND2.COM H:FULL.COM > A:FULL.TXT\r\n'
 RAMDISK_FLOPPY='COPY H:SUB\\HELLO.TXT B:RAM.TXT\r\n'
 RAMDISK_END='RAMDISK 0 /D\r\nDIR H: > A:RAM3.TXT\r\nRAMDISK 16K\r\nCOPY A:HELLO.TXT H:\r\n'
+# RESET_TIME (environment): time of the screen dump after the MSX reset (default 20 s)
 test_ramdisk() { # name rom map machine slots description [floppy size]
     wanted "$1" || return
     local autoexec="$RAMDISK$RAMDISK_END"
     [ -n "${7:-}" ] && autoexec="$RAMDISK$RAMDISK_FLOPPY$RAMDISK_END"
-    FIRST_TIME=50 SECOND_TIME=20 REBOOT_AUTOEXEC='RAMDISK > A:RAM2.TXT\r\nDIR H:\r\n' \
+    FIRST_TIME=50 SECOND_TIME=${RESET_TIME:-20} REBOOT_AUTOEXEC='RAMDISK > A:RAM2.TXT\r\nDIR H:\r\n' \
         run_scenario "$1" "$2" "$3" "$4" "$5" "$autoexec" "$TEST/tcl/reboot.tcl" "${7:-}" "$OUT/floppy_base" 1
     local d="$OUT/$1"
     begin_checks "$1"
@@ -502,6 +529,51 @@ test_nfs_dos1() { # name machine "slots" description
     end_checks "$1" "$4"
 }
 
+# JIO-ROM.COM on MSX-DOS 1: boot from the floppy (MSX-DOS 1 of the internal disk ROM), AUTOEXEC.BAT runs JIO-ROM, which
+# starts MSX-DOS 2 with the JIO ROM in a segment of the memory mapper: JIO drive A: + floppy B:, same commands as the
+# MSX-DOS 2 ROM (AUTOEXEC.BAT of the JIO drive)
+test_jiorom() { # name machine "slots" description [floppy size] [primary RAM of MSX-DOS 2 (KB), default 112]
+    wanted "$1" || return
+    if [ ! -f "$DOS1_FILES/MSXDOS.SYS" ]; then echo "  SKIP  $1: $DOS1_FILES/MSXDOS.SYS not found"; return; fi
+    JIOROM_BOOT=1 EXTRA_SCRIPT="$TEST/tcl/csrsw.tcl" run_scenario "$1" "$JIOROM" "$JIOROM_MAP" "$2" "$3" "VER\\r\\nFDTEST\\r\\n$DOS_HYBRID" "$TEST/tcl/screens.tcl" "${5:-360}" "$OUT/floppy_base" 1 "$(seq -s " " 14 2 30) 40 60 80"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "MSX-DOS 2 started (JIO ROM in RAM)" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
+    check "no cursor shown when printing (CSRSW cleared at boot: DIR as fast as with the ROM)" "$(grep -q 'CSRSW=00' "$d/csrsw.txt" 2> /dev/null && ! grep -q 'CSRSW=01' "$d/csrsw.txt" && echo ok)"
+    check "segment written to port FDH kept across the interrupts (FDTEST, signature search)" "$(has_text "$d/screens.txt" 'FDTEST: OK' && echo ok)"
+    check "top segment of the mapper used by the ROM (${6:-128 KB: 112 KB} for MSX-DOS 2)" "$(has_text "$d/screens.txt" "Primary RAM ${6:-112}KB" && echo ok)"
+    check "FCB test result on both drives" "$([ "$(count_text "$d/screen_80.txt" "$FCB_OK")" -ge 2 ] && echo ok)"
+    check "open with the FIB after the last _FNEXT" "$(has_text "$d/screens.txt" "$FIB_OK" && echo ok)"
+    check "floppy -> JIO copy (FLOPPY.TXT)" "$([ -f "$d/drive/FLOPPY.TXT" ] && echo ok)"
+    check "Y.COM (JIO -> floppy -> JIO) identical" "$(cmp -s "$d/drive/Y.COM" "$d/drive/COMMAND2.COM" && echo ok)"
+    check "floppy SUB/HELLO.TXT" "$([ -f "$d/floppy_out/sub/hello.txt" ] && echo ok)"
+    check "X.COM deleted from floppy" "$([ ! -f "$d/floppy_out/x.com" ] && echo ok)"
+    check "floppy DIR redirected to JIO drive" "$(has_text "$d/drive/OUT.TXT" 'Directory of B:' && echo ok)"
+    end_checks "$1" "$4"
+}
+
+# SofaRunIt (SRI.COM, not in this repository: SOFARUNIT environment, default the SD card folder of the author) launches
+# GAME.DSK (MSX-DOS 1 boot disk made with the disk manipulator, AUTOEXEC.BAT runs RUNOK.COM) from the JIO drive A:
+SOFARUNIT=${SOFARUNIT:-/mnt/DataLinux/Projects/MSX/sdcard/SOFARUN/SRI.COM}
+setup_sri() { # drive directory
+    cp "$SOFARUNIT" "$1/SRI.COM"
+    rm -rf "$1/../game"; mkdir -p "$1/../game"
+    cp -p "$DOS1_FILES/MSXDOS.SYS" "$DOS1_FILES/COMMAND.COM" "$1/../game/"
+    printf '\x11\x09\x01\x0e\x09\xcd\x05\x00\xc9RUN OK$' > "$1/../game/RUNOK.COM"
+    printf 'RUNOK\r\n' > "$1/../game/AUTOEXEC.BAT"
+    ( cd "$1/.." && DISK_FILE=drive/GAME.DSK FLOPPY_SIZE=360 FLOPPY_FILES=game timeout 30 openmsx -machine Philips_VG_8235 -script "$TEST/tcl/mkdisk.tcl" > /dev/null 2>&1 )
+}
+test_sri() { # name rom map machine slots description
+    wanted "$1" || return
+    if [ ! -f "$SOFARUNIT" ]; then echo "  SKIP  $1: $SOFARUNIT not found"; return; fi
+    if [ ! -f "$DOS1_FILES/MSXDOS.SYS" ]; then echo "  SKIP  $1: $DOS1_FILES/MSXDOS.SYS not found"; return; fi
+    TYPE_TIME=18 TYPE_TEXT=$'\r' SETUP=setup_sri run_scenario "$1" "$2" "$3" "$4" "$5" 'SRI GAME.DSK\r\n' "$TEST/tcl/typecmd.tcl" "" "" 1 "15 20 25 30 40 60"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "MSX-DOS 1 of the disk image booted by SofaRunIt, program run" "$(has_text "$d/screens.txt" 'RUN OK' && echo ok)"
+    end_checks "$1" "$6"
+}
+
 # MSX-DOS 2 ROM taking over from a MSX-DOS 2 cartridge in slot 1
 test_takeover_hybrid() { # name rom map machine floppy size description
     wanted "$1" || return
@@ -560,6 +632,20 @@ test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R,
 test_nfs       nfs_cart     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM with the JIO cartridge option (JIO C30 +D, port not emulated)" C30 'JIO cartridge, port 30H'
 test_nfs       nfs_joy1     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM on joystick port 1 (JIO J1 +D, serial line intercepted)" J1 'joystick port 1'
 test_nfs_dos1  nfs_dos1     Philips_VG_8235   "-ext ram1mb"            "VG-8235 + 1 MB mapper, JIO.COM on MSX-DOS 1 (internal disk ROM)"
+
+test_sri       sri_vg8235     "$R" "$RM" Philips_VG_8235  "-carta $R -extb ram1mb" "VG-8235 + 1 MB mapper, SofaRunIt launches a MSX-DOS 1 disk image from the JIO drive"
+
+echo "JIO-ROM.COM (JIO MSX-DOS 2 ROM in RAM, MSX-DOS 1 computers):"
+test_jiorom    jiorom_vg8235  Philips_VG_8235  ""                      "VG-8235 (128 KB mapper), JIO-ROM.COM on MSX-DOS 1: JIO drive A: + floppy B:"
+test_jiorom    jiorom_nms8255 Philips_NMS_8255 ""                      "NMS 8255 (128 KB mapper, 720 KB drive), JIO-ROM.COM on MSX-DOS 1: JIO drive A: + floppy B:" 720
+test_jiorom    jiorom_1mb     Philips_VG_8235  "-ext ram1mb"           "VG-8235 + 1 MB mapper, JIO-ROM.COM: ROM in the mapper of page 3" 360 "${JIOROM_1MB_RAM:-1008}"
+test_jiorom    jiorom_1mb_s2  Philips_VG_8235  "-extb ram1mb"          "VG-8235 + 1 MB mapper in slot 2, JIO-ROM.COM" 360 "${JIOROM_1MB_RAM:-1008}"
+# scenarios of the MSX-DOS 2 ROM, with the ROM started by JIO-ROM.COM (MSX-DOS 1 boot: actions of the scripts delayed)
+JIOROM_BOOT=1 TIME_SHIFT=15 test_basic  jiorom_basic_jio  "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "" A "VG-8235, JIO-ROM.COM, Disk BASIC on the JIO drive" 360
+JIOROM_BOOT=1 TIME_SHIFT=15 test_basic  jiorom_basic_flop "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "" B "VG-8235, JIO-ROM.COM, Disk BASIC on the floppy" 360
+JIOROM_BOOT=1 TIME_SHIFT=15 test_format jiorom_format     "$JIOROM" "$JIOROM_MAP" Philips_NMS_8255 "" 720 "NMS 8255, JIO-ROM.COM, FORMAT B: (720 KB floppy, double sided), then COPY to B:" 713K 2
+JIOROM_BOOT=1 TIME_SHIFT=15 test_sri    jiorom_sri        "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "-extb ram1mb" "VG-8235 + 1 MB mapper, JIO-ROM.COM, SofaRunIt launches a MSX-DOS 1 disk image from the JIO drive"
+JIOROM_BOOT=1 TIME_SHIFT=15 RESET_TIME=40 test_ramdisk jiorom_ramdisk   "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "" "VG-8235, JIO-ROM.COM, RAMDISK (H: on the server), MSX reset" 360
 
 echo
 echo "Passed: $PASSED, failed: $FAILED${FAILED_LIST:+ ($FAILED_LIST )}"

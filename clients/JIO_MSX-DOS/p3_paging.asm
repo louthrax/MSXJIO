@@ -13,6 +13,7 @@
 ; Modifications:
 ; 01. Moved init of paging helper routines to separate module
 ; 02. Added TURBOR and DOSV231 options
+; 03. RAMROM option (JIO-ROM.COM): disk system ROM in a segment of the memory mapper, slot id with bit 6 set
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -315,6 +316,183 @@ I43F6:		DEFW    SDOSON,PH_SDOSON
 I4418:
 		PHASE  0
 
+	IFDEF RAMROM
+; ---------------------------------------------------------
+; RAMROM (ROM loaded by JIO-ROM.COM on MSX-DOS 1): the 16KB of the disk system ROM are in the segment DATA_S+1 of
+; the memory mapper of page 3 (top segment, hidden to the mapper routines). Its slot id (MASTER, DRVTBL, HOOKSA,
+; hooks) is the RAM slot of page 3 with bit 6 set, bit 6 being ignored by the slot routines of the BIOS and of
+; these helper routines: page 1 shows the ROM when the RAM slot is enabled with the ROM segment in port FDH.
+; The segment of page 1 follows the slot id given to the slot routines of page 1 (ENASLT, CALSLT, CALLF, RDSLT,
+; WRSLT): ROM segment for bit 6 set, else the RAM segment (PH_SEG1: segment of PUT_P1, or segment written to port
+; FDH by a program, found by PH_P1SEG).
+; PH_TRAMP is at the start of these routines (address in ST_BDOS), the hooks of the ROM call it (C4C73).
+; ---------------------------------------------------------
+
+; ---------------------------------------------------------
+; Hook handler: CALL PH_TRAMP / DEFW routine, instead of RST 30H / slot id / DEFW routine / RET (whatever is in
+; page 0: interrupts in the BIOS, or BIOS calls of a program, do not use the CALLF of the DOS)
+; As CALLF: AF, BC, DE, HL passed to and from the routine, IX, IY and the alternate registers changed
+; ROM segment already in page 1 (always for the hooks of Disk BASIC): stack as with CALLF (the routines of Disk BASIC
+; change the return addresses of CALLF on the stack), else the segment state is restored by PH_REST after the call
+; ---------------------------------------------------------
+PH_TRAMP:	EX	(SP),HL			; HL = pointer to the routine in the hook, (SP) = HL
+		PUSH	AF
+		LD	A,(HL)
+		INC	HL
+		LD	H,(HL)
+		LD	L,A
+		PUSH	HL
+		POP	IX			; IX = routine
+; PH_BDOS: routine in IX, stack: AF, HL, return
+J_TRC:
+R_TR1:		LD	A,(PH_ROMON)
+		LD	L,A			; L = segment state of page 1 (PH_REST)
+		LD	A,(RAMAD3)
+		OR	40H			; slot id of the ROM
+		LD	H,A
+		PUSH	HL
+		POP	IY			; IYH = slot id of the ROM
+R_TR2:		CALL	PH_SETP1		; ROM segment in page 1
+		LD	A,L
+		OR	A
+		JR	NZ,J_TR1		; ROM segment already in page 1
+		LD	H,L
+		POP	AF
+		EX	(SP),HL			; HL restored, (SP) = segment state of page 1
+		PUSH	HL
+R_TR3:		LD	HL,PH_REST
+		EX	(SP),HL			; return of CALSLT: PH_REST
+		JP	CALSLT			; CALSLT of the BIOS or of the DOS (page 0)
+
+J_TR1:		POP	AF
+		POP	HL
+		PUSH	HL
+R_TR4:		LD	HL,PH_PUTP3
+		EX	(SP),HL			; return of CALSLT: RET (as the RET of a hook with CALLF)
+		JP	CALSLT
+
+; ---------------------------------------------------------
+; Return of the slot routines of page 1: segment state restored (H of the word on the stack), all registers kept
+; ---------------------------------------------------------
+PH_REST:	EX	(SP),HL
+		PUSH	AF
+		LD	A,H
+R_RS1:		CALL	PH_SETP1
+		POP	AF
+		POP	HL
+		RET
+
+; ---------------------------------------------------------
+; Subroutine segment of page 1 for slot id A (bit 6 set: ROM): all registers kept
+; Interrupts disabled while the state and the segment change (an interrupt would call PH_TRAMP)
+; ---------------------------------------------------------
+PH_SETP1:	PUSH	AF
+		PUSH	HL
+		LD	H,A
+		LD	A,I
+		PUSH	AF			; IFF2
+		DI
+		LD	A,H
+		AND	40H
+R_SP1:		LD	HL,PH_ROMON
+		JR	Z,J_SP2			; RAM segment
+		CP	(HL)
+R_SP2:		CALL	NZ,PH_P1SEG		; RAM -> ROM: PH_SEG1 = segment in port FDH
+		LD	(HL),40H
+		LD	A,(DATA_S)
+		INC	A			; ROM segment
+		JR	J_SP3
+J_SP2:		LD	(HL),A
+R_SP4:		LD	A,(PH_SEG1)
+J_SP3:		OUT	(0FDH),A
+		POP	AF
+R_SP3:		JP	PO,J_SP4		; interrupts were disabled
+		EI
+J_SP4:		POP	HL
+		POP	AF
+		RET
+
+; ---------------------------------------------------------
+; Subroutine PH_SEG1 = segment in port FDH, which can be written by a program without PUT_P1 (as SofaRunIt: the
+; mappers can not always be read back): signature at 4000H of the RAM slot of page 3, segments tried from PH_SEG1
+; until it is found (P1_SEG of the mapper routines not changed). Interrupts disabled, BC, DE and HL kept.
+; ---------------------------------------------------------
+PH_P1SEG:	PUSH	BC
+		PUSH	DE
+		PUSH	HL
+		IN	A,(0A8H)
+		LD	D,A			; primary slot register
+		LD	A,(DFFFF)
+		CPL
+		LD	E,A			; secondary slot register (primary slot of page 3)
+		PUSH	DE
+		LD	A,(RAMAD3)
+		LD	B,A
+		AND	0CH			; secondary slot of the RAM in page 1
+		LD	C,A
+		LD	A,E
+		AND	0F3H
+		OR	C
+		BIT	7,B
+		JR	Z,J_PS1
+		LD	(DFFFF),A
+J_PS1:		LD	A,B
+		AND	03H
+		RLCA
+		RLCA
+		LD	C,A
+		LD	A,D
+		AND	0F3H
+		OR	C
+		OUT	(0A8H),A		; page 1: RAM slot of page 3
+		LD	HL,4000H
+R_PS1:		LD	DE,PH_SIGSV
+		LD	BC,8
+		LDIR				; bytes at 4000H saved
+R_PS2:		LD	HL,PH_SIG
+		LD	DE,4000H
+		LD	C,8
+		LDIR				; signature at 4000H
+R_PS5:		LD	A,(PH_SEG1)
+		LD	C,A
+J_PS2:		LD	A,C
+		OUT	(0FDH),A
+		INC	C
+R_PS3:		LD	HL,PH_SIG
+		LD	DE,4000H
+		LD	B,8
+J_PS3:		LD	A,(DE)
+		CP	(HL)
+		JR	NZ,J_PS2		; not this segment
+		INC	HL
+		INC	DE
+		DJNZ	J_PS3
+		DEC	C
+		LD	A,C
+R_PS6:		LD	(PH_SEG1),A		; segment found
+R_PS4:		LD	HL,PH_SIGSV
+		LD	DE,4000H
+		LD	BC,8
+		LDIR				; bytes at 4000H restored
+		POP	DE
+		LD	A,(RAMAD3)
+		RLCA
+		JR	NC,J_PS4
+		LD	A,E
+		LD	(DFFFF),A
+J_PS4:		LD	A,D
+		OUT	(0A8H),A		; slots restored
+		POP	HL
+		POP	DE
+		POP	BC
+		RET
+
+PH_SIG:		DEFB	"JIO-ROM",0		; signature
+PH_SIGSV:	DEFS	8,0			; bytes at 4000H
+PH_ROMON:	DEFB	40H			; 40H: ROM segment in page 1, 0: PH_SEG1
+PH_SEG1:	DEFB	2			; RAM segment of page 1 (PUT_P1, or found by PH_P1SEG)
+	ENDIF
+
 ; ---------------------------------------------------------
 ; Subroutine SDOSON: enable disksystem rom on page 1
 ; ---------------------------------------------------------
@@ -401,9 +579,16 @@ J0057:		EX      AF,AF'
 ; Subroutine BDOS diskbasic
 ; ---------------------------------------------------------
 PH_BDOS:	LD      (IX_BDOS),IX
+	IFDEF RAMROM
+		LD      IX,(SBDOS)		; RAMROM: through PH_TRAMP, port FDH set whatever is in page 0 (BIOS)
+		PUSH	HL
+		PUSH	AF
+R_BD1:		JP	J_TRC
+	ELSE
 		LD      IY,(MASTER-1)
 		LD      IX,(SBDOS)
 		JP      CALSLT
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine jump to address on pointer (F1E2)
@@ -960,8 +1145,17 @@ PH_GETP0:	LD      A,(P0_SEG)
 
 ; Subroutine PUT_P1 handler
 PH_PUTP1:	LD      (P1_SEG),A
+	IFDEF RAMROM
+R_P10:		LD	(PH_SEG1),A
+		PUSH	AF
+R_P11:		LD	A,(PH_ROMON)
+R_P12:		CALL	PH_SETP1		; segment in port FDH when the ROM is not in page 1
+		POP	AF
+		RET
+	ELSE
 		OUT     (0FDH),A
 		RET
+	ENDIF
 
 ; Subroutine GET_P1 handler
 PH_GETP1:	LD      A,(P1_SEG)
@@ -986,12 +1180,30 @@ PH_PUTP3:	RET
 ; Subroutine RDSLT (F1E8)
 ; ---------------------------------------------------------
 PH_RDSLT:	RES     6,D
+	IFDEF RAMROM
+		JR	J0334R
+	ELSE
 		JR      J0334
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine WRSLT (F1EB)
 ; ---------------------------------------------------------
 PH_WRSLT:	SET     6,D
+	IFDEF RAMROM
+J0334R:		LD	C,A			; page 1: segment for the slot id, restored by PH_REST
+		LD	A,H
+		AND	0C0H
+		CP	40H
+		LD	A,C
+		JR	NZ,J0334
+R_RD1:		LD	A,(PH_ROMON)
+		PUSH	AF
+		LD	A,C
+R_RD2:		CALL	PH_SETP1
+R_RD3:		LD	BC,PH_REST
+		PUSH	BC
+	ENDIF
 J0334:		DI
 R0335:		LD      (DS0369),HL
 		EX      DE,HL
@@ -1056,7 +1268,11 @@ PH_CALLF:	EXX
 		PUSH    HL
 		PUSH    BC
 		POP     IX
+	IFDEF RAMROM
+		JR	J0390R
+	ELSE
 		JR      J0390
+	ENDIF
 
 ; ---------------------------------------------------------
 ; Subroutine CALSLT (F1EE)
@@ -1067,6 +1283,20 @@ PH_CASLT:	EXX
 		POP     BC
 		PUSH    IY
 		POP     AF
+	IFDEF RAMROM
+J0390R:		LD	C,A			; page 1: segment for the slot id, restored by PH_REST
+		LD	A,B
+		AND	0C0H
+		CP	40H
+		LD	A,C
+		JR	NZ,J0390
+R_CS1:		LD	A,(PH_ROMON)
+		PUSH	AF
+		LD	A,C
+R_CS2:		CALL	PH_SETP1
+R_CS3:		LD	HL,PH_REST
+		PUSH	HL
+	ENDIF
 J0390:		LD      C,A
 R0391:		CALL    C0413
 		BIT     7,C
@@ -1115,6 +1345,14 @@ C03BF:		IN      A,(0A8H)
 ; Subroutine ENASLT (F1F1)
 ; ---------------------------------------------------------
 PH_ENASLT:	PUSH    HL
+	IFDEF RAMROM
+		LD	C,A			; page 1: segment for the slot id
+		LD	A,H
+		AND	0C0H
+		CP	40H
+		LD	A,C
+R_EN1:		CALL	Z,PH_SETP1
+	ENDIF
 		LD      C,A
 		LD      B,H
 R03CD:		CALL    C0413
@@ -1254,4 +1492,8 @@ I489F:		DEFW    R001C+1
 		DEFW    R0245+1,R0290+1,R0295+1,R029E+1,R02A9+1,R02AE+1,R02B7+1,R02D2+1
 		DEFW    R02DA+1,R02E6+1,R0335+1,R0339+1,R033E+1,R0345+1,R034B+1,R0391+1
 		DEFW    R0398+1,R039E+1,R03B8+1,R03CD+1,R03D2+1,R03EC+1,R0421+1
+	IFDEF RAMROM
+		DEFW	R_TR1+1,R_TR2+1,R_TR3+1,R_TR4+1,R_RS1+1,R_SP1+1,R_SP2+1,R_SP3+1,R_SP4+1,R_PS1+1,R_PS2+1,R_PS3+1,R_PS4+1,R_PS5+1,R_PS6+1,R_P10+1,R_BD1+1,R_P11+1,R_P12+1
+		DEFW	R_RD1+1,R_RD2+1,R_RD3+1,R_CS1+1,R_CS2+1,R_CS3+1,R_EN1+1
+	ENDIF
 		DEFW	0

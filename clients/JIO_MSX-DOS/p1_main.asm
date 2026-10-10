@@ -24,6 +24,7 @@
 ; 11. Added TURBOR and DOSV231 options (not included: rom disk driver, boot logic, DOS1 mode, Kanji)
 ; 12. Optmized code / removed unused code (OPTM)
 ; 13. JIO: no boot sector, MSXDOS2.SYS is loaded from the JIO server, no sector buffer and DPB allocated
+; 14. RAMROM: ROM in a segment of the memory mapper, loaded by JIO-ROM.COM on MSX-DOS 1 (see p3_paging.asm)
 
 
 		INCLUDE "disk.inc"	; Assembler directives
@@ -153,7 +154,11 @@ C4029:  	JP      J4CD3                  	; SYSTEM:  Stop drives
 		NOP
 
 ; DOS entry point subroutine GETSLT
+	IFDEF RAMROM
+GETSLT:  	JP      C_RRSLT                	; slot id of this ROM (RAM slot, bit 6 set)
+	ELSE
 GETSLT:  	JP      C4E05                  	; get slot id of page 1
+	ENDIF
 
 ; DOS entry point $INIT
 DOS_SINIT:  	LD      HL,(DOSHIM)             ; SYSTEM:  get top of MSXDOS memory
@@ -346,7 +351,11 @@ J4888:		CALL    C4906			; get detected disk interfaces and drives
 		RET     Z			; no room for interfaces or drives, quit
 		LD      HL,MYSIZE		; size of work area disk driver
 		CALL    C5604			; allocate memory (adjust BASIC areapointers)
+	IFDEF RAMROM
+		JP      C,J48FE			; out of memory, increase disk interface count if first disk interface and quit
+	ELSE
 		JR      C,J48FE			; out of memory, increase disk interface count if first disk interface and quit
+	ENDIF
 		EX      DE,HL
 		CALL    C4DBB			; get pointer to SLTWRK entry
 		LD      (HL),E
@@ -923,6 +932,21 @@ C4C66:		LD      HL,H_CLEA
 		LD      DE,I4C82
 
 ; Subroutine patch hook
+	IFDEF RAMROM
+; RAMROM: CALL PH_TRAMP / DEFW routine (PH_TRAMP at the start of the paging helper routines, ST_BDOS)
+C4C73:		LD      (HL),0CDH
+		INC     HL
+		LD	A,(ST_BDOS)
+		LD      (HL),A
+		INC     HL
+		LD	A,(ST_BDOS+1)
+		LD      (HL),A
+		INC     HL
+		LD      (HL),E
+		INC     HL
+		LD      (HL),D
+		RET
+	ELSE
 C4C73:		LD      (HL),0F7H
 		INC     HL
 		LD      A,(MASTER)
@@ -934,6 +958,7 @@ C4C73:		LD      (HL),0F7H
 		INC     HL
 		LD      (HL),0C9H
 		RET
+	ENDIF
 
 I4C82:		LD      A,0C9H
 		LD      (H_LOPD),A
@@ -1278,6 +1303,13 @@ DOS_ZWRITE:     DOSCALL 028H
 ;		RLCA				; secondary slot page 0 in b3-b2
 ;		JR      J4E30			; make slot id and return
 
+	IFDEF RAMROM
+; Subroutine slot id of this ROM: RAM slot of page 1 with bit 6 set (see p3_paging.asm)
+C_RRSLT:	CALL	C4E05
+		OR	40H
+		RET
+	ENDIF
+
 ; Subroutine get slot id of page 1
 C4E05:		PUSH    HL
 		PUSH    BC
@@ -1618,6 +1650,18 @@ J56B3:		LD      E,(HL)
 		LD      A,E
 		OR      D
 		RET     Z
+	IFDEF RAMROM
+		PUSH	HL
+		LD	A,(HL)
+		INC	HL
+		LD	H,(HL)
+		LD	L,A
+		EX	DE,HL			; HL = hook, DE = routine
+		CALL	C4C73			; patch hook
+		POP	HL
+		INC	HL
+		INC	HL
+	ELSE
 		EX      DE,HL
 		LD      (HL),0F7H
 		INC     HL
@@ -1629,6 +1673,7 @@ J56B3:		LD      E,(HL)
 		LDI
 		LD      A,0C9H
 		LD      (DE),A
+	ENDIF
 		JR      J56B3
 
 I56CD:		DEFW	H_DSKO,C5EDC
@@ -3380,6 +3425,7 @@ SetTurbo:	LD	A,(IDBYT2)
 		JP	CHGCPU			; change CPU mode
 	ENDIF
 
+
 ; -------------------------------------
 		DOSENT  055DBH
 DOS_GETTIM:     DOSCALL 02CH
@@ -4603,7 +4649,11 @@ J_RFI7:		LD	(RFS_WMASK),A
 		LD	DE,(H_BDOS+1)
 		RST	R_DCOMPR
 		RET	Z
+	IFDEF RAMROM
+J_RFI6:		CALL	GETSLT			; slot of this ROM
+	ELSE
 J_RFI6:		CALL	C4E05			; slot of this ROM
+	ENDIF
 		EX	DE,HL			; DE = hook in the work area
 		PUSH	AF
 		PUSH	DE
@@ -5470,10 +5520,12 @@ J410F:		DI
 		POP	HL
 		RET     C			; c=error
 	IFNDEF ROM16K
+	IFNDEF RAMROM
 		PUSH	HL
 		CALL	C4E05			; get slot of page 1 (this ROM)
 		LD	H,080H			; enable page 2
 		CALL	ENASLT
+	ENDIF
 	ENDIF
 		LD      A,1
 		LD      (CUR_DRV),A              ; default drive = A:
@@ -5491,6 +5543,7 @@ J410F:		DI
 	IFNDEF ROM16K
 		CALL    PUT_P0
 		CALL    P0_RAM                  ; enable DOS memory on page 0
+	IFNDEF RAMROM
 		LD	HL,K1_BEGIN		; Source
 		LD	DE,0			; Target
 		LD	BC,K1_END-K1_BEGIN	; Number of bytes
@@ -5498,6 +5551,7 @@ J410F:		DI
 		POP	AF
 		LD	H,080H			; restore page 2 slot (ie. RAM)
 		CALL	ENASLT			; uses the ENASLT routine of the just loaded disk rom
+	ENDIF					; RAMROM: kernel put in the segment CODE_S by JIO-ROM.COM
 	ELSE
 		CALL	PUT_P2
 		LD	B,32			; transfer 32 sectors (16K)
@@ -5642,6 +5696,9 @@ J495A:		LD      (DE),A
 		LD	(HL),A
 R01:		SUB	4
 	ELSE
+	IFDEF RAMROM
+		DEC	(HL)			; top segment: disk system ROM (hidden to the mapper routines)
+	ENDIF
 		LD      A,(HL)                  ; number of segments in primary memory mapper
 	ENDIF
 R02:		DEC     A
@@ -5739,7 +5796,17 @@ J49E8:		PUSH    HL
 		PUSH    AF
 		LD      H,80H
 		CALL    ENASLT                  ; enable slot on page 2
+	IFDEF RAMROM
+		POP	AF			; only the memory mapper of page 3 (disk system ROM in its top segment)
+		PUSH	AF
+		LD	B,A
+		CALL	C4E21			; get slot id of page 3
+		CP	B
+		LD	A,0
+		CALL	Z,C4A34			; test memory mapper
+	ELSE
 		CALL    C4A34                   ; test memory mapper
+	ENDIF
 		OR      A
 		JR      Z,J4A0D                 ; no memory mapper, next
 		POP     BC
@@ -5896,7 +5963,9 @@ C4A87:		LD      A,(HL)
 		INC     A
 		OUT     (0FEH),A
 		INC     A
-		OUT     (0FDH),A
+	IFNDEF RAMROM
+		OUT     (0FDH),A		; RAMROM: page 1 is the disk system ROM (segment kept)
+	ENDIF
 		INC     A
 		OUT     (0FCH),A
 		POP     AF
