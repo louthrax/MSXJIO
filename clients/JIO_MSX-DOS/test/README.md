@@ -89,8 +89,12 @@ JIO-ROM.COM scenarios (`jiorom_*`): MSX-DOS 1 boots from the floppy (`MSXDOS.SYS
 | `jiorom_basic_jio`, `jiorom_basic_flop` | VG-8235 | as `dos2_basic_jio`, `dos2_basic_flop` (hooks of Disk BASIC) |
 | `jiorom_format` | NMS 8255 | as `dos2_format_nms` |
 | `jiorom_ramdisk` | VG-8235 | as `dos2_ramdisk`: after the reset, MSX-DOS 1 starts JIO-ROM.COM again |
-| `jiocas_vg8235` | VG-8235 booted with SHIFT (disk ROM disabled) | `JIO-ROM.CAS` (`clients/JIO_CAS`) in the cassette player, `BLOAD"CAS:",R` (`tcl/tape.tcl`): ROM read from the tape, MSX-DOS 2 started (FDTEST, FCB functions) |
+| `jiocas_vg8235` | VG-8235 booted with SHIFT (disk ROM disabled) | `JIO-ROM.CAS` (`clients/JIO_CAS`) in the cassette player, `BLOAD"CAS:",R` (`tcl/tape.tcl`): ROM read from the tape, "Press STOP on the tape player, then press a key" (`tcl/presskey.tcl`), MSX-DOS 2 started (FDTEST, FCB functions) |
 | `jiocas_msx1` | VG-8020 (MSX1) + 1 MB mapper | as `jiocas_vg8235` (no disk drive), function keys of BASIC not shown |
+| `jiocas_checksum` | VG-8235 booted with SHIFT | `JIO-ROM.CAS` with one bit of the compressed ROM block changed (`CAS_CORRUPT`): "Checksum error" (before the decompression), MSX-DOS 2 not started |
+| `cas2tape_rom`, `cas2tape_jiorom` | VG-8235: JIO ROM, JIO-ROM.COM | `CAS2TAPE.COM` (used by SofaRun to write a .CAS file to tape, not in this repository: `CAS2TAPE` environment) records `JIO-ROM.CAS` (`tcl/taperec.tcl`), "Press STOP on the tape player, then press a key" at the end, MSX-DOS 2 goes on |
+| `jiocas_srv`, `jiocas_srv_msx1` | VG-8235 booted with SHIFT, VG-8020 (MSX1) + 1 MB mapper | `JIO-CAS.CAS` (loader only): STOP on the tape player, then the ROM read from the server (`JIO-CAS.BIN` on A:, the bridge intercepts the serial routines of the loader: `TOOL_MAP`), MSX-DOS 2 started (FDTEST, FCB functions) |
+| `jiocas_srv_nofile` | VG-8235 booted with SHIFT | `JIO-CAS.CAS` without `JIO-CAS.BIN` on the server: "not found", back to BASIC |
 | `jiocas_dos` | VG-8235 with MSX-DOS 1 | `JIO-ROM.CAS`: message (MSX-DOS already there), nothing loaded |
 
 ## Results

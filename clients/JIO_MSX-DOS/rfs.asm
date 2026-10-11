@@ -2167,7 +2167,8 @@ R_SETRND:	PUSH	DE
 ; Function $26 _WRBLK
 ; Input:  DE = pointer to FCB
 ;         HL = number of records
-; Output: HL = number of records transferred
+; Output: DE = number of records transferred, A = L = 0 all done, 1 end of file or not all written (H = 0), as the
+;         original kernel (MSXDOS2.SYS returns DE in HL and L in A to the program, MSX-DOS 1 interface)
 ; ---------------------------------------------------------
 R_RDBLK:	LD	A,1
 		DEFB	0FEH			; CP n: skip next instruction
@@ -2233,22 +2234,21 @@ J_BK2:		CALL	RFS_MUL
 		INC	(IX+35)
 		JR	NZ,J_BK3
 		INC	(IX+36)
-J_BK3:		POP	HL
+J_BK3:		POP	DE			; records transferred
 		POP	AF
 		JR	NZ,J_BK4
-		LD	DE,(RFS_REQ)
-		PUSH	HL
+		LD	HL,(RFS_REQ)
 		OR	A
 		SBC	HL,DE
-		POP	HL
-		RET	Z
-J_BK4:		LD	A,1
+		JR	NZ,J_BK4		; not all transferred
+		LD	L,A			; A = HL = 0: all done
 		RET
 
 J_BK9:		POP	BC
 		POP	AF
-		LD	HL,0
-		LD	A,1
+		LD	DE,0
+J_BK4:		LD	HL,1			; A = HL = 1
+		LD	A,L
 		RET
 
 IX_33		EQU	33
@@ -2291,6 +2291,9 @@ J_GW0:		LD	DE,(DTA_AD)
 J_GW1:		CALL	F_WRITE
 J_GW2:		LD	B,H
 		LD	C,L
+		OR	A
+		JR	Z,J_GW3
+		LD	BC,0			; error (e.g. .EOF at the end of the file): nothing transferred (HL not set)
 J_GW3:		POP	IX
 		OR	A
 		RET	NZ

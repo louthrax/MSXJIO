@@ -32,7 +32,7 @@ The system is divided into two parts:
   Serves host folders as drives on an MSX that already runs MSX-DOS 2 or Nextor (from another cartridge), without the
   JIO ROM.
 
-  - **JIO-ROM.COM**, **JIO-ROM.CAS**  
+  - **JIO-ROM.COM**, **JIO-ROM.CAS**, **JIO-CAS.CAS**  
   Start MSX-DOS 2 with the JIO MSX-DOS 2 ROM loaded in RAM, without the JIO ROM: from MSX-DOS 1 (e.g. booted from the
   floppy drive), or from tape on an MSX without disk drive (see
   [JIO-ROM.COM](#jio-romcom-msx-dos-2-on-an-msx-dos-1-computer-without-the-jio-rom)).
@@ -179,6 +179,11 @@ port 1, until the server answers. The line found is shown (the ROMs don't show j
 - The cartridge's serial line still works when its ROM is disabled (ROMDIS switch): JIO.COM and JIOTIME.COM can use
   it while the MSX boots from another device.
 
+**Tape player and JIO:** with JIO on a joystick port, the MSX reads the serial line in the PSG register that also holds
+the cassette input. As long as the PLAY (or REC) key of the tape player is down, even with the tape stopped by the MSX
+(motor control), the cassette input gets noise that makes the communication with the server unstable (depending on the
+player model): press STOP on the player (or unplug the cassette cable) while JIO is used.
+
 ## Which ROM to use
 
 | ROM | Size | For |
@@ -256,8 +261,15 @@ MSX-DOS 2 starts as if the ROM was in a slot.
 
 **JIO-ROM.CAS**, the tape version, does the same on an MSX without disk drive (or with its disk ROM disabled by holding
 SHIFT at boot): write it to a tape (or play it with a cassette interface), then in MSX BASIC type `BLOAD"CAS:",R`.
-The ROM is read from the tape (about 34 KB: a few minutes), then MSX-DOS 2 starts. Same requirement: a memory mapper
-of at least 128 KB in the RAM slot of pages 2 and 3. If MSX-DOS is already there, it tells you to use JIO-ROM.COM.
+The ROM is read from the tape (about 27 KB, compressed: two or three minutes) and checked (*Tape read error* or
+*Checksum error*: rewind and try again). Then press STOP on the tape player and press a key: MSX-DOS 2 starts (see
+below: the tape player disturbs JIO as long as its PLAY key is down). Same requirement: a memory mapper of at least
+128 KB in the RAM slot of pages 2 and 3. If MSX-DOS is already there, it tells you to use JIO-ROM.COM.
+
+**JIO-CAS.CAS** is much faster: only a small loader is on the tape (about 2 KB: a few seconds), the ROM is read from the
+server. Put **JIO-CAS.BIN** in the folder served as **A:** (directories served, next to `MSXDOS2.SYS`), then
+`BLOAD"CAS:",R`, press STOP on the tape player and a key: the ROM comes in a few seconds and MSX-DOS 2 starts. If the
+file is not there (or not served as directories), the loader says so and goes back to BASIC: use JIO-ROM.CAS.
 
 ### If the link is lost
 

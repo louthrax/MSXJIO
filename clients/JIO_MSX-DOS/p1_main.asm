@@ -934,7 +934,9 @@ C4C66:		LD      HL,H_CLEA
 ; Subroutine patch hook
 	IFDEF RAMROM
 ; RAMROM: CALL PH_TRAMP / DEFW routine (PH_TRAMP at the start of the paging helper routines, ST_BDOS)
-C4C73:		LD      (HL),0CDH
+; Interrupts are on (H_TIMI): RET while the hook is written, CALL set last
+C4C73:		LD      (HL),0C9H
+		PUSH	HL
 		INC     HL
 		LD	A,(ST_BDOS)
 		LD      (HL),A
@@ -945,6 +947,8 @@ C4C73:		LD      (HL),0CDH
 		LD      (HL),E
 		INC     HL
 		LD      (HL),D
+		POP	HL
+		LD      (HL),0CDH
 		RET
 	ELSE
 C4C73:		LD      (HL),0F7H

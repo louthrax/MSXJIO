@@ -74,6 +74,8 @@ prepare_files() {
     ( cd "$TEST/fcbread" && z88dk-z80asm -b -o="$OUT/base/FCBREAD.COM" fcbread.asm && rm -f "$OUT"/base/*.o fcbread.o ) || { echo "Build of FCBREAD.COM failed"; exit 1; }
     ( cd "$TEST/p2test" && z88dk-z80asm -b -o="$OUT/base/P2TEST.COM" p2test.asm && rm -f "$OUT"/base/*.o p2test.o ) || { echo "Build of P2TEST.COM failed"; exit 1; }
     ( cd "$TEST/fdtest" && z88dk-z80asm -b -o="$OUT/base/FDTEST.COM" fdtest.asm && rm -f "$OUT"/base/*.o fdtest.o ) || { echo "Build of FDTEST.COM failed"; exit 1; }
+    ( cd "$TEST/blktest" && z88dk-z80asm -b -o="$OUT/base/BLKTEST.COM" blktest.asm && rm -f "$OUT"/base/*.o blktest.o ) || { echo "Build of BLKTEST.COM failed"; exit 1; }
+    head -c 300 /dev/zero | tr '\0' 'B' > "$OUT/base/BLKTEST.DAT"
     # JIO.COM (clients/JIO_NFS), built in a copy (its make script writes next to the sources)
     rm -rf "$OUT/nfs"
     mkdir -p "$OUT/nfs/clients"
@@ -93,11 +95,16 @@ prepare_files() {
     cp -r "$SRC/../../common" "$OUT/jiorom/"
     cp -r "$SRC/../JIO_ROM" "$SRC/../JIO_CAS" "$OUT/jiorom/clients/"
     cp "$SRC"/*.asm "$SRC"/*.inc "$SRC"/0_Build.sh "$OUT/jiorom/clients/JIO_MSX-DOS/"
+    mkdir -p "$OUT/jiorom/clients/JIO_NFS"
+    cp "$SRC/../JIO_NFS/transmit.asm" "$SRC/../JIO_NFS/receive.asm" "$OUT/jiorom/clients/JIO_NFS/"
     rm -rf "$OUT"/jiorom/clients/JIO_{ROM,CAS}/0_{Builds,Temp}
     ( cd "$OUT/jiorom/clients/JIO_ROM" && bash 0_Build.sh > build.log 2>&1 ) || { echo "Build of JIO-ROM.COM failed"; exit 1; }
     ( cd "$OUT/jiorom/clients/JIO_CAS" && bash 0_Build.sh > build.log 2>&1 ) || { echo "Build of JIO-ROM.CAS failed"; exit 1; }
     JIOROM="$OUT/jiorom/clients/JIO_ROM/0_Builds/JIO-ROM.COM"
     JIOCAS="$OUT/jiorom/clients/JIO_CAS/0_Builds/JIO-ROM.CAS"
+    JIOCAS_SRV="$OUT/jiorom/clients/JIO_CAS/0_Builds/JIO-CAS.CAS"
+    JIOCAS_BIN="$OUT/jiorom/clients/JIO_CAS/0_Builds/JIO-CAS.BIN"
+    JIOCAS_SRV_MAP="$OUT/jiorom/clients/JIO_CAS/0_Temp/server/JIOCAS.map"
     JIOROM_MAP="$OUT/jiorom/clients/JIO_MSX-DOS/0_Temp/dos2_ram/jio_dos2_ram.map"
     cp "$MSXDOS2_FILES/MSXDOS2.SYS" "$MSXDOS2_FILES/COMMAND2.COM" "$OUT/base/"
     printf 'Hello from the JIO server!\r\nSecond line.\r\n' > "$OUT/base/hello.txt"
@@ -135,8 +142,9 @@ run_scenario() {
     fi
     local shift=""
     [ -n "${TIME_SHIFT:-}" ] && shift="-script $TEST/tcl/shift.tcl"
-    # EXTRA_SCRIPT (environment): other tcl script run before the scenario script
-    [ -n "${EXTRA_SCRIPT:-}" ] && shift="$shift -script $EXTRA_SCRIPT"
+    # EXTRA_SCRIPT (environment): other tcl scripts (separated by spaces) run before the scenario script
+    local x
+    for x in ${EXTRA_SCRIPT:-}; do shift="$shift -script $x"; done
 
     if [ -n "$fsize" ]; then
         FLOPPY_SIZE=$fsize FLOPPY_FILES=$ffiles timeout 30 openmsx -machine "$machine" -script "$TEST/tcl/mkdisk.tcl" > /dev/null 2>&1
@@ -579,16 +587,33 @@ test_sri() { # name rom map machine slots description
 # JIO-ROM.CAS (clients/JIO_CAS, tape version of JIO-ROM.COM) in the cassette player, BLOAD"CAS:",R from MSX BASIC: SHIFT held at boot
 # (disk ROM disabled), the ROM is read from the tape, MSX-DOS 2 starts with the JIO drive A:. Without SHIFT, MSX-DOS 1 of
 # the disk ROM is there: message, nothing loaded.
+# CAS_CORRUPT (environment): one bit of the compressed ROM block changed in a copy of the tape image: "Checksum error"
+# (sum of the compressed bytes, checked before the decompression)
 test_jiocas() { # name machine "slots" description [no SHIFT at boot]
     wanted "$1" || return
-    local shift=1 tt=10 first=20
+    local shift=1 tt=10 first=20 cas=$JIOCAS
     [ -n "${5:-}" ] && shift="" tt=25 first=40
-    TAPE_TIME=$tt SHIFT_BOOT=$shift run_scenario "$1" "$JIOCAS" "$JIOROM_MAP" "$2" "-cassetteplayer $JIOCAS $3" \
-        'VER\r\nFDTEST\r\nFCBTEST\r\n' "$TEST/tcl/tape.tcl" "" "" 1 "$first 200 240"
+    if [ -n "${CAS_CORRUPT:-}" ]; then
+        cas="$OUT/JIO-ROM_corrupt.CAS"
+        python3 - "$JIOCAS" "$cas" <<'PYEOF'
+import sys
+d = bytearray(open(sys.argv[1], 'rb').read())
+header = bytes([0x1F, 0xA6, 0xDE, 0xBA, 0xCC, 0x13, 0x7D, 0x74])
+blocks = [i for i in range(0, len(d), 8) if d[i:i + 8] == header]
+d[blocks[2] + 8 + 1000] ^= 0x10      # one bit of the ROM block
+open(sys.argv[2], 'wb').write(d)
+PYEOF
+    fi
+    TAPE_TIME=$tt SHIFT_BOOT=$shift EXTRA_SCRIPT="$TEST/tcl/presskey.tcl" run_scenario "$1" "$JIOCAS" "$JIOROM_MAP" "$2" "-cassetteplayer $cas $3" \
+        'VER\r\nFDTEST\r\nFCBTEST\r\n' "$TEST/tcl/tape.tcl" "" "" 1 "$first $(seq -s ' ' 30 10 190) 200 240"
     local d="$OUT/$1"
     begin_checks "$1"
-    if [ -n "$shift" ]; then
+    if [ -n "${CAS_CORRUPT:-}" ]; then
+        check "checksum error of the ROM shown, back to BASIC" "$(has_text "$d/screen_240.txt" 'ROM... Checksum error' && echo ok)"
+        check "MSX-DOS 2 not started" "$( ! has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
+    elif [ -n "$shift" ]; then
         check "loader started from the tape" "$(has_text "$d/screen_20.txt" 'Loading...' && echo ok)"
+        check "ROM and kernel read (OK), then: STOP on the tape player, press a key" "$(has_text "$d/screen_key1.txt" 'ROM... OK' && has_text "$d/screen_key1.txt" 'Kernel... OK' && has_text "$d/screen_key1.txt" 'Press STOP on the tape player,' && echo ok)"
         check "MSX-DOS 2 started (JIO ROM in RAM)" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
         check "FCB test result" "$(has_text "$d/screen_240.txt" "$FCB_OK" && echo ok)"
         check "segment written to port FDH kept across the interrupts (FDTEST)" "$(has_text "$d/screens.txt" 'FDTEST: OK' && echo ok)"
@@ -596,6 +621,35 @@ test_jiocas() { # name machine "slots" description [no SHIFT at boot]
     else
         check "message: MSX-DOS already there" "$(has_text "$d/screen_40.txt" 'MSX-DOS is already there' && echo ok)"
         check "nothing loaded from the server" "$( ! grep -q OPEN "$d/server.log" && echo ok)"
+    fi
+    end_checks "$1" "$4"
+}
+
+# JIO-CAS.CAS (loader only, BLOAD"CAS:",R): STOP on the tape player, then the ROM and its kernel read from the server
+# (A:\JIO-CAS.BIN), MSX-DOS 2 started. The bridge intercepts the serial routines of the loader (TOOL_MAP: its map).
+# [no file]: JIO-CAS.BIN not on the server: "not found", back to BASIC
+setup_jiocas_srv() { # drive directory
+    cp "$JIOCAS_BIN" "$1/JIO-CAS.BIN"
+}
+test_jiocas_srv() { # name machine "slots" description [no file]
+    wanted "$1" || return
+    local setup=setup_jiocas_srv
+    [ -n "${5:-}" ] && setup=""
+    TOOL_MAP=$JIOCAS_SRV_MAP SETUP=$setup TAPE_TIME=10 SHIFT_BOOT=1 EXTRA_SCRIPT="$TEST/tcl/presskey.tcl" \
+        run_scenario "$1" "$JIOCAS_SRV" "$JIOROM_MAP" "$2" "-cassetteplayer $JIOCAS_SRV $3" \
+        'VER\r\nFDTEST\r\nFCBTEST\r\n' "$TEST/tcl/tape.tcl" "" "" 1 "$(seq -s ' ' 20 5 60) 80"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "loader loaded from the tape, then: STOP on the tape player, press a key" "$(has_text "$d/screen_key1.txt" 'Press STOP on the tape player,' && echo ok)"
+    if [ -n "${5:-}" ]; then
+        check "file not found on the server, back to BASIC" "$(has_text "$d/screen_80.txt" 'JIO-CAS.BIN... not found' && echo ok)"
+        check "MSX-DOS 2 not started" "$( ! has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
+    else
+        mock_check "file read from the server (_OPEN, _READ)" "$(grep -qi 'OPEN.*JIO-CAS.BIN' "$d/server.log" && grep -q '^READ' "$d/server.log" && echo ok)"
+        check "MSX-DOS 2 started (JIO ROM in RAM)" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
+        check "FCB test result" "$(has_text "$d/screen_80.txt" "$FCB_OK" && echo ok)"
+        check "segment written to port FDH kept across the interrupts (FDTEST)" "$(has_text "$d/screens.txt" 'FDTEST: OK' && echo ok)"
+        check "function keys of BASIC not shown" "$( ! has_text "$d/screen_80.txt" 'color  auto' && echo ok)"
     fi
     end_checks "$1" "$4"
 }
@@ -609,6 +663,44 @@ test_msx1() { # name rom map machine slots description
     check "MSX-DOS 2 started" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
     check "FCB test result" "$(has_text "$d/screen_60.txt" "$FCB_OK" && echo ok)"
     check "FDTEST" "$(has_text "$d/screens.txt" 'FDTEST: OK' && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# CAS2TAPE.COM (by Martos, used by SofaRun to write a .CAS file to tape; not in this repository: CAS2TAPE environment,
+# default the SD card folder of the author) records JIO-ROM.CAS (openMSX cassette player): MSX-DOS 2 goes on after it
+CAS2TAPE=${CAS2TAPE:-/mnt/DataLinux/Projects/MSX/sdcard/SOFARUN/CAS2TAPE.COM}
+# CAS2TAPE_FILE (environment): .CAS file recorded (default JIO-ROM.CAS); CAS2TAPE_END: time (s) of the end of the
+# recording at the latest (the FCB random block read gives the number of records read at the end of the file)
+setup_cas2tape() { # drive directory
+    cp "$CAS2TAPE" "$1/CAS2TAPE.COM"
+    cp "${CAS2TAPE_FILE:-$JIOCAS}" "$1/$(basename "${CAS2TAPE_FILE:-$JIOCAS}")"
+}
+test_cas2tape() { # name rom map machine slots description
+    wanted "$1" || return
+    if [ ! -f "$CAS2TAPE" ]; then echo "  SKIP  $1: $CAS2TAPE not found"; return; fi
+    local file
+    file=$(basename "${CAS2TAPE_FILE:-$JIOCAS}")
+    SETUP=setup_cas2tape EXTRA_SCRIPT="${EXTRA_SCRIPT:-$TEST/tcl/taperec.tcl $TEST/tcl/presskey.tcl}" run_scenario "$1" "$2" "$3" "$4" "$5" \
+        "CAS2TAPE $file 2400\\r\\nVER\\r\\nFDTEST\\r\\n" "$TEST/tcl/screens.tcl" "${7:-}" "$OUT/floppy_base" 1 "$(seq -s ' ' 20 10 60) 200 280 300"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "recording started" "$(has_text "$d/screens.txt" 'Recording .CAS file to tape' && echo ok)"
+    check "at the end: STOP on the tape player, press a key" "$(has_text "$d/screen_key1.txt" 'Press STOP on the tape player,' && echo ok)"
+    [ -n "${CAS2TAPE_END:-}" ] && check "recording ended within ${CAS2TAPE_END} s (FCB block read at the end of the file)" "$(has_text "$d/screen_${CAS2TAPE_END}.txt" 'COMMAND2.COM version' && echo ok)"
+    check "MSX-DOS 2 goes on after the recording (VER, FDTEST)" "$(has_text "$d/screen_300.txt" 'COMMAND2.COM version' && has_text "$d/screen_300.txt" 'FDTEST: OK' && echo ok)"
+    end_checks "$1" "$6"
+}
+
+# FCB random block read at the end of a file (BLKTEST.COM, 300 bytes file): on the JIO drive A: and on the floppy B:
+# (original MSX-DOS 2 kernel), HL = number of records read
+test_blkread() { # name rom map machine slots description
+    wanted "$1" || return
+    rm -rf "$OUT/floppy_blk"; mkdir -p "$OUT/floppy_blk"
+    cp "$OUT/base/BLKTEST.DAT" "$OUT/floppy_blk/"
+    SETUP=${BLK_SETUP:-} run_scenario "$1" "$2" "$3" "$4" "$5" 'BLKTEST\r\nB:\r\nA:BLKTEST\r\n' "$TEST/tcl/screens.tcl" 360 "$OUT/floppy_blk" 1 "30"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "A: (JIO) and B: (floppy): 300 records read, then 0 at the end of the file" "$([ "$(count_text "$d/screen_30.txt" 'RDBLK: 01 012C')" = 2 ] && [ "$(count_text "$d/screen_30.txt" 'RDBLK: 01 0000')" = 2 ] && echo ok)"
     end_checks "$1" "$6"
 }
 
@@ -658,6 +750,7 @@ test_dos_hybrid      dos2_safe        "$RS" "$RSM" Philips_VG_8235 "-carta $RS" 
 JIO_LINE=FE test_dos_hybrid dos2_joy1 "$R" "$RM" Philips_VG_8235 "-carta $R" 360 "VG-8235, joystick port 1 found at boot (kernel patched, serial line intercepted), both drives"
 test_format          dos2_format_vg   "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, FORMAT B: (360 KB floppy), then COPY to B:" 354K
 test_msx1            dos2_msx1        "$R" "$RM" Philips_VG_8020   "-carta $R -extb ram1mb" "VG-8020 (MSX1) + 1 MB mapper, JIO drive A:"
+test_blkread         dos2_blkread     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, FCB random block read at the end of a file, JIO drive A: and floppy B:"
 test_format          dos2_format_nms  "$R" "$RM" Philips_NMS_8255  "-carta $R" 720 "NMS 8255, FORMAT B: (720 KB floppy, double sided), then COPY to B:" 713K 2
 
 echo "Clients:"
@@ -686,6 +779,13 @@ JIOROM_BOOT=1 TIME_SHIFT=15 test_format jiorom_format     "$JIOROM" "$JIOROM_MAP
 JIOROM_BOOT=1 TIME_SHIFT=15 test_sri    jiorom_sri        "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "-extb ram1mb" "VG-8235 + 1 MB mapper, JIO-ROM.COM, SofaRunIt launches a MSX-DOS 1 disk image from the JIO drive"
 test_jiocas    jiocas_vg8235  Philips_VG_8235  ""                      "VG-8235 booted with SHIFT (disk ROM disabled), JIO-ROM.CAS: BLOAD\"CAS:\",R"
 test_jiocas    jiocas_msx1    Philips_VG_8020  "-ext ram1mb"           "VG-8020 (MSX1) + 1 MB mapper, JIO-ROM.CAS: BLOAD\"CAS:\",R"
+CAS_CORRUPT=1 test_jiocas jiocas_checksum Philips_VG_8235 "" "VG-8235 booted with SHIFT, JIO-ROM.CAS with a byte of the ROM changed: checksum error"
+test_cas2tape  cas2tape_rom   "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, JIO ROM, CAS2TAPE (SofaRun) records JIO-ROM.CAS"
+CAS2TAPE_FILE=$JIOCAS_SRV CAS2TAPE_END=40 test_cas2tape cas2tape_small "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, JIO ROM, CAS2TAPE records JIO-CAS.CAS (2 KB): ends at once (FCB block read at the end of the file)"
+JIOROM_BOOT=1 TIME_SHIFT=15 test_cas2tape cas2tape_jiorom "$JIOROM" "$JIOROM_MAP" Philips_VG_8235 "" "VG-8235, JIO-ROM.COM, CAS2TAPE (SofaRun) records JIO-ROM.CAS" 360
+test_jiocas_srv jiocas_srv     Philips_VG_8235  ""                     "VG-8235 booted with SHIFT, JIO-CAS.CAS: ROM read from the server (A:\\JIO-CAS.BIN)"
+test_jiocas_srv jiocas_srv_msx1 Philips_VG_8020 "-ext ram1mb"          "VG-8020 (MSX1) + 1 MB mapper, JIO-CAS.CAS: ROM read from the server"
+test_jiocas_srv jiocas_srv_nofile Philips_VG_8235 ""                   "VG-8235 booted with SHIFT, JIO-CAS.CAS without JIO-CAS.BIN on the server: not found" nofile
 test_jiocas    jiocas_dos     Philips_VG_8235  ""                      "VG-8235 with MSX-DOS 1, JIO-ROM.CAS: message, nothing loaded" noshift
 JIOROM_BOOT=1 TIME_SHIFT=15 RESET_TIME=40 test_ramdisk jiorom_ramdisk   "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "" "VG-8235, JIO-ROM.COM, RAMDISK (H: on the server), MSX reset" 360
 

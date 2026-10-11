@@ -12,6 +12,12 @@ RAMAD3		equ	0F344h
 
 		org	0100h
 
+		; no cursor shown when printing (CSRSW set by COMMAND.COM: cursor drawn at each character, slow)
+		ld	a,(CSRSW)
+		ld	(SavedCsrsw),a
+		xor	a
+		ld	(CSRSW),a
+
 		ld	de,MSG_TITLE
 		call	PrintString
 
@@ -22,7 +28,7 @@ RAMAD3		equ	0F344h
 		ld	a,b
 		cp	2
 		ld	de,MSG_DOS2
-		jp	nc,PrintString
+		jp	nc,ErrorExit
 
 		; what is found: RAM slots, memory mapper (page 2), disk interfaces (shown before any error)
 		ld	de,MSG_RAM
@@ -72,7 +78,7 @@ DiskShowNext:	djnz	DiskShow
 		ld	a,(Segments)
 		call	SetSegments
 		ld	de,MSG_MAPPER
-		jp	c,PrintString
+		jp	c,ErrorExit
 
 		ld	de,MSG_START
 		call	PrintString
@@ -87,6 +93,12 @@ DiskShowNext:	djnz	DiskShow
 		jp	StartBoot		; MSX-DOS 1 is not used anymore
 
 ErrorSlots:	ld	de,MSG_SLOTS
+
+; Error message DE, back to MSX-DOS 1 (cursor of CHPUT as before)
+ErrorExit:	call	PrintString
+		ld	a,(SavedCsrsw)
+		ld	(CSRSW),a
+		ret
 
 PrintString:	ld	c,09h			; _STROUT
 		jp	BDOS
@@ -133,6 +145,7 @@ CopyLoop:	push	de
 		ret
 
 CopySeg:	defb	0
+SavedCsrsw:	defb	0
 
 INCLUDE "../../common/ramrom_boot.asm"
 
