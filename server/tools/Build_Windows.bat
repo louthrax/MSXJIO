@@ -22,9 +22,6 @@ goto fail
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 if errorlevel 1 goto fail
 
-git config --global --add safe.directory "%SCRIPT_DIR%"
-if errorlevel 1 goto fail
-
 for /f "delims=" %%A in ('git -C "." rev-parse HEAD') do set "BUILD_HASH=%%A"
 if errorlevel 1 goto fail
 

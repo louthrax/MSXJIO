@@ -23,9 +23,6 @@ goto fail
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 if errorlevel 1 goto fail
 
-git config --global --add safe.directory "%SCRIPT_DIR%"
-if errorlevel 1 goto fail
-
 set /p BUILD_VERSION=<"./Version.txt"
 if errorlevel 1 goto fail
 
