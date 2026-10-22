@@ -12,5 +12,5 @@ SMB_SHARE='\\10.0.2.2\Host'
 WIN_DIR="S:${SCRIPT_DIR//\//\\}"
 WIN_BAT="S:${SCRIPT_DIR//\//\\}\\tools\\Build_Windows.bat"
 RUN_CMD="net use S: $SMB_SHARE /persistent:no >nul && cd /D \"$WIN_DIR\" && call \"$WIN_BAT\""
-"$WIN_VM_LAUNCHER" --ssh-port="${BUILD_WINDOWS_SSH_PORT:-2222}" --run="$RUN_CMD" \
+"$WIN_VM_LAUNCHER" --run="$RUN_CMD" \
     > >(awk '{ print strftime("[%H:%M:%S]"), $0; fflush() }') 2>&1
