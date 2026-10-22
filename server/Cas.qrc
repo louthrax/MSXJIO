@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>bin/JIO-CAS.CAS</file>
+    </qresource>
+</RCC>

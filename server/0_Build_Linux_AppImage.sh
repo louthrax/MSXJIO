@@ -2,11 +2,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_NAME="JIOServer"     # graphical server (JIOServerAll.pro: both servers, for Qt Creator)
-PROJECT_TO_BUILD="$(realpath "$SCRIPT_DIR/..")"
+PROJECT_NAME="JIOServer"
+PROJECT_TO_BUILD="$(realpath "$SCRIPT_DIR/..")"     # project root (server/ is below it), mounted at /src
 
-BUILD_HASH="$(git -C "$PROJECT_TO_BUILD" rev-parse HEAD)"
-BUILD_VERSION="$(<"$PROJECT_TO_BUILD/server/Version.txt")"
+BUILD_VERSION="$(<"$SCRIPT_DIR/Version.txt")"
 
 PROJECT_PACKAGE_NAME="${PROJECT_NAME}_LinuxAppImage_${BUILD_VERSION}"
 BUILD_DIR="/mnt/DataLinux/Tmp/$PROJECT_PACKAGE_NAME"
@@ -15,27 +14,25 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$SCRIPT_DIR/0_Builds"
 
-docker run --rm -it \
+docker run --rm \
   -u "$(id -u)":"$(id -g)" \
-  -e PROJECT_NAME="$PROJECT_NAME" \
   --mount type=bind,src="$PROJECT_TO_BUILD",dst=/src \
   --mount type=bind,src="$BUILD_DIR",dst=/build \
   -w /build \
   qt_dynamic_builder \
   bash -lc '
-    (
-      /qt/install/bin/qmake "/src/server/${PROJECT_NAME}.pro" &&
-      make -j"$(nproc)" &&
-      QMAKE=/qt/install/bin/qmake linuxdeploy \
-        --appdir=/build/AppDir \
-        --executable="/build/${PROJECT_NAME}" \
-        --plugin=qt \
-        --output=appimage \
-        --desktop-file="/src/server/${PROJECT_NAME}.desktop" \
-        -i "/src/server/${PROJECT_NAME}.svg"
-    ) || bash
+    cmake -G Ninja -S /src/server -B /build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/qt/install &&
+    cmake --build /build --target JIOServer &&
+    QMAKE=/qt/install/bin/qmake linuxdeploy \
+      --appdir=/build/AppDir \
+      --executable="/build/JIOServer" \
+      --plugin=qt \
+      --output=appimage \
+      --desktop-file="/src/server/JIOServer.desktop" \
+      -i "/src/server/JIOServer.svg"
   '
 
 cp -f \
-  "$BUILD_DIR/${PROJECT_NAME}.desktop-x86_64.AppImage" \
+  "$BUILD_DIR/JIOServer.desktop-x86_64.AppImage" \
   "$SCRIPT_DIR/0_Builds/$PROJECT_PACKAGE_NAME.AppImage"
+echo "Package: $SCRIPT_DIR/0_Builds/$PROJECT_PACKAGE_NAME.AppImage"

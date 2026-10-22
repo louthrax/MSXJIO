@@ -5,35 +5,32 @@ set -euo pipefail
 QT_DIR="$HOME/Qt/6.8.3/macos"
 # -------------------------------------
 
+# tools/ -> project (server) directory, shared with the host; build locally on the VM.
 script_dir="$(cd "$(dirname "$0")" && pwd)/.."
-project_dir="$(pwd)"
-
-PROJECT_NAME="JIOServer"     # graphical server (JIOServerAll.pro: both servers, for Qt Creator)
-
-BUILD_HASH="$(git -C "$script_dir" rev-parse HEAD)"
 BUILD_VERSION="$(<"$script_dir/Version.txt")"
-
-out_dmg="${project_dir}/${PROJECT_NAME}_macOS_${BUILD_VERSION}.dmg"
+out_dmg="$script_dir/0_Builds/JIOServer_macOS_${BUILD_VERSION}.dmg"
 build_dir="$HOME/Build"
 
-rm -f "$out_dmg"
+# cmake and ninja ship with the Qt Tools but are not on PATH
+export PATH="$HOME/Qt/Tools/Ninja:$PATH"
+for _d in "$HOME"/Qt/Tools/CMake/CMake.app/Contents/bin "$HOME"/Qt/Tools/CMake/bin; do
+  [[ -x "$_d/cmake" ]] && export PATH="$_d:$PATH" && break
+done
 
 rm -rf "$build_dir"
-mkdir -p "$build_dir"
-cd "$build_dir"
+mkdir -p "$build_dir" "$script_dir/0_Builds"
 
-"$QT_DIR/bin/qmake" "$project_dir/${PROJECT_NAME}.pro" CONFIG+=release
-make -j"$(sysctl -n hw.ncpu)"
+if command -v ninja >/dev/null 2>&1; then GEN="Ninja"; else GEN="Unix Makefiles"; fi
+cmake -G "$GEN" -S "$script_dir" -B "$build_dir" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR"
+cmake --build "$build_dir" --parallel        # both JIOServer and JIOServerCLI
 
-# command line server (JIOServerCLI.pro), in the bundle: uses its Qt frameworks
-mkdir -p "$build_dir/cli"
-cd "$build_dir/cli"
-"$QT_DIR/bin/qmake" "$project_dir/JIOServerCLI.pro" CONFIG+=release
-make -j"$(sysctl -n hw.ncpu)"
-cd "$build_dir"
-cp -f "cli/JIOServerCLI" "${PROJECT_NAME}.app/Contents/MacOS/JIOServerCLI"
+# the command line server rides inside the GUI bundle (shares its Qt frameworks), as the .pro build did
+cp -f "$build_dir/JIOServerCLI.app/Contents/MacOS/JIOServerCLI" \
+      "$build_dir/JIOServer.app/Contents/MacOS/JIOServerCLI"
 
-"$QT_DIR/bin/macdeployqt" "${PROJECT_NAME}.app" -executable="${PROJECT_NAME}.app/Contents/MacOS/JIOServerCLI" -dmg
+"$QT_DIR/bin/macdeployqt" "$build_dir/JIOServer.app" \
+  -executable="$build_dir/JIOServer.app/Contents/MacOS/JIOServerCLI" -dmg
 
-mkdir -p "$project_dir/0_Builds"
-cp -f "${PROJECT_NAME}.dmg" "$project_dir/0_Builds/${PROJECT_NAME}_macOS_${BUILD_VERSION}.dmg"
+cp -f "$build_dir/JIOServer.dmg" "$out_dmg"
+echo "Package: $out_dmg"

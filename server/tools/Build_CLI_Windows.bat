@@ -1,75 +1,65 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-rem Command line server (JIOServerCLI.pro): JIOServerCLI.exe and its Qt DLLs in a zip archive (no installer)
+rem JIOServerCLI: command-line server, Windows release, packaged as a zip (no installer), via CMake + Ninja.
+rem Runs on the Windows build VM (see 0_Build_CLI_Windows.sh).
 
 rem =========================
-rem Project settings (edit once)
+rem Tools of the VM (edit once)
 rem =========================
-set "QMAKE=C:\Qt\6.9.0\msvc2022_64\bin\qmake.exe"
-set "WINDEPLOYQT=C:\Qt\6.9.0\msvc2022_64\bin\windeployqt.exe"
+set "QT_DIR=C:\Qt\6.9.0\msvc2022_64"
+set "QT_TOOLS=C:\Qt\Tools"
 set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 rem =========================
 
-set "SCRIPT_DIR=%~dp0\.."
-if errorlevel 1 goto fail
-
 set "PROJECT_NAME=JIOServerCLI"
-if exist "%SCRIPT_DIR%\%PROJECT_NAME%.pro" goto :pro_found
-echo No %PROJECT_NAME%.pro file found in %SCRIPT_DIR%
-goto fail
+for %%I in ("%~dp0..") do set "SCRIPT_DIR=%%~fI"
 
-:pro_found
-if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set /p BUILD_VERSION=<"%SCRIPT_DIR%\Version.txt"
 if errorlevel 1 goto fail
-
-set /p BUILD_VERSION=<"./Version.txt"
-if errorlevel 1 goto fail
-
 set "OUT_ZIP=%SCRIPT_DIR%\0_Builds\%PROJECT_NAME%_Windows_%BUILD_VERSION%.zip"
 set "BUILD_DIR=%USERPROFILE%\BuildCLI"
-
-rmdir /S /Q "%BUILD_DIR%" >nul 2>&1
-
-mkdir "%BUILD_DIR%"
-if errorlevel 1 goto fail
-
-cd /D "%BUILD_DIR%"
-if errorlevel 1 goto fail
+set "DEPLOY=%BUILD_DIR%\deploy\%PROJECT_NAME%"
 
 call "%VCVARS%"
 if errorlevel 1 goto fail
+set "PATH=%QT_TOOLS%\CMake_64\bin;%QT_TOOLS%\Ninja;%PATH%"
 
-"%QMAKE%" "%SCRIPT_DIR%\%PROJECT_NAME%.pro" CONFIG+=release
+if exist "%BUILD_DIR%" rmdir /S /Q "%BUILD_DIR%"
+mkdir "%BUILD_DIR%"
 if errorlevel 1 goto fail
 
-set CL=/MP
-nmake -f Makefile
+echo ==^> [%TIME%] cmake configure
+cmake -G Ninja -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="%QT_DIR%"
 if errorlevel 1 goto fail
 
-mkdir "deploy\%PROJECT_NAME%"
+echo ==^> [%TIME%] cmake build (CLI only)
+cmake --build "%BUILD_DIR%" --target JIOServerCLI
 if errorlevel 1 goto fail
 
-copy /Y "release\%PROJECT_NAME%.exe" "deploy\%PROJECT_NAME%\%PROJECT_NAME%.exe"
+echo ==^> [%TIME%] deploy
+mkdir "%DEPLOY%"
+copy /Y "%BUILD_DIR%\JIOServerCLI.exe" "%DEPLOY%\JIOServerCLI.exe"
+if errorlevel 1 goto fail
+"%QT_DIR%\bin\windeployqt.exe" "%DEPLOY%\JIOServerCLI.exe" --release --no-translations --no-compiler-runtime
+if errorlevel 1 goto fail
+rem Visual C++ runtime DLLs next to the exe (no vc_redist installer in the archive)
+for /d %%D in ("%VCToolsRedistDir%x64\Microsoft.VC*.CRT") do copy /Y "%%D\*.dll" "%DEPLOY%\"
+if not exist "%DEPLOY%\vcruntime140.dll" goto fail
+
+"%DEPLOY%\JIOServerCLI.exe" --version
 if errorlevel 1 goto fail
 
-rem Qt DLLs; Visual C++ runtime DLLs copied next to the exe (no vc_redist installer of 25 MB in the archive)
-"%WINDEPLOYQT%" "deploy\%PROJECT_NAME%\%PROJECT_NAME%.exe" --release --no-translations --no-compiler-runtime
-if errorlevel 1 goto fail
-
-for /d %%D in ("%VCToolsRedistDir%x64\Microsoft.VC*.CRT") do copy /Y "%%D\*.dll" "deploy\%PROJECT_NAME%\"
-if not exist "deploy\%PROJECT_NAME%\vcruntime140.dll" goto fail
-
-"deploy\%PROJECT_NAME%\%PROJECT_NAME%.exe" --version
-if errorlevel 1 goto fail
-
+echo ==^> [%TIME%] zip
 if not exist "%SCRIPT_DIR%\0_Builds" mkdir "%SCRIPT_DIR%\0_Builds"
 del "%OUT_ZIP%" >nul 2>&1
-powershell -NoProfile -Command "Compress-Archive -Path 'deploy\%PROJECT_NAME%' -DestinationPath '%OUT_ZIP%'"
+powershell -NoProfile -Command "Compress-Archive -Path '%BUILD_DIR%\deploy\%PROJECT_NAME%' -DestinationPath '%OUT_ZIP%'"
 if errorlevel 1 goto fail
 
+echo ==^> [%TIME%] done
 exit /b 0
 
 :fail
 set "el=%errorlevel%"
+if "%el%"=="0" set "el=1"
 exit /b %el%

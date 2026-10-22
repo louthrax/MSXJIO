@@ -1,88 +1,62 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
+rem JIOServer: Windows release build + installer (graphical server + command-line server), via CMake + Ninja.
+rem Runs on the Windows build VM (see 0_Build_Windows.sh): builds in a local directory, reads the sources
+rem from the project directory (shared), writes the installer to 0_Builds.
+
 rem =========================
-rem Project settings (edit once)
+rem Tools of the VM (edit once)
 rem =========================
-set "QMAKE=C:\Qt\6.9.0\msvc2022_64\bin\qmake.exe"
-set "WINDEPLOYQT=C:\Qt\6.9.0\msvc2022_64\bin\windeployqt.exe"
+set "QT_DIR=C:\Qt\6.9.0\msvc2022_64"
+set "QT_TOOLS=C:\Qt\Tools"
 set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 rem =========================
 
-set "SCRIPT_DIR=%~dp0\.."
-if errorlevel 1 goto fail
-
-rem Graphical server (JIOServerAll.pro: both servers, for Qt Creator)
 set "PROJECT_NAME=JIOServer"
-if exist "%SCRIPT_DIR%\%PROJECT_NAME%.pro" goto :pro_found
-echo No %PROJECT_NAME%.pro file found in %SCRIPT_DIR%
-goto fail
+for %%I in ("%~dp0..") do set "SCRIPT_DIR=%%~fI"
 
-:pro_found
-if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set /p BUILD_VERSION=<"%SCRIPT_DIR%\Version.txt"
 if errorlevel 1 goto fail
-
-for /f "delims=" %%A in ('git -C "." rev-parse HEAD') do set "BUILD_HASH=%%A"
-if errorlevel 1 goto fail
-
-set /p BUILD_VERSION=<"./Version.txt"
-if errorlevel 1 goto fail
-
-set "PACKAGE_7Z=%PROJECT_NAME%_Windows_%BUILD_VERSION%.7z"
 set "OUT_EXE=%SCRIPT_DIR%\0_Builds\%PROJECT_NAME%_Windows_%BUILD_VERSION%.exe"
-
-del "%PACKAGE_7Z%" >nul 2>&1
-rmdir /S /Q "%USERPROFILE%\Build" >nul 2>&1
-
-mkdir "%USERPROFILE%\Build"
-if errorlevel 1 goto fail
-
-cd /D "%USERPROFILE%\Build"
-if errorlevel 1 goto fail
+set "BUILD_DIR=%USERPROFILE%\Build"
+set "DEPLOY=%BUILD_DIR%\deploy"
 
 call "%VCVARS%"
 if errorlevel 1 goto fail
+set "PATH=%QT_TOOLS%\CMake_64\bin;%QT_TOOLS%\Ninja;%PATH%"
 
-"%QMAKE%" "%SCRIPT_DIR%\%PROJECT_NAME%.pro" CONFIG+=release
+if exist "%BUILD_DIR%" rmdir /S /Q "%BUILD_DIR%"
+mkdir "%BUILD_DIR%"
 if errorlevel 1 goto fail
 
-set CL=/MP
-nmake -f Makefile
+echo ==^> [%TIME%] cmake configure
+cmake -G Ninja -S "%SCRIPT_DIR%" -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="%QT_DIR%"
 if errorlevel 1 goto fail
 
-"%WINDEPLOYQT%" "release\%PROJECT_NAME%.exe" --dir deploy --release
+echo ==^> [%TIME%] cmake build
+cmake --build "%BUILD_DIR%"
 if errorlevel 1 goto fail
 
-copy /Y "release\%PROJECT_NAME%.exe" "deploy\%PROJECT_NAME%.exe"
+echo ==^> [%TIME%] windeployqt
+mkdir "%DEPLOY%"
+copy /Y "%BUILD_DIR%\JIOServer.exe" "%DEPLOY%\JIOServer.exe"
+if errorlevel 1 goto fail
+copy /Y "%BUILD_DIR%\JIOServerCLI.exe" "%DEPLOY%\JIOServerCLI.exe"
+if errorlevel 1 goto fail
+"%QT_DIR%\bin\windeployqt.exe" "%DEPLOY%\JIOServer.exe" --release
+if errorlevel 1 goto fail
+"%QT_DIR%\bin\windeployqt.exe" "%DEPLOY%\JIOServerCLI.exe" --release
 if errorlevel 1 goto fail
 
-rem Command line server (JIOServerCLI.pro), in the same package
-mkdir "%USERPROFILE%\Build\cli"
+echo ==^> [%TIME%] installer
+"%SCRIPT_DIR%\tools\MakeWinInst.py" "%PROJECT_NAME% %BUILD_VERSION%" "%PROJECT_NAME%" "%BUILD_VERSION%" "%DEPLOY%" "%OUT_EXE%"
 if errorlevel 1 goto fail
 
-cd /D "%USERPROFILE%\Build\cli"
-if errorlevel 1 goto fail
-
-"%QMAKE%" "%SCRIPT_DIR%\JIOServerCLI.pro" CONFIG+=release
-if errorlevel 1 goto fail
-
-nmake -f Makefile
-if errorlevel 1 goto fail
-
-"%WINDEPLOYQT%" "release\JIOServerCLI.exe" --dir "%USERPROFILE%\Build\deploy" --release
-if errorlevel 1 goto fail
-
-copy /Y "release\JIOServerCLI.exe" "%USERPROFILE%\Build\deploy\JIOServerCLI.exe"
-if errorlevel 1 goto fail
-
-cd /D "%USERPROFILE%\Build"
-if errorlevel 1 goto fail
-
-"%SCRIPT_DIR%\tools\MakeWinInst.py" "%PROJECT_NAME% %BUILD_VERSION%" "%PROJECT_NAME%" "%BUILD_VERSION%" "deploy" "%OUT_EXE%"
-if errorlevel 1 goto fail
-
+echo ==^> [%TIME%] done
 exit /b 0
 
 :fail
 set "el=%errorlevel%"
+if "%el%"=="0" set "el=1"
 exit /b %el%

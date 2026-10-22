@@ -199,7 +199,7 @@ Flash the ROM to the JIO cartridge, a MegaFlashROM or a Carnivore2, or burn it t
 ## Usage instructions for the MSX-DOS clients
 
 1. Connect your MSX to your PC using a USB serial cable or Bluetooth adapter.
-1. Launch **JIOServer**, choose what to serve (a disk image, or directories, see below).
+1. Launch **JIOServer**, choose what to serve (a disk image and/or directories, see below).
 1. Select USB or Bluetooth mode using the <img src="./server/icons/Bluetooth.svg" width="20"/> or  <img src="./server/icons/USB.svg" width="20"/> button
 1. Select the communication device to use (ttyUSB0 or DSD TECH HC-05 for example)
 1. Click the <img src="./server/icons/disconnected.svg" width="20"/> button.
@@ -207,7 +207,11 @@ Flash the ROM to the JIO cartridge, a MegaFlashROM or a Carnivore2, or burn it t
 1. You should see an <span style="color:green">Info✓ </span> appear in the server log and the LED blink.
 1. The MSX should now access the image or the directories.
 
-The choice between disk image and directories is read by the ROM when the MSX starts: reset the MSX after changing it.
+The server serves the disk image, the directories and the tape BIN (see JIO-CAS.CAS below) all together: the
+**Disk image**, **Directories** and **Tape BIN** buttons only show their settings. When a disk image and directories
+are both served, **Boot** chooses what the JIO MSX-DOS 2 ROM boots from (directories by default; the JIO MSX-DOS 1
+ROMs always use the disk image). It is read by the ROM when the MSX starts: reset the MSX after changing it. JIO.COM
+can use the directories whatever the MSX booted from.
 
 ### Serving a disk image
 
@@ -266,10 +270,13 @@ The ROM is read from the tape (about 27 KB, compressed: two or three minutes) an
 below: the tape player disturbs JIO as long as its PLAY key is down). Same requirement: a memory mapper of at least
 128 KB in the RAM slot of pages 2 and 3. If MSX-DOS is already there, it tells you to use JIO-ROM.COM.
 
-**JIO-CAS.CAS** is much faster: only a small loader is on the tape (about 2 KB: a few seconds), the ROM is read from the
-server. Put **JIO-CAS.BIN** in the folder served as **A:** (directories served, next to `MSXDOS2.SYS`), then
-`BLOAD"CAS:",R`, press STOP on the tape player and a key: the ROM comes in a few seconds and MSX-DOS 2 starts. If the
-file is not there (or not served as directories), the loader says so and goes back to BASIC: use JIO-ROM.CAS.
+**JIO-CAS.CAS** is much faster: only a small loader is on the tape (about 1.5 KB, compressed: a few seconds), the ROM is read from the
+server, whatever it serves (disk image and/or directories): `BLOAD"CAS:",R`, press STOP on the tape player and a key:
+the ROM comes in a few seconds and MSX-DOS 2 starts. The server sends the JIO-CAS.BIN built in it, or the BIN chosen
+with its **Tape BIN** button (e.g. another version of the ROM, **JIO-CAS.BIN** of `0_Builds`). No tape needed: the
+graphical server plays JIO-CAS.CAS (built in) on the default audio output with **Play JIO-CAS.CAS on the audio
+output** (**Tape BIN** page, about 18 s at 1200 bauds, 10 s at 2400 bauds): connect the audio output to the tape input of the MSX, type
+`BLOAD"CAS:",R`, click the button, and press a key on the MSX when the loader asks to stop the tape player.
 
 ### If the link is lost
 
@@ -348,6 +355,7 @@ copies to the clipboard (and shows in the log) the command line with its current
 JIOServerCLI -i games.dsk                                 # serve a disk image
 JIOServerCLI -d A=~/MSX/boot -d C=~/MSX/work -l jio.log   # serve directories as drives A: and C:, log file
 JIOServerCLI -i hd.img -r -p /dev/ttyUSB1                 # read only, given serial port
+JIOServerCLI -i games.dsk -d A=~/MSX/boot --boot image    # both, the MSX-DOS 2 ROM boots from the image
 JIOServerCLI -d ~/MSX/boot -b 98:D3:31:FB:12:34           # Bluetooth
 JIOServerCLI --list                                       # serial ports (and the automatic choice)
 ```
@@ -356,8 +364,10 @@ JIOServerCLI --list                                       # serial ports (and th
 |---|---|
 | `-i`, `--image <file>` | serve a disk image (floppy, or hard disk with partitions) |
 | `-d`, `--drive [X=]<dir>` | serve a directory as drive X: (A to H, next free drive without `X=`), can be repeated |
+| `--boot dirs\|image` | what the JIO MSX-DOS 2 ROM boots from when a disk image and directories are both served (default: dirs) |
+| `--bin <file>` | BIN served to the tape loader JIO-CAS.CAS (default: the JIO-CAS.BIN built in) |
 | `-r`, `--read-only` | refuse all writes (the RAM disk H: stays writable) |
-| `--no-rx-crc`, `--no-tx-crc`, `--timeout`, `--slow-tx` | link options of the disk image mode (default: CRC both ways) |
+| `--no-rx-crc`, `--no-tx-crc`, `--timeout`, `--slow-tx` | link options of the disk image (default: CRC both ways) |
 | `--no-auto-retry` | the MSX does not retry the commands without answer (default: retry), disk image |
 | `-p`, `--port <port>` | serial port (`ttyUSB0`, `/dev/ttyUSB0`, `/dev/serial/by-id/...`, `COM3`) |
 | `-b`, `--bluetooth <address>` | Bluetooth device instead of a serial port (`--scan-bluetooth` lists them) |

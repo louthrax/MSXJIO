@@ -167,11 +167,15 @@ run_scenario() {
         while [ ! -s pty.path ]; do sleep 0.1; done
         local serve=(-d "${JIO_DRIVE:-A}=$dir/drive")
         [ -n "$image" ] && serve=(-i "$image")
+        [ -n "$image" ] && [ -n "${SERVE_BOTH:-}" ] && serve+=(-d "${JIO_DRIVE:-A}=$dir/drive")
+        [ -n "${SERVER_BOOT:-}" ] && serve+=(--boot "$SERVER_BOOT")
+        [ -n "${SERVER_BIN:-}" ] && serve+=(--bin "$SERVER_BIN")
         [ -n "${READ_ONLY:-}" ] && serve+=(-r)
         "$REAL_SERVER" "${serve[@]}" --port "$(cat pty.path)" -q -l server.log &
         mp="$mp $!"
     else
-        MOCK_IMAGE=$image MOCK_READONLY=${READ_ONLY:-} MOCK_DRIVE=${JIO_DRIVE:-A} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
+        MOCK_IMAGE=$image MOCK_BOTH=${SERVE_BOTH:-} MOCK_BOOT=${SERVER_BOOT:-dirs} MOCK_BIN=${SERVER_BIN:-} \
+            MOCK_READONLY=${READ_ONLY:-} MOCK_DRIVE=${JIO_DRIVE:-A} python3 "$TEST/mockserver.py" "$dir/drive" "$MOCK_PORT" server.log &
         mp=$!
     fi
     sleep 1
@@ -413,6 +417,28 @@ test_image_hybrid() { # name rom map machine slots floppy size description
     end_checks "$1" "$7"
 }
 
+# Disk image and directories served together (SERVE_BOTH), preferred boot of the server (SERVER_BOOT): the JIO
+# MSX-DOS 2 ROM boots from the directories (dirs, default), or from the image (image: _LOGIN answers 0).
+# DIRONLY.TXT is in the directory, not on the image (removed with mtools): shows where MSX-DOS 2 booted from.
+setup_both() { echo "only in the served directory" > "$1/DIRONLY.TXT"; }
+image_both() { mdel -i "$1" ::DIRONLY.TXT; }
+test_boot() { # name dirs|image description
+    wanted "$1" || return
+    IMAGE_MODE=1 SERVE_BOTH=1 SERVER_BOOT=$2 SETUP=setup_both IMAGE_SETUP=image_both run_scenario "$1" "$R" "$RM" \
+        Philips_VG_8235 "-carta $R" 'VER\r\nDIR DIRONLY.TXT\r\n' "$TEST/tcl/screens.tcl" 360 "$OUT/floppy_base" 1 "20 40"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "MSX-DOS 2 started" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
+    if [ "$2" = image ]; then
+        mock_check "_LOGIN 0: boot from the disk image (sectors)" "$(has_text "$d/server.log" 'LOGIN 00' && grep -q '^READ P0' "$d/server.log" && echo ok)"
+        check "drive A: is the disk image (no DIRONLY.TXT)" "$(has_text "$d/screen_40.txt" ' in 0 files' && echo ok)"
+    else
+        mock_check "_LOGIN not 0: boot from the directories (BDOS)" "$(has_text "$d/server.log" 'LOGIN 01' && ! grep -q '^READ P0' "$d/server.log" && echo ok)"
+        check "drive A: is the served directory (DIRONLY.TXT)" "$(has_text "$d/screen_40.txt" 'DIRONLY  TXT' && echo ok)"
+    fi
+    end_checks "$1" "$3"
+}
+
 # "Read only" server: every modification of the JIO drive is refused (.WPROT), reading works, the RAM disk H:
 # (and the floppy B:) stay writable
 READONLY='COPY HELLO.TXT X.TXT\r\nMD SUB\r\nDEL HELLO.TXT\r\nREN HELLO.TXT Y.TXT\r\nATTRIB +R HELLO.TXT\r\nTYPE HELLO.TXT\r\nRAMDISK 32K\r\nCOPY HELLO.TXT H:\r\nDIR H:\r\n'
@@ -508,6 +534,23 @@ test_nfs() { # name machine "slots" description [options of JIO.COM] [serial lin
     check "ATTRIB +R (host file read only)" "$([ -f "$d/drive/SUB/R2.TXT" ] && [ ! -w "$d/drive/SUB/R2.TXT" ] && echo ok)"
     [ -n "${6:-}" ] && check "serial line of the installed driver (JIO S)" "$(has_text "$d/screens.txt" "$6" && echo ok)"
     [ -z "${5:-}" ] && check "automatic serial line shown at install" "$(has_text "$d/screens.txt" 'Serial line: joystick port 2' && echo ok)"
+    end_checks "$1" "$4"
+}
+
+# JIO.COM "JIO +" (all the directories served) when the server prefers to boot from its disk image: _LOGIN answers 0,
+# LOGIN_NFS (asked by JIO.COM) the directories served
+test_nfs_login() { # name machine "slots" description
+    wanted "$1" || return
+    rm -rf "$OUT/floppy_nfsl"; mkdir -p "$OUT/floppy_nfsl"
+    cp -p "$OUT"/base/MSXDOS2.SYS "$OUT"/base/COMMAND2.COM "$OUT"/base/JIO.COM "$OUT/floppy_nfsl/"
+    printf 'JIO +\r\n' > "$OUT/floppy_nfsl/AUTOEXEC.BAT"
+    IMAGE_MODE=1 SERVE_BOTH=1 SERVER_BOOT=image TYPE_TIME=25 TYPE_TEXT=$'DIR D:\r' NFS=1 JIO_DRIVE=D \
+        run_scenario "$1" "$R" "$RM" "$2" "$3" 'REM\r\n' "$TEST/tcl/typecmd.tcl" 720 "$OUT/floppy_nfsl" 0 "$(seq -s " " 20 5 50)"
+    local d="$OUT/$1"
+    begin_checks "$1"
+    check "JIO +: directory served found (D:)" "$(has_text "$d/screens.txt" 'Drives served: D:' && echo ok)"
+    mock_check "LOGIN_NFS asked (not _LOGIN)" "$(has_text "$d/server.log" 'LOGIN_NFS 08' && echo ok)"
+    check "DIR D:" "$(has_text "$d/screens.txt" 'HELLO    TXT' && echo ok)"
     end_checks "$1" "$4"
 }
 
@@ -626,26 +669,27 @@ PYEOF
 }
 
 # JIO-CAS.CAS (loader only, BLOAD"CAS:",R): STOP on the tape player, then the ROM and its kernel read from the server
-# (A:\JIO-CAS.BIN), MSX-DOS 2 started. The bridge intercepts the serial routines of the loader (TOOL_MAP: its map).
-# [no file]: JIO-CAS.BIN not on the server: "not found", back to BASIC
-setup_jiocas_srv() { # drive directory
-    cp "$JIOCAS_BIN" "$1/JIO-CAS.BIN"
-}
+# (COMMAND_BIN: BIN of the server, SERVER_BIN), MSX-DOS 2 started. The bridge intercepts the serial routines of the
+# loader (TOOL_MAP: its map). [no file]: no BIN on the server: "not found", back to BASIC (real server, REAL_SERVER:
+# no --bin, the BIN built in the server is served, MSX-DOS 2 starts).
+# IMAGE_MODE (environment): the server serves a disk image only, the BIN is served too, MSX-DOS 2 boots from the image.
 test_jiocas_srv() { # name machine "slots" description [no file]
     wanted "$1" || return
-    local setup=setup_jiocas_srv
-    [ -n "${5:-}" ] && setup=""
-    TOOL_MAP=$JIOCAS_SRV_MAP SETUP=$setup TAPE_TIME=10 SHIFT_BOOT=1 EXTRA_SCRIPT="$TEST/tcl/presskey.tcl" \
+    local bin=$JIOCAS_BIN nofile=${5:-}
+    [ -n "$nofile" ] && bin=""
+    [ -n "${REAL_SERVER:-}" ] && nofile=""
+    TOOL_MAP=$JIOCAS_SRV_MAP SERVER_BIN=$bin TAPE_TIME=10 SHIFT_BOOT=1 EXTRA_SCRIPT="$TEST/tcl/presskey.tcl" \
         run_scenario "$1" "$JIOCAS_SRV" "$JIOROM_MAP" "$2" "-cassetteplayer $JIOCAS_SRV $3" \
         'VER\r\nFDTEST\r\nFCBTEST\r\n' "$TEST/tcl/tape.tcl" "" "" 1 "$(seq -s ' ' 20 5 60) 80"
     local d="$OUT/$1"
     begin_checks "$1"
     check "loader loaded from the tape, then: STOP on the tape player, press a key" "$(has_text "$d/screen_key1.txt" 'Press STOP on the tape player,' && echo ok)"
-    if [ -n "${5:-}" ]; then
+    if [ -n "$nofile" ]; then
         check "file not found on the server, back to BASIC" "$(has_text "$d/screen_80.txt" 'JIO-CAS.BIN... not found' && echo ok)"
         check "MSX-DOS 2 not started" "$( ! has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
     else
-        mock_check "file read from the server (_OPEN, _READ)" "$(grep -qi 'OPEN.*JIO-CAS.BIN' "$d/server.log" && grep -q '^READ' "$d/server.log" && echo ok)"
+        mock_check "BIN read from the server (COMMAND_BIN: sums, ROM, kernel)" "$(grep -q '^BIN 4 at 32768' "$d/server.log" && grep -q '^BIN 16384 at 0' "$d/server.log" && grep -q '^BIN 16384 at 16384' "$d/server.log" && echo ok)"
+        [ -n "${IMAGE_MODE:-}" ] && mock_check "MSX-DOS 2 booted from the disk image (sectors)" "$(grep -q '^READ P0' "$d/server.log" && echo ok)"
         check "MSX-DOS 2 started (JIO ROM in RAM)" "$(has_text "$d/screens.txt" 'COMMAND2.COM version' && echo ok)"
         check "FCB test result" "$(has_text "$d/screen_80.txt" "$FCB_OK" && echo ok)"
         check "segment written to port FDH kept across the interrupts (FDTEST)" "$(has_text "$d/screens.txt" 'FDTEST: OK' && echo ok)"
@@ -751,6 +795,8 @@ JIO_LINE=FE test_dos_hybrid dos2_joy1 "$R" "$RM" Philips_VG_8235 "-carta $R" 360
 test_format          dos2_format_vg   "$R" "$RM" Philips_VG_8235   "-carta $R" 360 "VG-8235, FORMAT B: (360 KB floppy), then COPY to B:" 354K
 test_msx1            dos2_msx1        "$R" "$RM" Philips_VG_8020   "-carta $R -extb ram1mb" "VG-8020 (MSX1) + 1 MB mapper, JIO drive A:"
 test_blkread         dos2_blkread     "$R" "$RM" Philips_VG_8235   "-carta $R" "VG-8235, FCB random block read at the end of a file, JIO drive A: and floppy B:"
+test_boot            dos2_boot_dirs   dirs  "VG-8235, disk image and directories served, preferred boot: directories"
+test_boot            dos2_boot_image  image "VG-8235, disk image and directories served, preferred boot: disk image"
 test_format          dos2_format_nms  "$R" "$RM" Philips_NMS_8255  "-carta $R" 720 "NMS 8255, FORMAT B: (720 KB floppy, double sided), then COPY to B:" 713K 2
 
 echo "Clients:"
@@ -760,12 +806,14 @@ test_jiotime   jiotime_none "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235,
 test_jiotime   jiotime_cart "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME C30 (JIO cartridge option, port not emulated)" "" C30
 test_jiotime   jiotime_joy1 "$R" "$RM" Philips_VG_8235   "-carta $R"   "VG-8235, JIOTIME J1 (joystick port 1, serial line intercepted)" "" J1
 test_nfs       nfs_nms8255  Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM (JIO_NFS) on the original MSX-DOS 2, drive D:"
+test_nfs_login nfs_login    Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM: JIO + finds the directories when the server prefers to boot from its disk image"
 test_nfs       nfs_turbor   Panasonic_FS-A1ST ""                       "turbo R, JIO.COM (JIO_NFS) on the internal MSX-DOS 2, drive D:"
 test_nfs       nfs_cart     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM with the JIO cartridge option (JIO C30 +D, port not emulated)" C30 'JIO cartridge, port 30H'
 test_nfs       nfs_joy1     Philips_NMS_8255  "-ext msxdos2"           "NMS 8255, JIO.COM on joystick port 1 (JIO J1 +D, serial line intercepted)" J1 'joystick port 1'
 test_nfs_dos1  nfs_dos1     Philips_VG_8235   "-ext ram1mb"            "VG-8235 + 1 MB mapper, JIO.COM on MSX-DOS 1 (internal disk ROM)"
 
 test_sri       sri_vg8235     "$R" "$RM" Philips_VG_8235  "-carta $R -extb ram1mb" "VG-8235 + 1 MB mapper, SofaRunIt launches a MSX-DOS 1 disk image from the JIO drive"
+test_sri       sri_128k       "$R" "$RM" Philips_VG_8235  "-carta $R"          "VG-8235 (128 KB mapper), SofaRunIt takes the segment of COMMAND2.COM (no free segment)"
 
 echo "JIO-ROM.COM, JIO-ROM.CAS (JIO MSX-DOS 2 ROM in RAM, MSX-DOS 1 computers, tape):"
 test_jiorom    jiorom_vg8235  Philips_VG_8235  ""                      "VG-8235 (128 KB mapper), JIO-ROM.COM on MSX-DOS 1: JIO drive A: + floppy B:"
@@ -783,9 +831,10 @@ CAS_CORRUPT=1 test_jiocas jiocas_checksum Philips_VG_8235 "" "VG-8235 booted wit
 test_cas2tape  cas2tape_rom   "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, JIO ROM, CAS2TAPE (SofaRun) records JIO-ROM.CAS"
 CAS2TAPE_FILE=$JIOCAS_SRV CAS2TAPE_END=40 test_cas2tape cas2tape_small "$R" "$RM" Philips_VG_8235 "-carta $R" "VG-8235, JIO ROM, CAS2TAPE records JIO-CAS.CAS (2 KB): ends at once (FCB block read at the end of the file)"
 JIOROM_BOOT=1 TIME_SHIFT=15 test_cas2tape cas2tape_jiorom "$JIOROM" "$JIOROM_MAP" Philips_VG_8235 "" "VG-8235, JIO-ROM.COM, CAS2TAPE (SofaRun) records JIO-ROM.CAS" 360
-test_jiocas_srv jiocas_srv     Philips_VG_8235  ""                     "VG-8235 booted with SHIFT, JIO-CAS.CAS: ROM read from the server (A:\\JIO-CAS.BIN)"
+test_jiocas_srv jiocas_srv     Philips_VG_8235  ""                     "VG-8235 booted with SHIFT, JIO-CAS.CAS: ROM read from the server (COMMAND_BIN)"
 test_jiocas_srv jiocas_srv_msx1 Philips_VG_8020 "-ext ram1mb"          "VG-8020 (MSX1) + 1 MB mapper, JIO-CAS.CAS: ROM read from the server"
-test_jiocas_srv jiocas_srv_nofile Philips_VG_8235 ""                   "VG-8235 booted with SHIFT, JIO-CAS.CAS without JIO-CAS.BIN on the server: not found" nofile
+test_jiocas_srv jiocas_srv_nofile Philips_VG_8235 ""                   "VG-8235 booted with SHIFT, JIO-CAS.CAS without BIN on the server: not found" nofile
+IMAGE_MODE=1 test_jiocas_srv jiocas_srv_image Philips_VG_8235 ""        "VG-8235 booted with SHIFT, JIO-CAS.CAS, server serving a disk image only: BIN served, boot from the image"
 test_jiocas    jiocas_dos     Philips_VG_8235  ""                      "VG-8235 with MSX-DOS 1, JIO-ROM.CAS: message, nothing loaded" noshift
 JIOROM_BOOT=1 TIME_SHIFT=15 RESET_TIME=40 test_ramdisk jiorom_ramdisk   "$JIOROM" "$JIOROM_MAP" Philips_VG_8235  "" "VG-8235, JIO-ROM.COM, RAMDISK (H: on the server), MSX reset" 360
 

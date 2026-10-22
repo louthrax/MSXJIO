@@ -7,7 +7,8 @@
 ; with the tape routines of the BIOS: the ROM and its kernel (16 KB each, compressed with BitBuster as in SofaCas),
 ; put in their segments (see common/ramrom_boot.asm).
 ; JIO-CAS.CAS (assembled with SERVER): this loader only (BLOAD file JIOCAS), the ROM and its kernel are read from the
-; JIO server (A:\JIO-CAS.BIN, directories served: COMMAND_BDOS _OPEN, _READ, _CLOSE as the ROM), much faster.
+; JIO server (COMMAND_BIN: BIN chosen on the server, JIO-CAS.BIN built in by default), much faster. Served whatever
+; the server serves (disk image and/or directories).
 ; Needs a memory mapper of 128 KB (7 segments at least) in the RAM slot of pages 2 and 3.
 ; ------------------------------------------------------------------------------
 
@@ -21,7 +22,7 @@ TAPIOF		equ	00E7h
 TAPE_ADR	equ	0D000h		; loader (page 3): above the boot code, below the BASIC stack
 	IFDEF SERVER
 TRIES		equ	6		; time-outs of bJIOReceive (about 0.8 s each) for an answer of the server
-COMMAND_BDOS	equ	22		; JIO protocol (common/drv_jio.inc, msxjio_protocol_specification.md)
+COMMAND_BIN	equ	25		; JIO protocol (common/drv_jio.inc, msxjio_protocol_specification.md)
 	ENDIF
 PACK_END	equ	0C040h		; end of the compressed data read in a segment (in page 3: room for the decompression
 					; in place, checked by 0_Build.sh)
@@ -123,7 +124,7 @@ PrintChar:	jp	CHPUT
 
 	IFDEF SERVER
 ; ------------------------------------------------------------------------------
-; ROM and kernel read from the JIO server (A:\JIO-CAS.BIN: ROM, kernel, 16-bit sums of both), then boot.
+; ROM and kernel read from the JIO server (BIN: ROM, kernel, 16-bit sums of both, COMMAND_BIN), then boot.
 ; Serial lines tried as JIOTIME.COM: JIO cartridge (if its I/O register is found), joystick port 2, joystick port 1.
 ; ------------------------------------------------------------------------------
 ServerLoad:	ld	de,MSG_READ
@@ -144,15 +145,19 @@ LinesJoy:	ld	(hl),0FFh
 		or	a
 		sbc	hl,de
 		ld	b,l			; number of lines
+		ld	hl,8000h		; first request: the sums (end of the BIN), answer: error, size
+		ld	(REQ_BIN+5),hl
+		ld	hl,4
+		ld	(REQ_BIN+7),hl
 		ld	hl,Lines
 		di
 LineLoop:	ld	a,(hl)
 		ld	(_JioPort),a
 		push	bc
 		push	hl
-		ld	hl,REQ_OPEN		; _OPEN: error, file handle
-		ld	de,REQ_OPEN_END-REQ_OPEN
-		ld	bc,2
+		ld	hl,REQ_BIN
+		ld	de,REQ_BIN_END-REQ_BIN
+		ld	bc,3
 		ld	a,1			; one try on each line
 		call	Request
 		pop	hl
@@ -166,29 +171,26 @@ LineLoop:	ld	a,(hl)
 LineFound:	ld	a,(Answer)
 		or	a
 		ld	de,MSG_NOFILE
-		jp	nz,ServerError
-		ld	a,(Answer+1)
-		ld	(REQ_READ+6),a		; file handle
-		ld	(REQ_CLOSE+6),a
-		ld	a,(BootRomSeg-BOOT_ADR+BootCode)
-		call	ServerSegment
-		jp	c,ServerReadErr
-		ld	a,(KernelSeg)
-		call	ServerSegment
-		jp	c,ServerReadErr
-		ld	hl,4			; sums of the ROM and of the kernel
-		ld	(REQ_READ+7),hl
-		call	ReadRequest
-		jp	c,ServerReadErr
-		ld	hl,FileSums
+		jp	nz,ServerError		; no BIN on the server
+		ld	hl,(Answer+1)
+		ld	de,4
+		sbc	hl,de			; Cx reset (or a)
+		ld	de,MSG_BADFILE
+		jp	nz,ServerError		; BIN too short
+		ld	hl,FileSums		; sums of the ROM and of the kernel
 		ld	de,4
 		call	Receive
 		jp	c,ServerReadErr
-		ld	hl,REQ_CLOSE
-		ld	de,REQ_CLOSE_END-REQ_CLOSE
-		ld	bc,1
-		ld	a,TRIES
-		call	Request
+		ld	hl,0
+		ld	(REQ_BIN+5),hl
+		ld	a,(BootRomSeg-BOOT_ADR+BootCode)
+		call	ServerSegment
+		jp	c,ServerReadErr
+		ld	hl,4000h
+		ld	(REQ_BIN+5),hl
+		ld	a,(KernelSeg)
+		call	ServerSegment
+		jp	c,ServerReadErr
 		ei
 		; checks: ROM header, sums
 		ld	a,(BootRomSeg-BOOT_ADR+BootCode)
@@ -222,11 +224,11 @@ ServerError:	ei
 		jp	PrintString
 
 ; ------------------------------------------------------------------------------
-; 16 KB of the file to a segment, through page 2: A = segment. Output: Cx set on error
+; 16 KB of the BIN (at REQ_BIN+5) to a segment, through page 2: A = segment. Output: Cx set on error
 ; ------------------------------------------------------------------------------
 ServerSegment:	ld	(ReadSeg),a
 		ld	hl,4000h
-		ld	(REQ_READ+7),hl
+		ld	(REQ_BIN+7),hl
 		call	ReadRequest
 		ret	c
 		ld	a,(ReadSeg)
@@ -238,9 +240,9 @@ ServerSegment:	ld	(ReadSeg),a
 		out	(0FEh),a
 		ret
 
-; _READ of REQ_READ+7 bytes: first answer packet (error, size read) checked. Output: Cx set on error
-ReadRequest:	ld	hl,REQ_READ
-		ld	de,REQ_READ_END-REQ_READ
+; COMMAND_BIN of REQ_BIN+7 bytes: first answer packet (error, size sent) checked. Output: Cx set on error
+ReadRequest:	ld	hl,REQ_BIN
+		ld	de,REQ_BIN_END-REQ_BIN
 		ld	bc,3
 		ld	a,TRIES
 		call	Request
@@ -249,10 +251,10 @@ ReadRequest:	ld	hl,REQ_READ
 		or	a
 		jr	nz,ReadReqErr		; MSX-DOS error
 		ld	hl,(Answer+1)
-		ld	de,(REQ_READ+7)
+		ld	de,(REQ_BIN+7)
 		sbc	hl,de			; Cx reset (or a)
 		ret	z
-ReadReqErr:	scf				; error, or file too short
+ReadReqErr:	scf				; error, or BIN too short
 		ret
 
 ; Request HL (DE bytes) to the server, answer packet (BC bytes) in Answer, A = number of time-outs
@@ -328,14 +330,11 @@ DP_Next:	inc	hl
 
 CART_PORTS:	defb	00h,20h,30h,0FFh
 
-; Requests (COMMAND_BDOS, sequence number 0: not numbered)
-REQ_OPEN:	defb	"JIO",0,COMMAND_BDOS,43h,"A:\\JIO-CAS.BIN",0,1	; _OPEN, read only
-REQ_OPEN_END:
-REQ_READ:	defb	"JIO",0,COMMAND_BDOS,48h,0	; _READ, file handle
+; Request (no CRC): part of the BIN
+REQ_BIN:	defb	"JIO",0,COMMAND_BIN
+		defw	0				; offset
 		defw	0				; size
-REQ_READ_END:
-REQ_CLOSE:	defb	"JIO",0,COMMAND_BDOS,45h,0	; _CLOSE, file handle
-REQ_CLOSE_END:
+REQ_BIN_END:
 
 _JioPort:	defb	0FFh		; serial line (transmit.asm, receive.asm)
 Lines:		defs	3,0
@@ -420,72 +419,7 @@ TapeEnd:	push	af
 		pop	af
 		ret
 
-; ------------------------------------------------------------------------------
-; BitBuster depacker (Arjan Bakker, as in SofaCas): HL = compressed data, DE = destination. Interrupts disabled
-; (alternate registers used). Changes AF, BC, DE, HL, BC', DE', HL'.
-; ------------------------------------------------------------------------------
-GETBIT		MACRO				; next bit of the bit stream in Cx (A: bits, HL: compressed data)
-		LOCAL	GetBitEnd
-		add	a,a
-		jr	nz,GetBitEnd
-		ld	a,(hl)			; 8 more bits
-		inc	hl
-		rla				; (bit 0 set: end of these 8 bits)
-GetBitEnd:
-		ENDM
-
-Depack:		ld	a,128
-		exx
-		ld	de,1
-		exx
-DepackLoop:	GETBIT
-		jr	c,DepackMatch
-		ldi				; literal byte
-		jr	DepackLoop
-DepackMatch:	ld	c,(hl)			; bits 6-0 of offset-1, bit 7: offset of 11 bits
-		inc	hl
-		ld	b,0
-		bit	7,c
-		jr	z,DepackOffset
-		GETBIT				; bits 10-8 of offset-1
-		rl	b
-		GETBIT
-		rl	b
-		GETBIT
-		rl	b
-		GETBIT				; bit 7
-		jr	c,DepackOffset
-		res	7,c
-DepackOffset:	inc	bc			; offset
-		exx				; length-2 (Elias gamma) in HL'
-		ld	h,d
-		ld	l,e
-		ld	b,e			; number of bits
-DepackSize:	exx
-		GETBIT
-		exx
-		jr	nc,DepackSizeEnd
-		inc	b
-		jr	DepackSize
-DepackBits:	exx
-		GETBIT
-		exx
-		adc	hl,hl
-DepackSizeEnd:	djnz	DepackBits
-		inc	hl			; length
-		exx
-		ret	c			; length of 16 bits + 1: end
-		push	hl
-		exx
-		push	hl
-		exx
-		ld	h,d
-		ld	l,e
-		sbc	hl,bc			; source of the match
-		pop	bc
-		ldir
-		pop	hl
-		jr	DepackLoop
+INCLUDE "depack.inc"
 
 	ENDIF
 
@@ -551,7 +485,7 @@ MSG_STOP:	defb	"Press STOP on the tape player,",13,10
 		defb	"then press a key",13,10,"$"
 MSG_TAPE:	defb	"Tape read error",13,10,"$"
 	IFDEF SERVER
-MSG_READ:	defb	"Reading A:\JIO-CAS.BIN... $"
+MSG_READ:	defb	"Reading JIO-CAS.BIN... $"
 MSG_NOANSWER:	defb	13,10,"No answer from the JIO server",13,10,"$"
 MSG_NOFILE:	defb	"not found",13,10,"$"
 MSG_READERR:	defb	"read error",13,10,"$"
@@ -559,4 +493,5 @@ MSG_BADFILE:	defb	"not a JIO ROM",13,10,"$"
 	ENDIF
 MSG_SUM:	defb	"Checksum error",13,10,"$"
 
-Buffer:		defs	256,0
+; 256 bytes after the loader (not in the tape file: work area of MapperSegments, no initial value)
+Buffer:

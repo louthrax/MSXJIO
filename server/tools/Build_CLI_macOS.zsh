@@ -1,36 +1,40 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-# Command line server (JIOServerCLI.pro): zip archive with an application bundle (for its Qt frameworks,
-# macdeployqt only deploys bundles) and a JIOServerCLI link to its executable, to run from a terminal
+# Command line server: a zip with an application bundle (macdeployqt only deploys bundles) and a
+# JIOServerCLI symlink to its executable, to run from a terminal.
 
 # ---- Project settings (edit once) ----
 QT_DIR="$HOME/Qt/6.8.3/macos"
 # -------------------------------------
 
 script_dir="$(cd "$(dirname "$0")" && pwd)/.."
-project_dir="$(pwd)"
-
-PROJECT_NAME="JIOServerCLI"
-
 BUILD_VERSION="$(<"$script_dir/Version.txt")"
-
-package_name="${PROJECT_NAME}_macOS_${BUILD_VERSION}"
+package_name="JIOServerCLI_macOS_${BUILD_VERSION}"
 build_dir="$HOME/BuildCLI"
 
+export PATH="$HOME/Qt/Tools/Ninja:$PATH"
+for _d in "$HOME"/Qt/Tools/CMake/CMake.app/Contents/bin "$HOME"/Qt/Tools/CMake/bin; do
+  [[ -x "$_d/cmake" ]] && export PATH="$_d:$PATH" && break
+done
+
 rm -rf "$build_dir"
-mkdir -p "$build_dir"
+mkdir -p "$build_dir" "$script_dir/0_Builds"
+
+if command -v ninja >/dev/null 2>&1; then GEN="Ninja"; else GEN="Unix Makefiles"; fi
+cmake -G "$GEN" -S "$script_dir" -B "$build_dir" \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR"
+cmake --build "$build_dir" --target JIOServerCLI --parallel
+
+"$QT_DIR/bin/macdeployqt" "$build_dir/JIOServerCLI.app" -no-plugins   # no GUI plugins (QtGui, QtWidgets...)
+
 cd "$build_dir"
-
-"$QT_DIR/bin/qmake" "$project_dir/${PROJECT_NAME}.pro" CONFIG+=release -after "CONFIG+=app_bundle"
-make -j"$(sysctl -n hw.ncpu)"
-"$QT_DIR/bin/macdeployqt" "${PROJECT_NAME}.app" -no-plugins      # no GUI plugins (they bring QtGui, QtWidgets...)
-
+rm -rf "$package_name"
 mkdir "$package_name"
-mv "${PROJECT_NAME}.app" "$package_name/"
-ln -s "${PROJECT_NAME}.app/Contents/MacOS/${PROJECT_NAME}" "$package_name/${PROJECT_NAME}"
-"$package_name/${PROJECT_NAME}" --version
+mv JIOServerCLI.app "$package_name/"
+ln -s "JIOServerCLI.app/Contents/MacOS/JIOServerCLI" "$package_name/JIOServerCLI"
+"$package_name/JIOServerCLI" --version
 
-mkdir -p "$project_dir/0_Builds"
-rm -f "$project_dir/0_Builds/${package_name}.zip"
-ditto -c -k --keepParent "$package_name" "$project_dir/0_Builds/${package_name}.zip"
+rm -f "$script_dir/0_Builds/${package_name}.zip"
+ditto -c -k --keepParent "$package_name" "$script_dir/0_Builds/${package_name}.zip"
+echo "Package: $script_dir/0_Builds/${package_name}.zip"

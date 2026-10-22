@@ -37,6 +37,7 @@ typedef enum
 
     CHECK_NFS                             = 0x1C,
     RESET_NFS                             = 0x1D,
+    LOGIN_NFS                             = 0x1E,   // drives served, whatever the preferred boot (JIO.COM)
 
     DOS_RANDOM_READ_FCB                   = 0x21,
     DOS_RANDOM_WRITE_FCB                  = 0x22,

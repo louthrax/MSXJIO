@@ -312,20 +312,24 @@ int main(int argc, char *argv[])
     QCommandLineParser oParser;
 
     oParser.setApplicationDescription(
-        "JIO server, command line version: serves a disk image, or host directories as drives A: to H:, to an MSX "
-        "connected by a JIO serial (USB) or Bluetooth link.\n"
+        "JIO server, command line version: serves a disk image and/or host directories as drives A: to H:, to an MSX "
+        "connected by a JIO serial (USB) or Bluetooth link, and the BIN of the tape loader JIO-CAS.CAS.\n"
+        "With both, the JIO MSX-DOS 2 ROM boots from the directories (--boot image: from the disk image).\n"
         "The connection is automatic (first USB serial adapter if no port is given) and is attempted again when the "
         "device is not present or disconnected. Stop with Ctrl+C.\n\n"
         "Examples:\n"
         "  JIOServerCLI -i games.dsk\n"
         "  JIOServerCLI -d A=~/MSX/boot -d C=~/MSX/work -l jio.log\n"
-        "  JIOServerCLI -i hd.img -r -p /dev/ttyUSB1");
+        "  JIOServerCLI -i hd.img -r -p /dev/ttyUSB1\n"
+        "  JIOServerCLI -i games.dsk -d A=~/MSX/boot --boot image");
     oParser.addHelpOption();
     oParser.addVersionOption();
 
     QCommandLineOption oImageOption({"i", "image"}, "Serve the disk image <file> (floppy, or hard disk with partitions).", "file");
     QCommandLineOption oDriveOption({"d", "drive"}, "Serve the directory <dir> as drive X: (A to H). Without X=, the next free drive from A:. Can be repeated.", "[X=]dir");
-    QCommandLineOption oReadOnlyOption({"r", "read-only"}, "Refuse all writes (disk image, or served directories; the RAM disk H: stays writable).");
+    QCommandLineOption oBootOption("boot", "What the JIO MSX-DOS 2 ROM boots from when both are served: dirs (default) or image.", "dirs|image");
+    QCommandLineOption oBinOption("bin", "BIN served to the tape loader JIO-CAS.CAS (default: the BIN built in).", "file");
+    QCommandLineOption oReadOnlyOption({"r", "read-only"}, "Refuse all writes (disk image and served directories; the RAM disk H: stays writable).");
     QCommandLineOption oNoRxCRCOption("no-rx-crc", "Disk image: no CRC check of the data received by the MSX.");
     QCommandLineOption oNoTxCRCOption("no-tx-crc", "Disk image: no CRC of the data sent by the MSX.");
     QCommandLineOption oNoAutoRetryOption("no-auto-retry", "The MSX does not retry the commands automatically (disk image).");
@@ -340,7 +344,7 @@ int main(int argc, char *argv[])
     QCommandLineOption oBriefOption("brief", "No details of the BDOS functions in the log.");
     QCommandLineOption oNoColorOption("no-color", "No colours on the console.");
 
-    oParser.addOptions({ oImageOption, oDriveOption, oReadOnlyOption, oNoRxCRCOption, oNoTxCRCOption, oNoAutoRetryOption,
+    oParser.addOptions({ oImageOption, oDriveOption, oBootOption, oBinOption, oReadOnlyOption, oNoRxCRCOption, oNoTxCRCOption, oNoAutoRetryOption,
                          oTimeoutOption, oSlowTxOption, oPortOption, oBluetoothOption, oListOption, oScanOption,
                          oLogOption, oQuietOption, oBriefOption, oNoColorOption });
     oParser.process(oApplication);
@@ -376,10 +380,27 @@ int main(int argc, char *argv[])
     QStringList aszDrives = oParser.values(oDriveOption);
     QString aszDrivePaths[8];
 
-    if(szImage.isEmpty() == aszDrives.isEmpty())
+    if(szImage.isEmpty() && aszDrives.isEmpty())
     {
-        fprintf(stderr, "%s\n", szImage.isEmpty() ? "Nothing to serve: give a disk image (-i) or directories (-d)." : "Give a disk image (-i) or directories (-d), not both.");
+        fprintf(stderr, "Nothing to serve: give a disk image (-i) and/or directories (-d).\n");
         fprintf(stderr, "Use --help for the options.\n");
+        return 2;
+    }
+
+    QString szBoot = oParser.value(oBootOption).toLower();
+
+    if(!szBoot.isEmpty() && (szBoot != "dirs") && (szBoot != "image"))
+    {
+        fprintf(stderr, "--boot: dirs or image.\n");
+        return 2;
+    }
+
+    QString szBin = oParser.value(oBinOption);
+
+    if(szBin.startsWith("~/")) szBin = QDir::homePath() + szBin.mid(1);
+    if(!szBin.isEmpty() && !QFileInfo(szBin).isFile())
+    {
+        fprintf(stderr, "BIN not found: %s\n", qPrintable(szBin));
         return 2;
     }
 
@@ -464,9 +485,12 @@ int main(int argc, char *argv[])
     poServer->m_bSlowTx = oParser.isSet(oSlowTxOption);
     poServer->m_bReadOnly = oParser.isSet(oReadOnlyOption);
 
+    poServer->vSetPreferredBoot(szBoot == "image" ? eBootDiskImage : eBootDirectories);
+    poServer->vSetBinPath(szBin.isEmpty() ? QString() : QFileInfo(szBin).absoluteFilePath());
+    for(int i = 0; i < 8; i++)
+        poServer->vSetDrivePath(i, aszDrivePaths[i]);
     if(!szImage.isEmpty())
     {
-        poServer->vSetServeMode(eServeDiskImage);
         if(!poServer->bInsertMedia(szImage))
         {
             goLogger.vFlush();
@@ -475,12 +499,8 @@ int main(int argc, char *argv[])
         }
     }
     else
-    {
-        for(int i = 0; i < 8; i++)
-            poServer->vSetDrivePath(i, aszDrivePaths[i]);
-        poServer->vSetServeMode(eServeDirectories);
         goLogger.vAdd(eLogInfo, "Serving directories\n" + poServer->szGetServerInfo() + "\n", false);
-    }
+    goLogger.vAdd(eLogInfo, QString("BIN of JIO-CAS.CAS: %1\n").arg(szBin.isEmpty() ? QString("built in") : szBin), false);
 
     // connection, attempted again until the device is present
     poServer->vSetRetryAlways(true);

@@ -13,7 +13,8 @@ No rights can be derived from this publication.
 - Commands can include an optional CRC.
 - Responses depend on the command and are typically data blocks or acknowledgments.
 - Data is transferred over a serial interface.
-- The server serves either a disk image (commands `0x10` to `0x13`) or host directories as drives A: to H: (command `0x16`), depending on the mode selected on the server. The commands of the other mode get no data: in directories mode, COMMAND DRIVE INFO reports 0 partitions and the sectors cannot be read or written; in disk image mode, no drive is served by COMMAND BDOS (_LOGIN answers `0x00`).
+- The server serves a disk image (commands `0x10` to `0x13`), host directories as drives A: to H: (command `0x16`) and the BIN of the tape loader JIO-CAS.CAS (command `0x19`), all together. COMMAND DRIVE INFO reports the partitions of the disk image (0 without image), the BDOS functions use the directories.
+- Preferred boot of the server: the JIO MSX-DOS 2 ROM chooses at its startup with _LOGIN (BDOS function `0x18`): drives served (not `0x00`) = boot from the directories, `0x00` = boot from the disk image. _LOGIN answers `0x00` when no directory is served, or when the disk image is preferred and a disk image is served. The JIO MSX-DOS 1 ROMs only use the disk image. JIO.COM asks the drives served with LOGIN (`0x1E`), whatever the preferred boot.
 
 ## Packet structure
 
@@ -163,9 +164,10 @@ The server answers with zero, one or more response packets (sync bytes `0xFF ...
 | Function | Name      | Parameters                                                   | Response packets                                   |
 |:---------|:----------|:-------------------------------------------------------------|:---------------------------------------------------|
 | `0x0E`   | _SELDSK   | drive (byte, 0 = A:)                                         | number of drives (byte)                            |
-| `0x18`   | _LOGIN    | none                                                         | drives served (byte, bit 0 = A:)                   |
+| `0x18`   | _LOGIN    | none                                                         | drives served (byte, bit 0 = A:), `0x00` if the server prefers to boot from its disk image (see the overview) |
 | `0x1B`   | _ALLOC    | drive (byte, 0 = current, 1 = A:)                            | sectors per cluster (byte, 0 = invalid drive), total clusters (word), free clusters (word) |
 | `0x1D`   | RESET     | none                                                         | none (all files closed, current directories reset) |
+| `0x1E`   | LOGIN     | none                                                         | drives served (byte, bit 0 = A:), whatever the preferred boot (JIO.COM) |
 | `0x40`   | _FFIRST   | path, [file name (string) if path is a FIB], attributes (byte) | FIB                                              |
 | `0x41`   | _FNEXT    | FIB                                                          | FIB                                                |
 | `0x42`   | _FNEW     | path, [file name (string) if path is a FIB], attributes (byte), template file name (13 bytes) | FIB               |
@@ -222,6 +224,22 @@ Notes:
 | Text      | variable    | ASCIIZ string (max 64 characters shown) |
 
 **Response:** none
+  
+  
+#### 0x19 — COMMAND BIN
+
+**Description:** Part of the BIN of the tape loader JIO-CAS.CAS (`clients/JIO_CAS`): the JIO MSX-DOS 2 ROM run in RAM (32 KB: ROM, then kernel) followed by the 16-bit sums of both halves (2 words). The BIN chosen on the server, or JIO-CAS.BIN built in the server. Served whatever the server serves (disk image and/or directories). No CRC.  
+**Payload:**
+| Field     | Size        | Description                  |
+|:----------|:------------|:-----------------------------|
+| Offset    | 2 bytes     | Offset in the BIN            |
+| Size      | 2 bytes     | Number of bytes              |
+
+**Response:** two packets
+| Packet    | Size        | Description                  |
+|:----------|:------------|:-----------------------------|
+| 1         | 3 bytes     | Error (byte, `0x00` = no error, `0xD7` = no BIN), size sent (word: less than asked at the end of the BIN) |
+| 2         | size sent   | Data (only if the size sent is not 0) |
   
   
 #### 0xNN — COMMAND DRIVE REPORT [NN]

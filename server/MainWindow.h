@@ -10,6 +10,15 @@
 #include "Common.h"
 #include "Server.h"
 
+class CasPlayer;
+
+// Page shown under the tab buttons: disk image, directories, BIN of the tape loader (all served together)
+typedef enum {
+    ePageImage,
+    ePageDirectories,
+    ePageBin,
+} tdPage;
+
 namespace Ui
 {
 class	MainWindow;
@@ -44,6 +53,8 @@ public slots:
     void        onDirectoryPathChanged();
     void        onItemActivated(QListWidgetItem *_poItem);
     void        onImagePathValidated();
+    void        onPreferredBootChanged(int _iIndex);
+    void        vUpdateCasPlayText(int _iSecondsLeft);
     void        onAddressLineValidated();
 
     void        onLogTimer();
@@ -56,7 +67,9 @@ protected:
 private:
     void		vSetInterface(tdInterface _eInterface);
     void		vSetState(tdConnectionState _eCState);
-    void		vSetServeMode(tdServeMode _eServeMode);
+    void		vSetPage(tdPage _ePage);
+    void        vUpdateBinPathText();
+    int         iCasBauds();
 
     void		vLog(tdLogType _eLogType, const QString &_szMessage);
     void		vSetFrameColor(QFrame *_poFrame, int _iR, int _iG, int _iB);
@@ -75,6 +88,7 @@ private:
 
     Ui::MainWindow                  *m_poUI = nullptr;
     Server                          *m_poServer = nullptr;
+    CasPlayer                       *m_poCasPlayer = nullptr;
     QTimer							*m_poRedLightOffTimer = nullptr;
     QTimer							*m_poGreenLightOffTimer = nullptr;
 
@@ -89,6 +103,7 @@ private:
     QTimer                          *m_poLogTimer = nullptr;
 
     tdInterface                     m_eSelectedInterface = eInterfaceSerial;
+    tdPage                          m_ePage = ePageImage;
     QString                         m_oSelectedSerialID;
     QString                         m_oSelectedBlueToothID;
     QString                         &roSelectedID();

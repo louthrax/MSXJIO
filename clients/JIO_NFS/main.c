@@ -689,11 +689,12 @@ bool bServerExchange(const void *_pvRequest, unsigned int _uiRequestSize, void *
 
 /*
  =======================================================================================================================
-    Drives served by the server ("JIO +"): BDOS _LOGIN, as the hybrid JIO ROM at boot (bit 0 = A:). Answer without
-    CRC: asked just after the server information, a few times.
+    Drives served by the server ("JIO +"): JIO function LOGIN_NFS (bit 0 = A:), the directories served whatever the
+    preferred boot of the server (_LOGIN, asked by the hybrid JIO ROM at boot, is 0 when it boots from the disk image).
+    Answer without CRC: asked just after the server information, a few times.
  =======================================================================================================================
  */
-static const unsigned char g_aucLoginCommand[] = { 'J', 'I', 'O', 0, COMMAND_BDOS, 0x18 };
+static const unsigned char g_aucLoginCommand[] = { 'J', 'I', 'O', 0, COMMAND_BDOS, 0x1E };    // LOGIN_NFS (common/msxdos2.h)
 unsigned char g_ucLogin = 0;                // answer (never on the stack)
 
 bool bGetServedDrives()
@@ -719,7 +720,7 @@ bool bAddServedDrives()
         return false;
     if (!g_ucLogin)
     {
-        vError("No drive served by the server (disk image mode ?).\r\n", 1);
+        vError("No directory served by the server.\r\n", 1);
         return false;
     }
     vPrint("Drives served:");

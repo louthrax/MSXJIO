@@ -15,6 +15,7 @@
 #endif
 
 #include "MainWindow.h"
+#include "CasPlayer.h"
 #include "ui_MainWindow.h"
 
 /*
@@ -207,6 +208,18 @@ MainWindow::MainWindow() :
     connect(m_poServer, &Server::statisticsChanged, this, &MainWindow::vUpdateLights);
     m_poServer->vSetDeviceResolver([this]() { return roSelectedID(); });
 
+    // JIO-CAS.CAS played on the audio output: seconds left on the button, end in the log
+    m_poCasPlayer = new CasPlayer(this);
+    connect(m_poCasPlayer, &CasPlayer::progress, this, &MainWindow::vUpdateCasPlayText);
+    connect(m_poCasPlayer, &CasPlayer::finished, this, [this](const QString &_szError)
+    {
+        vUpdateCasPlayText(0);
+        if(_szError.isEmpty())
+            vLog(eLogInfo, "JIO-CAS.CAS played: press a key on the MSX when it asks to stop the tape player\n");
+        else
+            vLog(eLogError, "JIO-CAS.CAS: " + _szError + "\n");
+    });
+
     connect(m_poUI->unlockPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->timeout, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->slowTx, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
@@ -225,6 +238,10 @@ MainWindow::MainWindow() :
     connect(m_poUI->RxCRC, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->serveImageButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->serveDirectoriesButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->serveBinButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->binSelectPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->binEjectPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
+    connect(m_poUI->casPlayPushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
 
     connect(m_poUI->fileEjectDriveA_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
     connect(m_poUI->fileEjectDriveB_PushButton, &QPushButton::clicked, this, &MainWindow::onButtonClicked);
@@ -287,7 +304,11 @@ MainWindow::MainWindow() :
     m_poServer->m_bTimeout = m_poSettings->value("Timeout", false).toBool();
     m_poServer->m_bReadOnly = m_poSettings->value("ReadOnly", false).toBool();
     m_poServer->m_bSlowTx = m_poSettings->value("SlowTx", false).toBool();
-    tdServeMode eServeMode = (tdServeMode) m_poSettings->value("ServeMode", eServeDiskImage).toInt();
+    // page shown (ServeMode of the previous versions: 0 = disk image, 1 = directories), preferred boot, BIN
+    tdPage      ePage = (tdPage) m_poSettings->value("Page", m_poSettings->value("ServeMode", ePageImage)).toInt();
+
+    m_poServer->vSetPreferredBoot((tdBootMode) m_poSettings->value("PreferredBoot", eBootDirectories).toInt());
+    m_poServer->vSetBinPath(szLocalPath(m_poSettings->value("BinPath").toString()));
 
     m_oSelectedSerialID = m_poSettings->value("SelectedSerialID").toString();
     m_oSelectedBlueToothID = m_poSettings->value("SelectedBlueToothID").toString();
@@ -304,6 +325,14 @@ MainWindow::MainWindow() :
     m_poUI->bluetoothButton->hide();
     m_poUI->USBButton->hide();
     m_poUI->commandLinePushButton->hide();      // no command line server on Android
+    // row of the pages: icons only (the window is not narrower than this row, the screen of a phone is), short texts
+    for(QPushButton *poButton : { m_poUI->serveImageButton, m_poUI->serveDirectoriesButton, m_poUI->serveBinButton })
+    {
+        poButton->setText(QString());
+        poButton->setIconSize(QSize(24, 24));
+    }
+    m_poUI->preferredBootComboBox->setItemText(0, "Boot: dirs");
+    m_poUI->preferredBootComboBox->setItemText(1, "Boot: image");
 #else
     m_eSelectedInterface = (tdInterface) m_poSettings->value("SelectedInterface").toInt();
 #endif
@@ -318,6 +347,7 @@ MainWindow::MainWindow() :
     poServeModeGroup->setExclusive(true);
     poServeModeGroup->addButton(m_poUI->serveImageButton);
     poServeModeGroup->addButton(m_poUI->serveDirectoriesButton);
+    poServeModeGroup->addButton(m_poUI->serveBinButton);
 
     m_poUI->bluetoothButton->setChecked(m_eSelectedInterface == eInterfaceBluetooth);
     m_poUI->USBButton->setChecked(m_eSelectedInterface == eInterfaceSerial);
@@ -352,8 +382,15 @@ MainWindow::MainWindow() :
     m_poUI->fileEjectDriveH_PushButton->setToolTip("Do not serve drive H:.");
 
 
-    m_poUI->serveImageButton->setToolTip("Serve a disk image (floppy, or hard disk with partitions).\nUsed by the JIO MSX-DOS 1 and MSX-DOS 2 ROMs reading sectors.\nApplied at MSX startup.");
-    m_poUI->serveDirectoriesButton->setToolTip("Serve host directories as drives A: to H:.\nUsed by the JIO MSX-DOS 2 ROMs with remote file system.\nApplied at MSX startup.");
+    m_poUI->serveImageButton->setToolTip("Disk image served (floppy, or hard disk with partitions), sectors read by the JIO ROMs.\nThe disk image, the directories and the tape BIN are all served together.");
+    m_poUI->serveDirectoriesButton->setToolTip("Host directories served as drives A: to H: (JIO MSX-DOS 2 ROMs with remote file system, JIO.COM).\nThe disk image, the directories and the tape BIN are all served together.");
+    m_poUI->serveBinButton->setToolTip("BIN read by the tape loader JIO-CAS.CAS (JIO MSX-DOS 2 ROM run in RAM).\nThe disk image, the directories and the tape BIN are all served together.");
+    m_poUI->preferredBootComboBox->setToolTip("What the JIO MSX-DOS 2 ROMs boot from when a disk image and directories are both served\n(the one served if only one is). The JIO MSX-DOS 1 ROMs always use the disk image.\nApplied at MSX startup.");
+    m_poUI->binPathLineEdit->setToolTip("BIN served to the tape loader JIO-CAS.CAS (empty: JIO-CAS.BIN built in the server).");
+    m_poUI->binSelectPushButton->setToolTip("Select the BIN to serve to the tape loader JIO-CAS.CAS.");
+    m_poUI->binEjectPushButton->setToolTip("Serve the JIO-CAS.BIN built in the server.");
+    m_poUI->casBaudsComboBox->setToolTip("Speed of JIO-CAS.CAS on the audio output, read by the BIOS of the MSX.\n1200 bauds: the most reliable. 2400 bauds: standard speed, faster.\n3800 bauds: beyond the MSX standard, may not load (depends on the MSX and on the audio output).");
+    m_poUI->casPlayPushButton->setToolTip("Play the tape loader JIO-CAS.CAS (built in the server) on the default audio output, connected to the\ntape input of the MSX: type BLOAD\"CAS:\",R on the MSX first. The ROM is then read from this server.");
     m_poUI->fileSelectPushButton->setToolTip("Select the disk image to serve.");
     m_poUI->connectPushButton->setToolTip("Connect to the MSX.");
     m_poUI->addressLineEdit->setToolTip("Address of the communication device to use.");
@@ -379,7 +416,12 @@ MainWindow::MainWindow() :
 
     vUpdateLights();        // counters shown from the start (0 / 0)
     vUpdateDrivePathsTexts();
-    vSetServeMode(eServeMode);
+    m_poUI->preferredBootComboBox->setCurrentIndex(m_poServer->ePreferredBoot() == eBootDiskImage ? 1 : 0);
+    connect(m_poUI->preferredBootComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::onPreferredBootChanged);
+    vUpdateBinPathText();
+    vUpdateCasPlayText(0);
+    m_poUI->casBaudsComboBox->setCurrentIndex(qBound(0, m_poSettings->value("CasBaudsIndex", 0).toInt(), m_poUI->casBaudsComboBox->count() - 1));
+    vSetPage(ePage);
 
 #ifdef Q_OS_ANDROID
     vRequestAndroidPermissionsAndSetInterface(this);
@@ -396,6 +438,8 @@ MainWindow::MainWindow() :
 MainWindow::~MainWindow()
 {
     vSaveSettings();
+    delete m_poCasPlayer;       // before the user interface (no signal of the player after it)
+    m_poCasPlayer = nullptr;
     delete m_poServer;          // before the user interface (no signal of the server after it)
     m_poServer = nullptr;
     delete m_poSettings;
@@ -540,7 +584,10 @@ void MainWindow::vSaveSettings()
     m_poSettings->setValue("Timeout", m_poServer->m_bTimeout);
     m_poSettings->setValue("ReadOnly", m_poServer->m_bReadOnly);
     m_poSettings->setValue("SlowTx", m_poServer->m_bSlowTx);
-    m_poSettings->setValue("ServeMode", m_poServer->eServeMode());
+    m_poSettings->setValue("Page", m_ePage);
+    m_poSettings->setValue("PreferredBoot", m_poServer->ePreferredBoot());
+    m_poSettings->setValue("BinPath", m_poServer->szBinPath());
+    m_poSettings->setValue("CasBaudsIndex", m_poUI->casBaudsComboBox->currentIndex());
 
     for(int iDrive = 0; iDrive < 8; iDrive++)
         m_poSettings->setValue(QString("DrivePath%1").arg(QChar('A' + iDrive)), m_poServer->szDrivePath(iDrive));
@@ -733,20 +780,53 @@ void MainWindow::onButtonClicked()
     else if(poSender == m_poUI->slowTx)
         m_poServer->m_bSlowTx = ((QPushButton *) poSender)->isChecked();
     else if(poSender == m_poUI->serveImageButton)
+        vSetPage(ePageImage);
+    else if(poSender == m_poUI->serveDirectoriesButton)
+        vSetPage(ePageDirectories);
+    else if(poSender == m_poUI->serveBinButton)
+        vSetPage(ePageBin);
+    else if(poSender == m_poUI->binSelectPushButton)
     {
-        if(m_poServer->eServeMode() != eServeDiskImage)
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+        QString szInitialDir = m_poServer->szBinPath().isEmpty() ?
+            QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) : QFileInfo(m_poServer->szBinPath()).absolutePath();
+        QString szBinPath = QFileDialog::getOpenFileName(nullptr, "Select the BIN of the tape loader", szInitialDir, "BIN files (*.bin *.BIN);;All Files (*)");
+        /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+        if(!szBinPath.isEmpty())
         {
-            vSetServeMode(eServeDiskImage);
-            vLog(eLogInfo, "Serving disk image\n");
+            m_poServer->vSetBinPath(szLocalPath(szBinPath));
+            vUpdateBinPathText();
+            vLog(eLogInfo, "Tape BIN: " + m_poServer->szBinPath() + "\n");
         }
     }
-    else if(poSender == m_poUI->serveDirectoriesButton)
+    else if(poSender == m_poUI->casPlayPushButton)
     {
-        if(m_poServer->eServeMode() != eServeDirectories)
+        if(m_poCasPlayer->bIsPlaying())
         {
-            vSetServeMode(eServeDirectories);
-            vLog(eLogInfo, "Serving directories\n");
+            m_poCasPlayer->vStop();
+            vUpdateCasPlayText(0);
+            vLog(eLogInfo, "JIO-CAS.CAS: stopped\n");
         }
+        else
+        {
+            /*~~~~~~~~~~~*/
+            QString szError;
+            /*~~~~~~~~~~~*/
+
+            int iBauds = iCasBauds();
+
+            if(m_poCasPlayer->bPlay(":/bin/JIO-CAS.CAS", iBauds, szError))
+                vLog(eLogInfo, QString("Playing JIO-CAS.CAS at %1 bauds on %2, %3 Hz (BLOAD\"CAS:\",R on the MSX)\n").arg(iBauds).arg(m_poCasPlayer->szDeviceName()).arg(m_poCasPlayer->iSampleRate()));
+            else
+                vLog(eLogError, "JIO-CAS.CAS: " + szError + "\n");
+        }
+    }
+    else if(poSender == m_poUI->binEjectPushButton)
+    {
+        m_poServer->vSetBinPath(QString());
+        vUpdateBinPathText();
+        vLog(eLogInfo, "Tape BIN: JIO-CAS.BIN built in the server\n");
     }
     else if(poSender == m_poUI->unlockPushButton)
     {
@@ -765,9 +845,7 @@ void MainWindow::onButtonClicked()
 
         if(szCommand.isEmpty())
         {
-            vLog(eLogWarning, m_poServer->eServeMode() == eServeDiskImage ?
-                     "No command line: select the disk image to serve first.\n" :
-                     "No command line: select at least one directory to serve first.\n");
+            vLog(eLogWarning, "No command line: select a disk image or a directory to serve first.\n");
             return;
         }
 
@@ -950,13 +1028,12 @@ void MainWindow::vSetState(tdConnectionState _eCState)
 
 /*
  =======================================================================================================================
-    Disk image or directories: only the controls of the selected mode are shown, the other mode is not served.
+    Page shown: the controls of the disk image, of the directories or of the tape BIN (all served together)
  =======================================================================================================================
  */
-void MainWindow::vSetServeMode(tdServeMode _eServeMode)
+void MainWindow::vSetPage(tdPage _ePage)
 {
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-    bool			bImage = _eServeMode == eServeDiskImage;
     QList<QWidget*> oImageWidgets =
     {
         m_poUI->iconMediaType, m_poUI->imagePathLineEdit, m_poUI->fileSelectPushButton, m_poUI->fileEjectPushButton
@@ -974,21 +1051,71 @@ void MainWindow::vSetServeMode(tdServeMode _eServeMode)
     };
     /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
-    for(QWidget *poWidget : oImageWidgets) poWidget->setVisible(bImage);
-    for(QWidget *poWidget : oDirectoriesWidgets) poWidget->setVisible(!bImage);
+    QList<QWidget*> oBinWidgets =
+    {
+        m_poUI->iconBin, m_poUI->binPathLineEdit, m_poUI->binSelectPushButton, m_poUI->binEjectPushButton,
+        m_poUI->casPlayPushButton, m_poUI->casBaudsComboBox
+    };
 
-    m_poUI->serveImageButton->setChecked(bImage);
-    m_poUI->serveDirectoriesButton->setChecked(!bImage);
+    if((_ePage < ePageImage) || (_ePage > ePageBin)) _ePage = ePageImage;
+    m_ePage = _ePage;
 
-    // CRC, timeout, auto retry and slow transmission are only used for the disk image (COMMAND_DRIVE_*), the settings
-    // are kept. "Read only" is used in both modes.
-    m_poUI->RxCRC->setEnabled(bImage);
-    m_poUI->TxCRC->setEnabled(bImage);
-    m_poUI->autoRetry->setEnabled(bImage);
-    m_poUI->timeout->setEnabled(bImage);
-    m_poUI->slowTx->setEnabled(bImage);
+    for(QWidget *poWidget : oImageWidgets) poWidget->setVisible(_ePage == ePageImage);
+    for(QWidget *poWidget : oDirectoriesWidgets) poWidget->setVisible(_ePage == ePageDirectories);
+    for(QWidget *poWidget : oBinWidgets) poWidget->setVisible(_ePage == ePageBin);
 
-    m_poServer->vSetServeMode(_eServeMode);
+    m_poUI->serveImageButton->setChecked(_ePage == ePageImage);
+    m_poUI->serveDirectoriesButton->setChecked(_ePage == ePageDirectories);
+    m_poUI->serveBinButton->setChecked(_ePage == ePageBin);
+}
+
+/*
+ =======================================================================================================================
+    BIN of the tape loader: path, empty for the BIN built in the server (placeholder text)
+ =======================================================================================================================
+ */
+void MainWindow::vUpdateBinPathText()
+{
+    m_poUI->binPathLineEdit->setText(m_poServer->szBinPath());
+}
+
+/*
+ =======================================================================================================================
+    Speed chosen for JIO-CAS.CAS: text of the combo box ("2400 bauds")
+ =======================================================================================================================
+ */
+int MainWindow::iCasBauds()
+{
+    int iBauds = m_poUI->casBaudsComboBox->currentText().section(' ', 0, 0).toInt();
+
+    return iBauds ? iBauds : CAS_BAUDS;
+}
+
+/*
+ =======================================================================================================================
+    Button of JIO-CAS.CAS: seconds left while it is played
+ =======================================================================================================================
+ */
+void MainWindow::vUpdateCasPlayText(int _iSecondsLeft)
+{
+#ifdef Q_OS_ANDROID
+    QString szPlay = "Play JIO-CAS.CAS";        // narrow screen
+#else
+    QString szPlay = "Play JIO-CAS.CAS on the audio output";
+#endif
+
+    m_poUI->casPlayPushButton->setText(m_poCasPlayer->bIsPlaying() ? QString("Stop JIO-CAS.CAS (%1 s)").arg(_iSecondsLeft) : szPlay);
+}
+
+/*
+ =======================================================================================================================
+    Preferred boot of the JIO MSX-DOS 2 ROMs when a disk image and directories are both served
+ =======================================================================================================================
+ */
+void MainWindow::onPreferredBootChanged(int _iIndex)
+{
+    m_poServer->vSetPreferredBoot(_iIndex == 1 ? eBootDiskImage : eBootDirectories);
+    vLog(eLogInfo, QString("Preferred boot: %1 (applied at MSX startup)\n").arg(_iIndex == 1 ? "disk image" : "directories"));
 }
 
 /*
@@ -1125,10 +1252,9 @@ QString MainWindow::szCommandLine()
     // next to the graphical server (Windows installer, macOS bundle), else from the PATH
     aszArguments << (QFileInfo::exists(szProgram) ? QDir::toNativeSeparators(szProgram) : QString("JIOServerCLI"));
 
-    // empty if nothing is served
-    if(m_poServer->eServeMode() == eServeDiskImage)
+    // empty if nothing is served (disk image and directories served together)
+    if(!m_poServer->roDrive().oMediaPath().isEmpty())
     {
-        if(m_poServer->roDrive().oMediaPath().isEmpty()) return QString();
         aszArguments << "-i" << QDir::toNativeSeparators(m_poServer->roDrive().oMediaPath());
         if(!m_poServer->m_bRxCRC) aszArguments << "--no-rx-crc";
         if(!m_poServer->m_bTxCRC) aszArguments << "--no-tx-crc";
@@ -1136,15 +1262,14 @@ QString MainWindow::szCommandLine()
         if(m_poServer->m_bSlowTx) aszArguments << "--slow-tx";
         if(!m_poServer->m_bAutoRetry) aszArguments << "--no-auto-retry";
     }
-    else
+    for(int iDrive = 0; iDrive < 8; iDrive++)
     {
-        for(int iDrive = 0; iDrive < 8; iDrive++)
-        {
-            if(!m_poServer->szDrivePath(iDrive).isEmpty())
-                aszArguments << "-d" << QString("%1=%2").arg(QChar('A' + iDrive)).arg(QDir::toNativeSeparators(m_poServer->szDrivePath(iDrive)));
-        }
-        if(!aszArguments.contains("-d")) return QString();
+        if(!m_poServer->szDrivePath(iDrive).isEmpty())
+            aszArguments << "-d" << QString("%1=%2").arg(QChar('A' + iDrive)).arg(QDir::toNativeSeparators(m_poServer->szDrivePath(iDrive)));
     }
+    if(!aszArguments.contains("-i") && !aszArguments.contains("-d")) return QString();
+    if(m_poServer->ePreferredBoot() == eBootDiskImage) aszArguments << "--boot" << "image";
+    if(!m_poServer->szBinPath().isEmpty()) aszArguments << "--bin" << QDir::toNativeSeparators(m_poServer->szBinPath());
 
     if(m_poServer->m_bReadOnly) aszArguments << "-r";
 

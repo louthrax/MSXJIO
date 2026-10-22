@@ -1,0 +1,3 @@
+// Windows resources of JIOServer.exe (configured by CMakeLists.txt):
+// icon 1 is the application icon, generated from the SVG and used by Explorer.
+1 ICON "@APP_ICON_PATH@"

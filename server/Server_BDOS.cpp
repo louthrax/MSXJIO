@@ -171,7 +171,7 @@ qint64 Server::iRamDiskFree()
 bool Server::bIsDriveServed(unsigned char _ucDrive)
 {
     // no drive is served when a disk image is served
-    return (m_eServeMode == eServeDirectories) && (_ucDrive < 8) && !szRootDir(_ucDrive).isEmpty() && QFileInfo(szRootDir(_ucDrive)).isDir();
+    return (_ucDrive < 8) && !szRootDir(_ucDrive).isEmpty() && QFileInfo(szRootDir(_ucDrive)).isDir();
 }
 
 /*
@@ -508,7 +508,21 @@ unsigned char Server::ucLoginVector()
     return ucLogin;
 }
 
+// Asked by the JIO MSX-DOS 2 ROM at its startup: 0 makes it boot from the disk image (preferred boot)
 void Server::vDOS_GET_LOGIN_VECTOR()
+{
+    unsigned char ucLogin = bBootFromDirectories() ? ucLoginVector() : 0;
+
+    vLog(eLogBDOSDetails, "Drives: %02Xh%s\n", ucLogin, ucLogin ? "" : " (boot from the disk image)");
+    vBDOSAnswer(&ucLogin, sizeof(ucLogin));
+}
+
+/*
+ =======================================================================================================================
+    Function $1E (JIO): drives served, whatever the preferred boot (JIO.COM, "JIO +")
+ =======================================================================================================================
+ */
+void Server::vLOGIN_NFS()
 {
     unsigned char ucLogin = ucLoginVector();
 
@@ -539,9 +553,7 @@ void Server::vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments)
         vDestroyRamDisk();
     else if (_ucSegments != 0xFF)
     {
-        if (m_eServeMode != eServeDirectories)
-            s.ucError = DOS_ERR_NORAM;  // a disk image is served
-        else if (m_ucRamDiskSegments || bIsDriveServed(7))
+        if (m_ucRamDiskSegments || bIsDriveServed(7))
             s.ucError = DOS_ERR_RAMDX;  // RAM disk exists, or H: is a served directory
         else
         {

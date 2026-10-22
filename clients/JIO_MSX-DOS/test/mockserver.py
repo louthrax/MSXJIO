@@ -8,8 +8,16 @@ and receives for 'R': status byte (1 = data follows, 0 = time-out) + data.
 
 _RAMD creates the RAM disk H: in a temporary directory (destroyed at RESET, removed at exit).
 
-MOCK_IMAGE (environment): disk image mode, the disk image (no partitions) is served with the
-COMMAND_DRIVE_* commands (sectors, CRC checked both ways) and no drive is served by COMMAND_BDOS.
+MOCK_IMAGE (environment): the disk image (no partitions) is served with the COMMAND_DRIVE_* commands (sectors, CRC
+checked both ways), and no drive is served by COMMAND_BDOS unless MOCK_BOTH is set.
+
+MOCK_BOTH (environment): with MOCK_IMAGE, the directory is served too (as the C++ server, which serves both).
+
+MOCK_BOOT (environment): preferred boot of the server, "image" or "dirs" (default): _LOGIN, asked by the JIO MSX-DOS 2
+ROM at its startup, answers 0 (boot from the disk image) if "image" and a disk image is served. LOGIN_NFS (1EH,
+JIO.COM) always answers the drives served.
+
+MOCK_BIN (environment): BIN served to the tape loader JIO-CAS.CAS (COMMAND_BIN), none if not set.
 
 MOCK_DRIVE (environment): drive letter of the served directory (default A).
 
@@ -28,9 +36,11 @@ import os, re, socket, struct, sys, shutil, datetime, tempfile, atexit, signal
 
 # served drive (MOCK_DRIVE environment: drive letter, default A:)
 ROOTS = {ord(os.environ.get('MOCK_DRIVE', 'A').upper()) - 65: sys.argv[1]}
-IMAGE = os.environ.get('MOCK_IMAGE')  # disk image mode
-if IMAGE:
+IMAGE = os.environ.get('MOCK_IMAGE')  # disk image served
+if IMAGE and not os.environ.get('MOCK_BOTH'):
     ROOTS.clear()
+BOOT_IMAGE = bool(IMAGE) and os.environ.get('MOCK_BOOT', 'dirs') == 'image'
+BIN = os.environ.get('MOCK_BIN')
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 9876
 LOG = open(sys.argv[3] if len(sys.argv) > 3 else '/dev/stdout', 'w', buffering=1)
 RAM = 7                           # RAM disk drive (H:)
@@ -56,6 +66,7 @@ FLAG_RX_CRC, FLAG_TX_CRC = 1, 2
 CMD_READ, CMD_WRITE, CMD_INFO, CMD_CHANGED = 16, 17, 18, 19
 CMD_DATE_TIME = 23
 CMD_LOG = 24
+CMD_BIN = 25
 REPORTS = {1: 'write protected', 3: 'drive not ready', 5: 'CRC error', 11: 'write fault'}
 
 
@@ -419,9 +430,11 @@ class Server:
             LOG.write('RESET\n')
             self.reset()
             return []
-        if func == 0x18:
+        if func in (0x18, 0x1E):
             m = sum(1 << d for d in range(8) if self.served(d))
-            LOG.write('LOGIN %02X\n' % m)
+            if func == 0x18 and BOOT_IMAGE:
+                m = 0                       # preferred boot: disk image
+            LOG.write('%s %02X\n' % ('LOGIN' if func == 0x18 else 'LOGIN_NFS', m))
             return [bytes([m])]
         if func == 0x0E:
             d = r.byte()
@@ -773,6 +786,15 @@ def main():
                             info = b'\r\nMock server: directories\r\n'
                             data = (bytes([(8 if retry else 0) | (32 if blocks else 0), 0, 0]) + info + b'\0' * 512)[:512]
                             out = [data] + ([struct.pack('<H', crc16(data))] if flags & FLAG_RX_CRC else [])
+                        elif cmd == CMD_BIN:
+                            offset, size = struct.unpack('<HH', r.take(4))
+                            LOG.write('BIN %d at %d\n' % (size, offset))
+                            if BIN and os.path.isfile(BIN):
+                                data = open(BIN, 'rb').read()[offset:offset + size]
+                                out = [struct.pack('<BH', E_OK, len(data))] + ([data] if data else [])
+                            else:
+                                LOG.write('BIN not found\n')
+                                out = [struct.pack('<BH', E_NOFIL, 0)]
                         elif cmd == CMD_LOG:
                             LOG.write('MSX: %s\n' % r.string())
                             out = []

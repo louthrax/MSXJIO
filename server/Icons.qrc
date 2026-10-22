@@ -15,5 +15,6 @@
         <file>icons/empty.svg</file>
         <file>icons/floppy.svg</file>
         <file>icons/hardDisk.svg</file>
+        <file>icons/cassette.svg</file>
     </qresource>
 </RCC>

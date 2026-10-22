@@ -30,10 +30,13 @@ typedef enum {
     eCStateDisconnected
 } tdConnectionState;
 
+// The disk image (sectors, COMMAND_DRIVE_*), the host directories (drives A: to H:, COMMAND_BDOS) and the BIN of the
+// tape loader (COMMAND_BIN) are all served. The preferred boot only chooses what the JIO MSX-DOS 2 ROM uses at its
+// startup (answer of _LOGIN): the directories if some are served, else the disk image.
 typedef enum {
-    eServeDiskImage,        // sectors of a disk image (COMMAND_DRIVE_*)
-    eServeDirectories,      // host directories as drives A: to H: (COMMAND_BDOS)
-} tdServeMode;
+    eBootDiskImage,         // disk image (if a media is inserted, else the directories)
+    eBootDirectories,       // directories (if some are served, else the disk image)
+} tdBootMode;
 
 #define TRANSMIT_DELAY_NORMAL		3
 #define TRANSMIT_DELAY_ACKNOWLEDGE	7
@@ -69,7 +72,7 @@ public:
     explicit Server(QObject *_poParent = nullptr);
     ~Server();
 
-    // Link options (disk image mode, sent to the MSX at its startup) and read only (both modes)
+    // Link options (disk image, sent to the MSX at its startup) and read only (disk image and directories)
     bool                m_bRxCRC = true;
     bool                m_bTxCRC = true;
     bool                m_bTimeout = false;
@@ -77,8 +80,14 @@ public:
     bool                m_bReadOnly = false;
     bool                m_bSlowTx = false;
 
-    void                vSetServeMode(tdServeMode _eServeMode);
-    tdServeMode         eServeMode() const { return m_eServeMode; }
+    void                vSetPreferredBoot(tdBootMode _eBootMode) { m_eBootMode = _eBootMode; }
+    tdBootMode          ePreferredBoot() const { return m_eBootMode; }
+    bool                bBootFromDirectories();
+
+    // BIN of the tape loader JIO-CAS.CAS (COMMAND_BIN): file read at each request, empty path = BIN built in
+    void                vSetBinPath(const QString &_szPath) { m_szBinPath = _szPath; }
+    QString             szBinPath() const { return m_szBinPath; }
+    QByteArray          acBin();
 
     bool                bInsertMedia(const QString &_szPath);
     void                vEjectMedia();
@@ -172,6 +181,7 @@ private:
     void                vDOS_SELECT_DISK(unsigned char _ucDiskToSelect);
     void                vDOS_GET_LOGIN_VECTOR();
     unsigned char       ucLoginVector();
+    void                vLOGIN_NFS();
     void                vDOS_CREATE_OR_DESTROY_RAMDISK(unsigned char _ucSegments);
     void                vDOS_GET_ALLOCATION_INFORMATION(unsigned char _ucDrive);
     void                vDOS_FIND_FIRST_ENTRY(tdFileInfoBlock &_roFIB, const QString &_szMSXPath, const QString &_szFileName, unsigned char _ucSearchAttributes);
@@ -240,7 +250,8 @@ private:
     bool                            m_bConnectedOnce = false;
     bool                            m_bRetryAlways = false;
 
-    tdServeMode                     m_eServeMode = eServeDiskImage;
+    tdBootMode                      m_eBootMode = eBootDirectories;
+    QString                         m_szBinPath;
     bool                            m_bDiskChanged = false;
     quint64                         m_uiBytesReceived = 0;
     quint64                         m_uiBytesTransmitted = 0;

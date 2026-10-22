@@ -121,13 +121,15 @@ do {                                                                            
  */
 QString Server::szGetServerInfo()
 {
-    /*~~~~~~~~~~~*/
+    /*~~~~~~~~~~~~~*/
     QString oText;
     QString oFlags;
-    /*~~~~~~~~~~~*/
+    QString oDrives;
+    /*~~~~~~~~~~~~~*/
 
-    // only "Read only" is used for the served directories (COMMAND_BDOS)
-    bool bImage = m_eServeMode == eServeDiskImage;
+    // what the JIO MSX-DOS 2 ROM boots from is described, the other one in one line. Only "Read only" is used for the
+    // served directories (COMMAND_BDOS).
+    bool bImage = !bBootFromDirectories();
 
     if(m_bRxCRC && bImage) oFlags += "RxCRC ";
     if(m_bTxCRC && bImage) oFlags += "TxCRC ";
@@ -136,23 +138,20 @@ QString Server::szGetServerInfo()
     if(m_bReadOnly || (bImage && m_oDrive.bIsMediaWriteProtected())) oFlags += "ReadOnly ";
     if(m_bSlowTx && bImage) oFlags += "SlowTx";
 
-    if(m_eServeMode == eServeDirectories)
+    for(int i = 0; i < 8; i++)
     {
-        /*~~~~~~~~~~~~~*/
-        QString oDrives;
-        /*~~~~~~~~~~~~~*/
+        if(bIsDriveServed(i)) oDrives += QString("%1: %2\r\n").arg(QChar('A' + i)).arg(szRootDir(i));
+    }
 
-        for(int i = 0; i < 8; i++)
-        {
-            if(bIsDriveServed(i)) oDrives += QString("%1: %2\r\n").arg(QChar('A' + i)).arg(szRootDir(i));
-        }
-
+    if(!bImage)
+    {
         oText = QString::asprintf
             (
                 "\r\nDirectories :\r\n%s\r\nFlags : %s\r\n",
-                qPrintable(oDrives.isEmpty() ? "None\r\n" : oDrives),
+                qPrintable(oDrives),
                 qPrintable(oFlags)
                 );
+        if(m_oDrive.uiPartitionCount()) oText += QString("Image : %1\r\n").arg(m_oDrive.oMediaPath());
     }
     else
     {
@@ -163,9 +162,36 @@ QString Server::szGetServerInfo()
                 qPrintable(oFlags),
                 qPrintable(m_oDrive.oMediaPath())
                 );
+        if(!oDrives.isEmpty()) oText += QString("Directories : %1\r\n").arg(QString::number(ucLoginVector(), 16).toUpper() + "h");
     }
 
     return oText;
+}
+
+/*
+ =======================================================================================================================
+    The JIO MSX-DOS 2 ROM boots from the directories (answer of _LOGIN not 0) if some are served, unless the disk image
+    is preferred and a media is inserted.
+ =======================================================================================================================
+ */
+bool Server::bBootFromDirectories()
+{
+    if(!ucLoginVector()) return false;
+    return (m_eBootMode == eBootDirectories) || !m_oDrive.uiPartitionCount();
+}
+
+/*
+ =======================================================================================================================
+    BIN of the tape loader JIO-CAS.CAS (COMMAND_BIN): the file chosen, or the BIN built in (resource, copied by
+    clients/JIO_CAS/0_Build.sh). Empty if it cannot be read.
+ =======================================================================================================================
+ */
+QByteArray Server::acBin()
+{
+    QFile oFile(m_szBinPath.isEmpty() ? QString(":/bin/JIO-CAS.BIN") : m_szBinPath);
+
+    if(!oFile.open(QIODevice::ReadOnly)) return QByteArray();
+    return oFile.readAll();
 }
 
 /*
@@ -230,6 +256,7 @@ const char *tdFunctionToString(tdFunction func)
         ENUM_CASE(DOS_GET_ALLOCATION_INFORMATION)
         ENUM_CASE(CHECK_NFS)
         ENUM_CASE(RESET_NFS)
+        ENUM_CASE(LOGIN_NFS)
         ENUM_CASE(DOS_RANDOM_READ_FCB)
         ENUM_CASE(DOS_RANDOM_WRITE_FCB)
         ENUM_CASE(DOS_GET_FILE_SIZE_FCB)
@@ -461,6 +488,10 @@ Task Server::oParser()
                 vDOS_GET_LOGIN_VECTOR();
                 break;
 
+            case LOGIN_NFS:
+                vLOGIN_NFS();
+                break;
+
             case DOS_CREATE_OR_DESTROY_RAMDISK:
                 vReceive(&ucByte1, sizeof(ucByte1), 0, uiCRC);
                 vLogBDOSFunction(ucFunction, ucByte1 != 0xFF);      // FFh = get size
@@ -671,6 +702,45 @@ Task Server::oParser()
         }
         break;
 
+        case COMMAND_BIN:
+        {
+            /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+            quint16     uiOffset;
+            quint16     uiSize;
+            QByteArray  acBinData = acBin();
+            /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+            // part of the BIN of the tape loader (JIO-CAS.CAS): answer packet (error, size), then the data packet
+            vReceive(&uiOffset, sizeof(uiOffset), 0, uiCRC);
+            vReceive(&uiSize, sizeof(uiSize), 0, uiCRC);
+            vLog(eLogInfo, "BIN: %d bytes at %d, %s\n", uiSize, uiOffset, qPrintable(m_szBinPath.isEmpty() ? QString("built in") : m_szBinPath));
+
+            PACK_PUSH
+            struct
+            {
+                quint8  ucError;
+                quint16 uiSize;
+            } s;
+            PACK_POP
+
+            if(acBinData.isEmpty())
+            {
+                vLog(eLogError, "BIN not found: %s\n", qPrintable(m_szBinPath));
+                s.ucError = DOS_ERR_NOFIL;
+                s.uiSize = 0;
+            }
+            else
+            {
+                acBinData = acBinData.mid(uiOffset, uiSize);
+                s.ucError = DOS_ERR_OK;
+                s.uiSize = acBinData.size();
+            }
+            uiTransmit(&s, sizeof(s), 0, 0, false, TRANSMIT_DELAY_NORMAL);
+            if(s.uiSize)
+                uiTransmit(acBinData.constData(), acBinData.size(), 0, 0, false, TRANSMIT_DELAY_ACKNOWLEDGE);
+        }
+        break;
+
         case COMMAND_DATE_TIME:
         {
             /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -739,9 +809,10 @@ Task Server::oParser()
                     // Bluetooth: long transmissions of the MSX can be lost by the serial module (no flow control),
                     // JIO.COM sends its large writes in blocks
                     ((m_eInterface == eInterfaceBluetooth) ? FLAG_TX_BLOCKS : 0);
-                bool        bImage = m_eServeMode == eServeDiskImage;
-                quint8		W_DRIVES = bImage ? m_oDrive.uiPartitionCount() : 0;
-                quint8		W_BOOTDRV = bImage ? m_oDrive.uiFirstActivePartition() : 0;
+                // partitions of the disk image (0 without media), served whatever the preferred boot: the JIO
+                // MSX-DOS 2 ROM uses the directories instead if _LOGIN is not 0 (bBootFromDirectories)
+                quint8		W_DRIVES = m_oDrive.uiPartitionCount();
+                quint8		W_BOOTDRV = W_DRIVES ? m_oDrive.uiFirstActivePartition() : 0;
                 QByteArray	acPayload = szGetServerInfo().toUtf8().left(509);
                 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
 
@@ -798,11 +869,7 @@ Task Server::oParser()
                 QByteArray	oFileData;
                 /*~~~~~~~~~~~~~~~~~~*/
 
-                if(m_eServeMode != eServeDiskImage)
-                {
-                    vLog(eLogError, "No disk image served (directories mode) !\n");
-                }
-                else if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
+                if(m_oDrive.eReadSectors(ucPartition, uiSector, oHeader.m_ucLength, oFileData) == eDriveErrorOK)
                     uiTransmit
                         (
                             oFileData.constData(),
@@ -867,12 +934,7 @@ Task Server::oParser()
 
             if(bCRCOK)
             {
-                if(m_eServeMode != eServeDiskImage)
-                {
-                    vLog(eLogError, "No disk image served (directories mode) !\n");
-                    uiAcknowledge = DRIVE_ANSWER_WRITE_FAILED;
-                }
-                else if(m_bReadOnly)
+                if(m_bReadOnly)
                 {
                     uiAcknowledge = DRIVE_ANSWER_WRITE_PROTECTED;
                 }
@@ -1260,20 +1322,6 @@ void Server::vResetStatistics()
     m_uiReceiveErrors = 0;
     m_uiTransmitErrors = 0;
     emit statisticsChanged();
-}
-
-/*
- =======================================================================================================================
-    Disk image or directories: the other mode is not served.
- =======================================================================================================================
- */
-void Server::vSetServeMode(tdServeMode _eServeMode)
-{
-    m_eServeMode = _eServeMode;
-
-    // the files opened on the served directories are closed, the MSX sees a disk change
-    vResetNFS();
-    m_bDiskChanged = true;
 }
 
 /*
