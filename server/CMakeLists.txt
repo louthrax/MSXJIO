@@ -130,6 +130,26 @@ endif()
 
 # ---- Android: package template (manifest, icons) for the graphical server ----
 if(ANDROID)
+  # Launcher icons rendered from the SVG at each density into android/res (generated, git-ignored,
+  # removed by 0_Clean.sh). SELF_CALL: parallel inkscape exports race on DBus otherwise (inkscape#4716).
+  set(_icons)
+  foreach(_entry IN ITEMS ldpi:36 mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192)
+    string(REPLACE ":" ";" _entry "${_entry}")
+    list(GET _entry 0 _dpi)
+    list(GET _entry 1 _size)
+    set(_dir ${CMAKE_CURRENT_SOURCE_DIR}/android/res/drawable-${_dpi})
+    add_custom_command(OUTPUT ${_dir}/icon.png
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${_dir}
+      COMMAND ${CMAKE_COMMAND} -E env SELF_CALL=1
+              inkscape ${CMAKE_CURRENT_SOURCE_DIR}/JIOServer.svg -w ${_size} -h ${_size}
+              --export-type=png --export-filename=${_dir}/icon.png
+      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/JIOServer.svg
+      COMMENT "Rendering Android icon (${_dpi}, ${_size}px)" VERBATIM)
+    list(APPEND _icons ${_dir}/icon.png)
+  endforeach()
+  add_custom_target(jioserver_android_icons DEPENDS ${_icons})
+  add_dependencies(JIOServer jioserver_android_icons)
+
   set_target_properties(JIOServer PROPERTIES
     QT_ANDROID_PACKAGE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/android)
 endif()
