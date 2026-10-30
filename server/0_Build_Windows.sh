@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # The Windows VM mounts nothing by default: map the host Samba share on S:, cd into the project and
 # call the .bat there. launch.shnt --run executes this command over ssh (10.0.2.2 = the host, via slirp).
-WIN_VM_LAUNCHER=${BUILD_WINDOWS_VM_LAUNCHER:-/mnt/DataLinux/VirtualBox_VMs/Windows10_Qt/launch.shnt}
+WIN_VM_LAUNCHER=${BUILD_WINDOWS_VM_LAUNCHER:-/vms/Windows10_Qt/launch.shnt}
 SMB_SHARE='\\10.0.2.2\Host'
 WIN_DIR="S:${SCRIPT_DIR//\//\\}"
 WIN_BAT="S:${SCRIPT_DIR//\//\\}\\tools\\Build_Windows.bat"
