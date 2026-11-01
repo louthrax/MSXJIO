@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # All the projects: clients and tools (0_Build.sh of each), then the servers of all the platforms
-# (server/0_Build_All.sh: Docker, Android SDK, Windows and macOS VMs).
+# (server/0_Build_All.sh: Docker x86_64 and arm64, Android SDK, Windows and macOS VMs).
 # Usage: 0_Build_All.sh [clients]     clients: clients and tools only
 # Outputs in the 0_Builds folder of each project, all copied to the 0_Builds folder of the repository.
 

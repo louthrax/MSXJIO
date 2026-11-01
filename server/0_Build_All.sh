@@ -11,6 +11,9 @@ cd "$SCRIPT_DIR"
 ./0_Build_Linux_AppImage.sh
 
 cd "$SCRIPT_DIR"
+./0_Build_Linux_AppImage_ARM64.sh
+
+cd "$SCRIPT_DIR"
 ./0_Build_Android.sh
 
 cd "$SCRIPT_DIR"
