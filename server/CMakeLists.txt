@@ -30,6 +30,14 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
+find_package(Qt6 REQUIRED COMPONENTS Core)
+# Linux with a static Qt (qt_static_builder, musl): fully static executables (see below), so the
+# system libraries Qt looks up (xkbcommon...) must be the .a, not the .so
+get_target_property(QT_CORE_TYPE Qt6::Core TYPE)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND QT_CORE_TYPE STREQUAL "STATIC_LIBRARY")
+  set(LINUX_STATIC ON)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+endif()
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Bluetooth SerialPort Multimedia)
 
 # Build metadata (MainCLI.cpp stringizes BUILD_VERSION; all three mirror the .pro defines)
@@ -73,6 +81,17 @@ target_link_libraries(JIOServerCLI PRIVATE Qt6::Core Qt6::Bluetooth Qt6::SerialP
 target_compile_definitions(JIOServerCLI PRIVATE
   BUILD_DATE=${JIO_DATE} BUILD_HASH=${JIO_HASH} BUILD_VERSION=${JIO_VERSION})
 set_target_properties(JIOServerCLI PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
+# Linux with a static Qt: without -static, the results need the musl loader and the X/xcb/dbus
+# libraries at run time, and silently fail to start (exit 127) on a glibc system. The extra
+# libraries are the dependencies of the static X/xcb/dbus libraries that their link interface does
+# not bring in (as the .pro files did).
+if(LINUX_STATIC)
+  target_link_libraries(JIOServer PRIVATE brotlicommon Xau Xdmcp xcb-util dbus-1)
+  target_link_libraries(JIOServerCLI PRIVATE brotlicommon dbus-1)
+  target_link_options(JIOServer PRIVATE -static)
+  target_link_options(JIOServerCLI PRIVATE -static)
+endif()
 
 # GCC needs -fcoroutines for the C++20 coroutines the core uses (clang and MSVC enable them with -std)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
