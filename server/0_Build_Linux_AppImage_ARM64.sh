@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# JIOServer: Linux AppImage for ARM64 (aarch64), built in the qt_arm64_builder image of the Dockers project
+# JIOServer: Linux AppImage for ARM64 (aarch64), built in the qt_dynamic_builder_arm64 image of the Dockers project
 # (Ubuntu 24.04 arm64, emulated by qemu-user-static: slower than the x86_64 build). Qt 6.9.0 for arm64 in
 # /qt/install (as the x86_64 builds), with the Wayland platform plugins. Built on Ubuntu 24.04, the
 # AppImage runs on the ARM64 distributions with glibc 2.39 or later (Ubuntu 24.04, Debian 13, Raspberry
 # Pi OS 13, Fedora 40...).
-# Needs the qt_arm64_builder image (Dockers/0_Build_qt_arm64_builder.sh) and the ARM emulation.
+# Needs the qt_dynamic_builder_arm64 image (Dockers/0_Build_qt_dynamic_builder_arm64.sh) and the ARM emulation.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_NAME="JIOServer"
@@ -33,7 +33,7 @@ docker run --rm \
   --mount type=bind,src="$PROJECT_TO_BUILD",dst=/src \
   --mount type=bind,src="$BUILD_DIR",dst=/build \
   -w /build \
-  qt_arm64_builder \
+  qt_dynamic_builder_arm64 \
   bash -lc '
     set -e
     QMAKE=/qt/install/bin/qmake
