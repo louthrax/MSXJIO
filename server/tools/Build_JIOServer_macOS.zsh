@@ -21,7 +21,9 @@ BUILD_DIR="$HOME/Build"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$SCRIPT_DIR/0_Builds"
-cmake -G Ninja -S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR"
+# universal: Apple Silicon (arm64) and Intel (x86_64); the Qt of the VM is universal
+cmake -G Ninja -S "$SCRIPT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_DIR" \
+  -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 cmake --build "$BUILD_DIR" --target "$TARGET"
 
 # the command line server rides inside the bundle (shares its Qt frameworks), as the .pro build did
