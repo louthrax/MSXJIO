@@ -84,10 +84,16 @@ set_target_properties(JIOServerCLI PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEA
 
 # Linux with a static Qt: without -static, the results need the musl loader and the X/xcb/dbus
 # libraries at run time, and silently fail to start (exit 127) on a glibc system. The extra
-# libraries are the dependencies of the static X/xcb/dbus libraries that their link interface does
-# not bring in (as the .pro files did).
+# libraries are the dependencies of the static X/xcb/dbus/freetype/fontconfig libraries that their link
+# interface does not bring in (as the .pro files did).
+# Wayland: a static Qt only links its default platform plugin (xcb); the Wayland platform, its window
+# shell (xdg-shell) and its window decorations are imported explicitly (native Wayland, not XWayland:
+# sharp on scaled screens).
 if(LINUX_STATIC)
-  target_link_libraries(JIOServer PRIVATE brotlicommon Xau Xdmcp xcb-util dbus-1)
+  find_package(Qt6 REQUIRED COMPONENTS WaylandClient)
+  qt_import_plugins(JIOServer INCLUDE Qt6::QWaylandIntegrationPlugin Qt6::QWaylandXdgShellIntegrationPlugin
+                    Qt6::QWaylandBradientDecorationPlugin)
+  target_link_libraries(JIOServer PRIVATE brotlicommon Xau Xdmcp xcb-util dbus-1 bz2 ffi)
   target_link_libraries(JIOServerCLI PRIVATE brotlicommon dbus-1)
   target_link_options(JIOServer PRIVATE -static)
   target_link_options(JIOServerCLI PRIVATE -static)
