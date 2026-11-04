@@ -14,7 +14,7 @@ cmake_minimum_required(VERSION 3.21)
 file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/Version.txt JIO_VERSION LIMIT_COUNT 1)
 string(STRIP "${JIO_VERSION}" JIO_VERSION)
 
-project(JIOServer VERSION ${JIO_VERSION} LANGUAGES CXX)
+project(JIOServer VERSION ${JIO_VERSION} LANGUAGES C CXX)
 
 if(WIN32 AND NOT MSVC)
   message(FATAL_ERROR "On Windows, build with MSVC in a Visual Studio developer environment (vcvars64.bat).")
@@ -127,7 +127,7 @@ endif()
 if(APPLE)
   set(APP_ICNS ${CMAKE_CURRENT_BINARY_DIR}/JIOServer.icns)
   add_custom_command(OUTPUT ${APP_ICNS}
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/Svg2icns.sh
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/svg2icns.sh
             ${CMAKE_CURRENT_SOURCE_DIR}/JIOServer.svg ${APP_ICNS}
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/JIOServer.svg
     COMMENT "Generating JIOServer.icns from the SVG" VERBATIM)

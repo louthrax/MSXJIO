@@ -1,33 +1,36 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# All the builds of the servers (JIOServer and JIOServerCLI), one after another: a failure does not stop the next builds; the failed ones are listed
+# at the end. Packages in 0_Builds.
+# Usage: 0_Build_All.sh
 
-cd "$SCRIPT_DIR"
-./0_Build_Linux_Static.sh
+cd "$(dirname "$0")"
 
-cd "$SCRIPT_DIR"
-./0_Build_Linux_AppImage.sh
+BUILDS=(
+  "0_Build_JIOServer_Linux_Static.sh"
+  "0_Build_JIOServer_Linux_Static.sh --arm64"
+  "0_Build_JIOServer_Linux_AppImage.sh"
+  "0_Build_JIOServer_Linux_AppImage.sh --arm64"
+  "0_Build_JIOServer_macOS.sh"
+  "0_Build_JIOServer_Windows.sh"
+  "0_Build_JIOServer_Android.sh"
+  "0_Build_JIOServerCLI_Linux_Static.sh"
+  "0_Build_JIOServerCLI_Linux_Static.sh --arm64"
+  "0_Build_JIOServerCLI_macOS.sh"
+  "0_Build_JIOServerCLI_Windows.sh"
+)
 
-cd "$SCRIPT_DIR"
-./0_Build_Linux_AppImage_ARM64.sh
+failed=()
+for build in "${BUILDS[@]}"; do
+  printf '\n========================================\n==> %s\n========================================\n' "$build"
+  ./$build || failed+=("$build")
+done
 
-cd "$SCRIPT_DIR"
-./0_Build_Android.sh
-
-cd "$SCRIPT_DIR"
-./0_Build_macOS.sh
-
-cd "$SCRIPT_DIR"
-./0_Build_Windows.sh
-
-# command line server
-cd "$SCRIPT_DIR"
-./0_Build_CLI_Linux_Static.sh
-
-cd "$SCRIPT_DIR"
-./0_Build_CLI_macOS.sh
-
-cd "$SCRIPT_DIR"
-./0_Build_CLI_Windows.sh
+echo
+if (( ${#failed[@]} == 0 )); then
+  echo "==> All builds OK"
+else
+  printf '==> FAILED: %s\n' "${failed[@]}"
+  exit 1
+fi

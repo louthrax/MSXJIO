@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Builds the Android graphical server (0_Build_Android.sh), installs it on the phone connected with adb (settings
+# Builds the Android graphical server (0_Build_JIOServer_Android.sh), installs it on the phone connected with adb (settings
 # kept) and starts it.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,7 +15,7 @@ if [[ "$("$ADB" get-state 2>/dev/null)" != "device" ]]; then
   exit 1
 fi
 
-"$SCRIPT_DIR/0_Build_Android.sh"
+"$SCRIPT_DIR/0_Build_JIOServer_Android.sh"
 
 apk="$SCRIPT_DIR/0_Builds/JIOServer_Android_$(<"$SCRIPT_DIR/Version.txt").apk"
 
