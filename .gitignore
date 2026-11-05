@@ -14,6 +14,3 @@ clients/JIO_TIME/dbg/*.lis
 # Server: Android icons (generated from JIOServer.svg), macOS icon
 server/android/res/
 server/JIOServer.icns
-
-# Server: JIO-CAS loader embedded in the server (Bin.qrc, Cas.qrc), generated and copied there by clients/JIO_CAS/0_Build.sh
-server/bin/

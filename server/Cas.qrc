@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>bin/JIO-CAS.CAS</file>
+        <file alias="bin/JIO-CAS.CAS">../clients/JIO_CAS/0_Builds/JIO-CAS.CAS</file>
     </qresource>
 </RCC>

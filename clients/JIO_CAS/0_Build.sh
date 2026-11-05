@@ -110,10 +110,5 @@ print('JIO-CAS: loader %d bytes' % len(loader))
 PYEOF
 echo "0_Builds/JIO-CAS.CAS, 0_Builds/JIO-CAS.BIN"
 
-# BIN built in the server (COMMAND_BIN, served to JIO-CAS.CAS when no other BIN is chosen) and JIO-CAS.CAS (played
-# on the audio output by the graphical server), if the server is there (not in the copy of the sources built by the
-# tests)
-if [ -d ../../server/bin ]; then
-    cp ./0_Builds/JIO-CAS.BIN ./0_Builds/JIO-CAS.CAS ../../server/bin/
-    echo "../../server/bin/JIO-CAS.BIN, ../../server/bin/JIO-CAS.CAS"
-fi
+# The server embeds 0_Builds/JIO-CAS.BIN (COMMAND_BIN, served to JIO-CAS.CAS when no other BIN is chosen) and
+# 0_Builds/JIO-CAS.CAS (played on the audio output by the graphical server) straight from here: server/Bin.qrc, Cas.qrc

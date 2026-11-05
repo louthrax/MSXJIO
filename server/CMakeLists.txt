@@ -45,6 +45,14 @@ execute_process(COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse HEAD
                 OUTPUT_VARIABLE JIO_HASH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 string(TIMESTAMP JIO_DATE "%Y-%m-%d_%H:%M:%S")
 
+# The JIO-CAS loader (Bin.qrc, Cas.qrc) is embedded from the build output of clients/JIO_CAS, not from the sources
+foreach(JIOCAS_FILE JIO-CAS.BIN JIO-CAS.CAS)
+  if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../clients/JIO_CAS/0_Builds/${JIOCAS_FILE})
+    message(FATAL_ERROR "clients/JIO_CAS/0_Builds/${JIOCAS_FILE} missing: build clients/JIO_CAS first "
+                        "(clients/JIO_CAS/0_Build.sh, or 0_Build_All.sh at the root of the repository)")
+  endif()
+endforeach()
+
 # ---- Shared core: protocol, disk image, served directories, connection (Core/Bluetooth/SerialPort)
 set(CORE_SOURCES
   Drive.cpp Find.cpp InterfaceBluetoothSocket.cpp InterfaceSerialPort.cpp
