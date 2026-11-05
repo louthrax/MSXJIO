@@ -93,7 +93,7 @@ if(LINUX_STATIC)
   find_package(Qt6 REQUIRED COMPONENTS WaylandClient)
   qt_import_plugins(JIOServer INCLUDE Qt6::QWaylandIntegrationPlugin Qt6::QWaylandXdgShellIntegrationPlugin
                     Qt6::QWaylandBradientDecorationPlugin)
-  target_link_libraries(JIOServer PRIVATE brotlicommon Xau Xdmcp xcb-util dbus-1 bz2 ffi)
+  target_link_libraries(JIOServer PRIVATE brotlicommon Xau Xdmcp xcb-util dbus-1 bz2 ffi z)
   target_link_libraries(JIOServerCLI PRIVATE brotlicommon dbus-1)
   target_link_options(JIOServer PRIVATE -static)
   target_link_options(JIOServerCLI PRIVATE -static)
