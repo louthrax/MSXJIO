@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # JIOServer (graphical server): Linux AppImage.
-# Built in the qt_dynamic_builder image of the Dockers project (Debian 11, Qt 6.9.0): runs on the x86_64
+# Built in the qt_dynamic_builder image of the Dockers project (Debian 11, Qt 6.9.3): runs on the x86_64
 # distributions with glibc 2.31 or later. --arm64: for ARM64, in the qt_dynamic_builder_arm64 image
 # (Ubuntu 24.04, emulated by qemu-user-static: much slower), with the Wayland plugins: runs on the ARM64
 # distributions with glibc 2.39 or later.
