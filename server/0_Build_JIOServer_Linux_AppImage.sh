@@ -25,7 +25,7 @@ if [[ ${1:-} == --arm64 ]]; then
   IMAGE=qt_dynamic_builder_arm64 PLATFORM=linux/arm64 KIND=LinuxAppImageARM64
 fi
 
-PACKAGE="${NAME}_${KIND}_${VERSION}"
+PACKAGE="${NAME}_${VERSION}_${KIND}"
 BUILD_DIR="/mnt/DataLinux/Tmp/$PACKAGE"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$SCRIPT_DIR/0_Builds"

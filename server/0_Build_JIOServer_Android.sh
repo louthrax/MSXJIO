@@ -37,7 +37,7 @@ if [[ ! -f $QT_ANDROID_KEYSTORE_PATH ]]; then
   exit 1
 fi
 
-PACKAGE="${NAME}_Android_${VERSION}"
+PACKAGE="${NAME}_${VERSION}_Android"
 BUILD_DIR="/mnt/DataLinux/Tmp/$PACKAGE"
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$SCRIPT_DIR/0_Builds"

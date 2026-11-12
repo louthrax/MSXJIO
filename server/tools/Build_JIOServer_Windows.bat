@@ -17,7 +17,7 @@ rem -------------------------------------
 for %%I in ("%~dp0..") do set "SCRIPT_DIR=%%~fI"
 set /p VERSION=<"%SCRIPT_DIR%\Version.txt"
 if errorlevel 1 goto fail
-set "PACKAGE=%NAME%_Windows_%VERSION%"
+set "PACKAGE=%NAME%_%VERSION%_Windows"
 set "BUILD_DIR=%USERPROFILE%\Build"
 set "DEPLOY=%BUILD_DIR%\deploy"
 

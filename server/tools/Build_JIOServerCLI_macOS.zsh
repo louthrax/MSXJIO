@@ -16,7 +16,7 @@ export PATH="$HOME/Qt/Tools/Ninja:$HOME/Qt/Tools/CMake/CMake.app/Contents/bin:$H
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(<"$SCRIPT_DIR/Version.txt")"
-PACKAGE="${NAME}_macOS_${VERSION}"
+PACKAGE="${NAME}_${VERSION}_macOS"
 BUILD_DIR="$HOME/Build"
 
 rm -rf "$BUILD_DIR"
