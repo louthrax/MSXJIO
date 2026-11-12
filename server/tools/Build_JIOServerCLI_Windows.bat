@@ -9,7 +9,7 @@ set "NAME=JIOServerCLI"
 set "TARGET=JIOServerCLI"
 
 rem ---- Tools of the VM (edit once) ----
-set "QT_DIR=C:\Qt\6.9.0\msvc2022_64"
+set "QT_DIR=C:\Qt\6.9.3\msvc2022_64"
 set "QT_TOOLS=C:\Qt\Tools"
 set "VCVARS=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 rem -------------------------------------

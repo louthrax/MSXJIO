@@ -9,7 +9,7 @@ NAME=JIOServerCLI
 TARGET=JIOServerCLI
 
 # ---- Tools of the VM (edit once) ----
-QT_DIR="$HOME/Qt/6.8.3/macos"
+QT_DIR="$HOME/Qt/6.9.3/macos"
 # CMake and Ninja of the Qt Tools (not on PATH)
 export PATH="$HOME/Qt/Tools/Ninja:$HOME/Qt/Tools/CMake/CMake.app/Contents/bin:$HOME/Qt/Tools/CMake/bin:$PATH"
 # -------------------------------------
